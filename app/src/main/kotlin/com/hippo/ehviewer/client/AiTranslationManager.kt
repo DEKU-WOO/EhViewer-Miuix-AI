@@ -1,11 +1,10 @@
 package com.hippo.ehviewer.client
 
-import com.ehviewer.core.database.roomDb
+import com.ehviewer.core.database.EhDatabase
 import com.ehviewer.core.database.model.GalleryTranslationEntity
+import com.ehviewer.core.database.roomDb
+import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.Settings
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -20,15 +19,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
 
 object AiTranslationManager {
-    private val httpClient = HttpClient(CIO) {
-        install(HttpTimeout) {
-            requestTimeoutMillis = 30_000
-            connectTimeoutMillis = 15_000
-        }
-    }
+    private val httpClient get() = EhApplication.ktorClient
 
     private val json = Json { ignoreUnknownKeys = true }
     private val translatingGids = ConcurrentHashMap.newKeySet<Long>()
+
+    private val db by lazy { roomDb<EhDatabase>("eh.db") }
 
     suspend fun getOrTranslateTitle(gid: Long, originalTitle: String): String {
         if (!Settings.aiTranslationEnabled.value) {
@@ -37,7 +33,7 @@ object AiTranslationManager {
         if (originalTitle.isBlank()) return originalTitle
 
         // 1. 查询本地 Room 数据库缓存
-        val cached = roomDb.galleryTranslationDao().getTranslation(gid)
+        val cached = db.galleryTranslationDao().getTranslation(gid)
         if (cached != null && cached.originalTitle == originalTitle) {
             return cached.translatedTitle
         }
@@ -50,12 +46,12 @@ object AiTranslationManager {
         return try {
             val translated = requestAiTranslation(originalTitle)
             if (translated.isNotBlank()) {
-                roomDb.galleryTranslationDao().insertTranslation(
+                db.galleryTranslationDao().insertTranslation(
                     GalleryTranslationEntity(
                         gid = gid,
                         originalTitle = originalTitle,
-                        translatedTitle = translated
-                    )
+                        translatedTitle = translated,
+                    ),
                 )
                 translated
             } else {

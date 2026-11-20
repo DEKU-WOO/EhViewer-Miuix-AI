@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
@@ -21,8 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
@@ -108,7 +107,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     TextPreferenceField(
                         title = stringResource(id = R.string.settings_ai_translation_api_key),
                         state = Settings.aiTranslationApiKey.asMutableState(),
-                        visualTransformation = PasswordVisualTransformation(),
+                        password = true,
                     )
                     TextPreferenceField(
                         title = stringResource(id = R.string.settings_ai_translation_model),
@@ -141,7 +140,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
 private fun TextPreferenceField(
     title: String,
     state: MutableState<String>,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
+    password: Boolean = false,
 ) {
     val fieldState = rememberTextFieldState(state.value)
     // 输入内容异步写回偏好设置（DataStore 写入本身是非阻塞的），保证退出页面不丢失修改
@@ -155,6 +154,6 @@ private fun TextPreferenceField(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         lineLimits = TextFieldLineLimits.SingleLine,
-        visualTransformation = visualTransformation,
+        outputTransformation = if (password) OutputTransformation { replace(0, length, "\u2022".repeat(length)) } else null,
     )
 }
