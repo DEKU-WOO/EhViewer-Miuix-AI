@@ -29,8 +29,12 @@ jobs:
 
       - name: Generate Release Keystore
         run: |
-          mkdir -p app/keystore
-          keytool -genkey -v -keystore app/keystore/androidkey.jks -keyalg RSA -keysize 2048 -validity 10000 -alias key0 -storepass 000000 -keypass 000000 -dname "CN=Android, OU=AI, O=EhViewer, L=Unknown, ST=Unknown, C=US"
+          if [ ! -f app/keystore/androidkey.jks ]; then
+            mkdir -p app/keystore
+            keytool -genkey -v -keystore app/keystore/androidkey.jks -keyalg RSA -keysize 2048 -validity 10000 -alias key0 -storepass 000000 -keypass 000000 -dname "CN=Android, OU=AI, O=EhViewer, L=Unknown, ST=Unknown, C=US"
+          else
+            echo "Keystore already exists, skipping generation."
+          fi
 
       - name: Build APK
         run: ./gradlew assembleDefaultDebug assembleDefaultRelease
