@@ -18,7 +18,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,7 +46,10 @@ import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.detailThumbGenerator
 import com.ehviewer.core.ui.util.thenIf
+import com.hippo.ehviewer.Settings
+import com.hippo.ehviewer.client.AiTranslationManager
 import com.hippo.ehviewer.client.EhUtils
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -265,5 +275,61 @@ fun GalleryDetailErrorTip(error: String, onClick: () -> Unit) = Column(
         modifier = Modifier.widthIn(max = 228.dp),
         style = MiuixTheme.textStyles.body2,
         color = MiuixTheme.colorScheme.onSurfaceSecondary,
+    )
+}
+
+/** 详情页标题的 AI 翻译状态。 */
+@Stable
+class GalleryDetailTitleState(
+    val title: String,
+    val translationEnabled: Boolean,
+    val translated: Boolean,
+    val onTranslateOrToggle: () -> Unit,
+)
+
+/**
+ * 详情页标题（带 AI 翻译）。
+ *
+ * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）下自动翻译并展示译文；
+ * - 手动模式下点击翻译按钮触发；
+ * - 已翻译后再次触发可在原文与译文之间切换显示。
+ */
+@Composable
+fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailTitleState {
+    val enabled by remember { Settings.aiTranslationEnabled.valueFlow() }
+        .collectAsState(initial = Settings.aiTranslationEnabled.value)
+    val triggerMode by remember { Settings.aiTranslationMode.valueFlow() }
+        .collectAsState(initial = Settings.aiTranslationMode.value)
+    var translated by remember(gid) { mutableStateOf<String?>(null) }
+    var showTranslated by remember(gid) { mutableStateOf(false) }
+    var translating by remember(gid) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun translate() {
+        if (!enabled || translated != null || translating || original.isBlank()) return
+        translating = true
+        val result = AiTranslationManager.getOrTranslateTitle(gid, original)
+        if (result.isNotBlank() && result != original) {
+            translated = result
+            showTranslated = true
+        }
+        translating = false
+    }
+
+    LaunchedEffect(gid, enabled, triggerMode, original) {
+        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate()
+    }
+
+    return GalleryDetailTitleState(
+        title = if (showTranslated) translated ?: original else original,
+        translationEnabled = enabled,
+        translated = translated != null,
+        onTranslateOrToggle = {
+            if (translated != null) {
+                showTranslated = !showTranslated
+            } else {
+                scope.launch { translate() }
+            }
+        },
     )
 }

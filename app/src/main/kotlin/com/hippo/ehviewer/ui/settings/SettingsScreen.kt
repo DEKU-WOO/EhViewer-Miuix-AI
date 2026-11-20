@@ -37,6 +37,7 @@ import com.hippo.ehviewer.ui.MainNavItems
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.destinations.AboutScreenDestination
 import com.hippo.ehviewer.ui.destinations.AdvancedScreenDestination
+import com.hippo.ehviewer.ui.destinations.AiTranslationScreenDestination
 import com.hippo.ehviewer.ui.destinations.BottomNavItemsScreenDestination
 import com.hippo.ehviewer.ui.destinations.DownloadScreenDestination
 import com.hippo.ehviewer.ui.destinations.EhScreenDestination
@@ -58,6 +59,7 @@ import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -129,6 +131,12 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                         icon = MiuixIcons.Tune,
                         title = R.string.settings_advanced,
                         childRoute = AdvancedScreenDestination,
+                        navigator = navigator,
+                    )
+                    PreferenceHeader(
+                        icon = MiuixIcons.Translate,
+                        title = R.string.settings_ai_translation,
+                        childRoute = AiTranslationScreenDestination,
                         navigator = navigator,
                     )
                     PreferenceHeader(

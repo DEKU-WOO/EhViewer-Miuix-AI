@@ -399,6 +399,15 @@
     <string name="settings_advanced_deep_clean_summary">清理缩略图与临时缓存、修复失效下载死链并压缩优化数据库</string>
     <string name="settings_advanced_deep_clean_confirm">确定进行深度清理吗？这将清理所有缓存、移除本地文件已缺失的下载记录并整理数据库碎片。</string>
     <string name="settings_advanced_deep_clean_done">深度清理完成，共清理 %d 个失效下载记录</string>
+    <string name="settings_ai_translation">AI 翻译</string>
+    <string name="settings_ai_translation_enable">启用 AI 翻译</string>
+    <string name="settings_ai_translation_enable_summary">使用 AI 模型翻译画廊标题</string>
+    <string name="settings_ai_translation_api_url">API 地址</string>
+    <string name="settings_ai_translation_api_key">API Key</string>
+    <string name="settings_ai_translation_model">模型名称</string>
+    <string name="settings_ai_translation_mode">触发方式</string>
+    <string name="settings_ai_translation_mode_auto">列表自动翻译</string>
+    <string name="settings_ai_translation_mode_manual">点击手动翻译</string>
     <string name="settings_about">关于</string>
     <string name="settings_about_declaration_summary">EhViewer MIUIX 与 E-Hentai.org 无任何联系</string>
     <string name="settings_about_disclaimer">免责声明</string>

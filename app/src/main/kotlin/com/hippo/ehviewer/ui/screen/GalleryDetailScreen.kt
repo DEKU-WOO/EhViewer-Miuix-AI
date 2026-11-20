@@ -53,6 +53,7 @@ import com.hippo.ehviewer.ui.MainActivity
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.main.GalleryDetailErrorTip
 import com.hippo.ehviewer.ui.main.NavigationIcon
+import com.hippo.ehviewer.ui.main.rememberGalleryDetailTitleState
 import com.hippo.ehviewer.ui.navToReader
 import com.hippo.ehviewer.ui.openBrowser
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
@@ -82,6 +83,7 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Share
+import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 typealias VoteTag = suspend GalleryDetail.(String, Int) -> Unit
@@ -174,7 +176,8 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
     val exportSuccess = stringResource(id = R.string.export_as_archive_success)
     val exportFailed = stringResource(id = R.string.export_as_archive_failed)
     val windowSizeClass = LocalWindowSizeClass.current
-    val title = galleryInfo?.let { EhUtils.getSuitableTitle(it) }.orEmpty()
+    val titleState = rememberGalleryDetailTitleState(gid, galleryInfo?.let { EhUtils.getSuitableTitle(it) }.orEmpty())
+    val title = titleState.title
     val backdrop = rememberBlurBackdrop()
     Scaffold(
         topBar = {
@@ -197,6 +200,11 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
                             },
                         ) {
                             Icon(imageVector = MiuixIcons.Share, contentDescription = null)
+                        }
+                        if (titleState.translationEnabled) {
+                            IconButton(onClick = titleState.onTranslateOrToggle) {
+                                Icon(imageVector = MiuixIcons.Translate, contentDescription = null)
+                            }
                         }
                         if (windowSizeClass.isExpanded) {
                             IconButton(

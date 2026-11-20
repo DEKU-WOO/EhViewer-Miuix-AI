@@ -80,8 +80,8 @@ android {
     productFlavors {
         create("default") {
             minSdk = 26
-            applicationIdSuffix = ".miuix"
-            versionNameSuffix = "-miuix"
+            applicationIdSuffix = ".ai"
+            versionNameSuffix = "-ai"
         }
         create("marshmallow") {
             applicationIdSuffix = ".m"

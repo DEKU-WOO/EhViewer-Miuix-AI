@@ -132,6 +132,13 @@ object Settings : DataStorePreferences(null) {
     val updateIntervalDays = intPref("update_interval_days", 7)
     val ignoredUpdateVersion = stringOrNullPref("ignored_update_version")
 
+    // AI Translation
+    val aiTranslationEnabled = boolPref("ai_translation_enabled", false)
+    val aiTranslationApiUrl = stringPref("ai_translation_api_url", "https://api.openai.com/v1")
+    val aiTranslationApiKey = stringPref("ai_translation_api_key", "")
+    val aiTranslationModel = stringPref("ai_translation_model", "gpt-4o-mini")
+    val aiTranslationMode = intPref("ai_translation_mode", 0)
+
     // Misc
     val languageFilter = intPref("language_filter", -1)
     val downloadSortMode = intPref("download_sort_mode", SortMode.Default.flag)

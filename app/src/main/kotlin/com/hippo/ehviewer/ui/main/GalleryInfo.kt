@@ -16,15 +16,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,9 +42,12 @@ import com.ehviewer.core.ui.util.SharedElementBox
 import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.listThumbGenerator
 import com.hippo.ehviewer.EhDB
+import com.hippo.ehviewer.Settings
+import com.hippo.ehviewer.client.AiTranslationManager
 import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.util.FavouriteStatusRouter
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -74,10 +81,9 @@ fun GalleryInfoListItem(
             )
         }
         Column(modifier = Modifier.padding(start = 8.dp, top = 2.dp, end = 4.dp, bottom = 4.dp)) {
-            Text(
-                text = EhUtils.getSuitableTitle(info),
+            GalleryTitleText(
+                info = info,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
                 style = MiuixTheme.textStyles.body1,
             )
             Spacer(modifier = Modifier.weight(1f))
@@ -289,6 +295,68 @@ fun GalleryInfoGridItem(
     }
 }
 
+/**
+ * 画廊标题（带 AI 翻译）。
+ *
+ * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）：进入列表即自动翻译并展示译文；
+ * - 手动模式：点击标题触发翻译；
+ * - 已翻译后再次点击可在原文与译文之间切换显示。
+ */
+@Composable
+fun GalleryTitleText(
+    info: GalleryInfo,
+    style: TextStyle,
+    maxLines: Int,
+    modifier: Modifier = Modifier,
+) {
+    val enabled by remember { Settings.aiTranslationEnabled.valueFlow() }
+        .collectAsState(initial = Settings.aiTranslationEnabled.value)
+    val triggerMode by remember { Settings.aiTranslationMode.valueFlow() }
+        .collectAsState(initial = Settings.aiTranslationMode.value)
+    val original = remember(info.gid) { EhUtils.getSuitableTitle(info) }
+    var translated by remember(info.gid) { mutableStateOf<String?>(null) }
+    var showTranslated by remember(info.gid) { mutableStateOf(false) }
+    var translating by remember(info.gid) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun translate() {
+        if (!enabled || translated != null || translating) return
+        translating = true
+        val result = AiTranslationManager.getOrTranslateTitle(info.gid, original)
+        if (result.isNotBlank() && result != original) {
+            translated = result
+            showTranslated = true
+        }
+        translating = false
+    }
+
+    LaunchedEffect(info.gid, enabled, triggerMode) {
+        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate()
+    }
+
+    val clickable = enabled && (translated != null || triggerMode != AI_TRANSLATION_MODE_AUTO)
+    Text(
+        text = if (showTranslated) translated ?: original else original,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+        style = style,
+        modifier = if (clickable) {
+            modifier.clickable {
+                if (translated != null) {
+                    showTranslated = !showTranslated
+                } else {
+                    scope.launch { translate() }
+                }
+            }
+        } else {
+            modifier
+        },
+    )
+}
+
 private const val MIN_RATIO = 0.5F
 private const val MAX_RATIO = 1.5F
 const val DEFAULT_RATIO = 0.67F
+
+/** AI 翻译触发模式：0 = 列表自动翻译，1 = 手动点击翻译 */
+const val AI_TRANSLATION_MODE_AUTO = 0
