@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.ui.main
 
+import android.widget.Toast
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +46,7 @@ import com.ehviewer.core.ui.util.listThumbGenerator
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.AiTranslationManager
+import com.hippo.ehviewer.client.AiTranslationResult
 import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.util.FavouriteStatusRouter
@@ -301,6 +304,7 @@ fun GalleryInfoGridItem(
  * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）：进入列表即自动翻译并展示译文；
  * - 手动模式：点击标题触发翻译；
  * - 已翻译后再次点击可在原文与译文之间切换显示。
+ * - 翻译失败时：自动模式保持原标题静默（避免列表弹出一串提示），手动点击（含自动模式下补点）会 Toast 出具体原因。
  */
 @Composable
 fun GalleryTitleText(
@@ -318,34 +322,42 @@ fun GalleryTitleText(
     var showTranslated by remember(info.gid) { mutableStateOf(false) }
     var translating by remember(info.gid) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    suspend fun translate() {
+    suspend fun translate(reportError: Boolean) {
         if (!enabled || translated != null || translating) return
         translating = true
-        val result = AiTranslationManager.getOrTranslateTitle(info.gid, original)
-        if (result.isNotBlank() && result != original) {
-            translated = result
-            showTranslated = true
+        when (val result = AiTranslationManager.getOrTranslateTitle(info.gid, original)) {
+            is AiTranslationResult.Success -> {
+                if (result.title.isNotBlank() && result.title != original) {
+                    translated = result.title
+                    showTranslated = true
+                }
+            }
+            is AiTranslationResult.Failure -> {
+                if (reportError) Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
         }
         translating = false
     }
 
     LaunchedEffect(info.gid, enabled, triggerMode) {
-        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate()
+        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate(reportError = false)
     }
 
-    val clickable = enabled && (translated != null || triggerMode != AI_TRANSLATION_MODE_AUTO)
+    // 手动模式下点击标题即翻译（失败会 Toast）；自动模式不拦截点击，避免影响卡片本身的跳转
+    val interceptClick = enabled && (translated != null || triggerMode != AI_TRANSLATION_MODE_AUTO)
     Text(
         text = if (showTranslated) translated ?: original else original,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         style = style,
-        modifier = if (clickable) {
+        modifier = if (interceptClick) {
             modifier.clickable {
                 if (translated != null) {
                     showTranslated = !showTranslated
                 } else {
-                    scope.launch { translate() }
+                    scope.launch { translate(reportError = true) }
                 }
             }
         } else {

@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.ui.main
 
+import android.widget.Toast
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -48,6 +50,7 @@ import com.ehviewer.core.ui.util.detailThumbGenerator
 import com.ehviewer.core.ui.util.thenIf
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.AiTranslationManager
+import com.hippo.ehviewer.client.AiTranslationResult
 import com.hippo.ehviewer.client.EhUtils
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
@@ -304,20 +307,27 @@ fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailT
     var showTranslated by remember(gid) { mutableStateOf(false) }
     var translating by remember(gid) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-    suspend fun translate() {
+    suspend fun translate(reportError: Boolean) {
         if (!enabled || translated != null || translating || original.isBlank()) return
         translating = true
-        val result = AiTranslationManager.getOrTranslateTitle(gid, original)
-        if (result.isNotBlank() && result != original) {
-            translated = result
-            showTranslated = true
+        when (val result = AiTranslationManager.getOrTranslateTitle(gid, original)) {
+            is AiTranslationResult.Success -> {
+                if (result.title.isNotBlank() && result.title != original) {
+                    translated = result.title
+                    showTranslated = true
+                }
+            }
+            is AiTranslationResult.Failure -> {
+                if (reportError) Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
         }
         translating = false
     }
 
     LaunchedEffect(gid, enabled, triggerMode, original) {
-        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate()
+        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate(reportError = false)
     }
 
     return GalleryDetailTitleState(
@@ -328,7 +338,7 @@ fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailT
             if (translated != null) {
                 showTranslated = !showTranslated
             } else {
-                scope.launch { translate() }
+                scope.launch { translate(reportError = true) }
             }
         },
     )

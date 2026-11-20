@@ -5,6 +5,7 @@ import com.ehviewer.core.database.model.GalleryTranslationEntity
 import com.ehviewer.core.database.roomDb
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.Settings
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -12,11 +13,18 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.ConcurrentHashMap
+
+/** AI 翻译结果：成功时携带译文，失败时携带可直接展示给用户的错误原因。 */
+sealed interface AiTranslationResult {
+    data class Success(val title: String) : AiTranslationResult
+    data class Failure(val message: String) : AiTranslationResult
+}
 
 object AiTranslationManager {
     private val httpClient get() = EhApplication.ktorClient
@@ -26,57 +34,80 @@ object AiTranslationManager {
 
     private val db by lazy { roomDb<EhDatabase>("eh.db") }
 
-    suspend fun getOrTranslateTitle(gid: Long, originalTitle: String): String {
+    /**
+     * 获取画廊标题译文。命中本地缓存时直接返回；否则发起请求并写回缓存。
+     * 任何失败都返回 [AiTranslationResult.Failure]，调用方据此提示用户，避免静默失败。
+     */
+    suspend fun getOrTranslateTitle(gid: Long, originalTitle: String): AiTranslationResult {
         if (!Settings.aiTranslationEnabled.value) {
-            return originalTitle
+            return AiTranslationResult.Failure("AI 翻译未启用")
         }
-        if (originalTitle.isBlank()) return originalTitle
+        if (originalTitle.isBlank()) {
+            return AiTranslationResult.Failure("标题为空，无需翻译")
+        }
+
+        val apiUrl = Settings.aiTranslationApiUrl.value.trim().trimEnd('/')
+        val apiKey = Settings.aiTranslationApiKey.value.trim()
+        val model = Settings.aiTranslationModel.value.trim()
+        if (apiUrl.isBlank()) return AiTranslationResult.Failure("未配置 API 地址")
+        if (apiKey.isBlank()) return AiTranslationResult.Failure("未配置 API Key")
 
         // 1. 查询本地 Room 数据库缓存
-        val cached = db.galleryTranslationDao().getTranslation(gid)
-        if (cached != null && cached.originalTitle == originalTitle) {
-            return cached.translatedTitle
-        }
+        runCatching { db.galleryTranslationDao().getTranslation(gid) }
+            .getOrNull()
+            ?.takeIf { it.originalTitle == originalTitle }
+            ?.let { return AiTranslationResult.Success(it.translatedTitle) }
 
-        // 2. 防抖 / 并发保护：如果正在翻译该 gid，直接返回原标题等待缓存或下次刷新
+        // 2. 防抖 / 并发保护：同一 gid 正在翻译时不重复发请求
         if (!translatingGids.add(gid)) {
-            return originalTitle
+            return AiTranslationResult.Failure("该画廊正在翻译中，请稍候")
         }
 
         return try {
-            val translated = requestAiTranslation(originalTitle)
-            if (translated.isNotBlank()) {
-                db.galleryTranslationDao().insertTranslation(
-                    GalleryTranslationEntity(
-                        gid = gid,
-                        originalTitle = originalTitle,
-                        translatedTitle = translated,
-                    ),
-                )
-                translated
+            val translated = requestAiTranslation(apiUrl, apiKey, model, originalTitle)
+            if (translated.isBlank()) {
+                AiTranslationResult.Failure("模型未返回翻译内容")
             } else {
-                originalTitle
+                runCatching {
+                    db.galleryTranslationDao().insertTranslation(
+                        GalleryTranslationEntity(
+                            gid = gid,
+                            originalTitle = originalTitle,
+                            translatedTitle = translated,
+                        ),
+                    )
+                }
+                AiTranslationResult.Success(translated)
             }
         } catch (e: Exception) {
-            originalTitle
+            AiTranslationResult.Failure(e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误"))
         } finally {
             translatingGids.remove(gid)
         }
     }
 
-    private suspend fun requestAiTranslation(text: String): String {
-        val apiUrl = Settings.aiTranslationApiUrl.value.trimEnd('/')
-        val apiKey = Settings.aiTranslationApiKey.value
-        val model = Settings.aiTranslationModel.value
+    private suspend fun requestAiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
+        val text = "请将以下漫画/画廊标题准确翻译为简洁流畅的简体中文。不要解释，直接输出翻译结果：\n$prompt"
 
-        val prompt = "请将以下漫画/画廊标题准确翻译为简洁流畅的简体中文。不要解释，直接输出翻译结果：\n$text"
-
-        // 判断是 Google Gemini 接口还是 OpenAI 兼容接口
-        return if (apiUrl.contains("generativelanguage.googleapis.com", ignoreCase = true) || apiUrl.contains("gemini", ignoreCase = true)) {
-            requestGeminiTranslation(apiUrl, apiKey, model, prompt)
+        return if (isOpenAiCompatible(apiUrl)) {
+            requestOpenAiTranslation(apiUrl, apiKey, model, text)
         } else {
-            requestOpenAiTranslation(apiUrl, apiKey, model, prompt)
+            requestGeminiTranslation(apiUrl, apiKey, model, text)
         }
+    }
+
+    /**
+     * 判断是否走 OpenAI 兼容协议。
+     *
+     * Google 的 OpenAI 兼容层地址形如 `https://generativelanguage.googleapis.com/v1beta/openai`，
+     * 它同时包含 Google 域名与 `/openai` 路径，必须优先按 OpenAI 协议处理，否则会被误判为
+     * Gemini 原生接口并拼出 404 的 endpoint。
+     */
+    private fun isOpenAiCompatible(apiUrl: String): Boolean {
+        val url = apiUrl.lowercase()
+        if (url.contains("/openai")) return true
+        if (url.contains("generativelanguage.googleapis.com")) return false
+        return true
     }
 
     private suspend fun requestOpenAiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
@@ -93,23 +124,25 @@ object AiTranslationManager {
 
         val response = httpClient.post(endpoint) {
             contentType(ContentType.Application.Json)
-            if (apiKey.isNotBlank()) {
-                header(HttpHeaders.Authorization, "Bearer $apiKey")
-            }
+            header(HttpHeaders.Authorization, "Bearer $apiKey")
+            // 共享 ktorClient 的全局请求超时仅 10s，翻译请求单独放宽
+            timeout { requestTimeoutMillis = 30_000 }
             setBody(requestBody)
-        }.bodyAsText()
+        }
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException("HTTP ${response.status.value}：${body.take(200)}")
+        }
 
-        val jsonObject = json.parseToJsonElement(response).jsonObject
-        val choices = jsonObject["choices"]?.jsonArray
-        val firstChoice = choices?.getOrNull(0)?.jsonObject
-        val message = firstChoice?.get("message")?.jsonObject
-        return message?.get("content")?.jsonPrimitive?.content?.trim() ?: ""
+        val jsonObject = json.parseToJsonElement(body).jsonObject
+        val message = jsonObject["choices"]?.jsonArray?.getOrNull(0)?.jsonObject?.get("message")?.jsonObject
+        return message?.get("content")?.jsonPrimitive?.content?.trim().orEmpty()
     }
 
     private suspend fun requestGeminiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
-        val targetModel = if (model.isBlank()) "gemini-1.5-flash" else model
+        val targetModel = model.ifBlank { "gemini-1.5-flash" }
         // 兼容形如 https://generativelanguage.googleapis.com/v1beta 或带模型的完整 URL
-        val endpoint = if (apiUrl.contains("models/")) {
+        val endpoint = if (apiUrl.contains("/models/")) {
             "$apiUrl:generateContent?key=$apiKey"
         } else {
             "$apiUrl/models/$targetModel:generateContent?key=$apiKey"
@@ -129,16 +162,19 @@ object AiTranslationManager {
 
         val response = httpClient.post(endpoint) {
             contentType(ContentType.Application.Json)
+            // 共享 ktorClient 的全局请求超时仅 10s，翻译请求单独放宽
+            timeout { requestTimeoutMillis = 30_000 }
             setBody(requestBody)
-        }.bodyAsText()
+        }
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException("HTTP ${response.status.value}：${body.take(200)}")
+        }
 
-        val jsonObject = json.parseToJsonElement(response).jsonObject
-        val candidates = jsonObject["candidates"]?.jsonArray
-        val firstCandidate = candidates?.getOrNull(0)?.jsonObject
-        val content = firstCandidate?.get("content")?.jsonObject
-        val parts = content?.get("parts")?.jsonArray
-        val firstPart = parts?.getOrNull(0)?.jsonObject
-        return firstPart?.get("text")?.jsonPrimitive?.content?.trim() ?: ""
+        val jsonObject = json.parseToJsonElement(body).jsonObject
+        val candidate = jsonObject["candidates"]?.jsonArray?.getOrNull(0)?.jsonObject
+        val part = candidate?.get("content")?.jsonObject?.get("parts")?.jsonArray?.getOrNull(0)?.jsonObject
+        return part?.get("text")?.jsonPrimitive?.content?.trim().orEmpty()
     }
 
     private fun jsonEncode(value: String): String {
