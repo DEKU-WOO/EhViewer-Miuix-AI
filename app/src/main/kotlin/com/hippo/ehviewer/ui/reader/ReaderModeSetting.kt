@@ -56,15 +56,23 @@ fun ReaderModeSetting(isWebtoon: Boolean) = Column(
     }
     Spacer(modifier = Modifier.size(16.dp))
     Crossfade(targetState = isWebtoon, label = "Setting") { webtoon ->
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-        ) {
-            if (webtoon) {
-                WebtoonSetting()
-            } else {
-                PagerSetting()
+        Column {
+            Text(
+                text = stringResource(id = if (webtoon) R.string.webtoon_viewer else R.string.pager_viewer),
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                style = MiuixTheme.textStyles.body2,
+            )
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            ) {
+                if (webtoon) {
+                    WebtoonSetting()
+                } else {
+                    PagerSetting()
+                }
             }
         }
     }
@@ -72,12 +80,6 @@ fun ReaderModeSetting(isWebtoon: Boolean) = Column(
 
 @Composable
 private fun PagerSetting() = Column {
-    Text(
-        text = stringResource(id = R.string.pager_viewer),
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        style = MiuixTheme.textStyles.body2,
-    )
     val pagerNav = Settings.readerPagerNav.asMutableState()
     SpinnerChoice(
         title = stringResource(id = R.string.pref_viewer_nav),
@@ -126,12 +128,6 @@ private fun PagerSetting() = Column {
 
 @Composable
 private fun WebtoonSetting() = Column {
-    Text(
-        text = stringResource(id = R.string.webtoon_viewer),
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-        style = MiuixTheme.textStyles.body2,
-    )
     val webtoonNav = Settings.readerWebtoonNav.asMutableState()
     SpinnerChoice(
         title = stringResource(id = R.string.pref_viewer_nav),

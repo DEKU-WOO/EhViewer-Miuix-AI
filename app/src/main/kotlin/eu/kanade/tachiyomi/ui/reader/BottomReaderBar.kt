@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -17,7 +18,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.LiquidGlassSurface
-import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Crop
 import com.ehviewer.core.ui.icons.filled.CropOff
@@ -45,7 +45,7 @@ fun BottomReaderBar(
     modifier = modifier
         .fillMaxWidth()
         .height(56.dp),
-    shape = SquircleShape(20.dp),
+    shape = CircleShape,
     elevation = 8.dp,
     containerColor = containerColor,
 ) {
