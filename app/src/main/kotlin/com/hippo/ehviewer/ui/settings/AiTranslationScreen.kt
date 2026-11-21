@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,6 +41,8 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
@@ -64,6 +67,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.coroutines.resume
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -364,15 +368,29 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = if (profiles.isEmpty()) 16.dp else 0.dp,
+                                bottom = 16.dp,
+                            ),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        TextButton(text = newProfileTitle, onClick = ::newProfile)
-                        TextButton(text = renameProfileTitle, onClick = ::renameProfile)
-                        TextButton(
+                        ProfileActionButton(
+                            text = newProfileTitle,
+                            onClick = ::newProfile,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ProfileActionButton(
+                            text = renameProfileTitle,
+                            onClick = ::renameProfile,
+                            modifier = Modifier.weight(1f),
+                        )
+                        ProfileActionButton(
                             text = stringResource(R.string.settings_ai_translation_profile_delete),
                             onClick = ::deleteProfile,
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
@@ -385,8 +403,8 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 ) {
                     val profile = activeProfile
                     if (profile != null) {
-                        // 首尾各留 12.dp：Card 自身无内边距，靠这里给输入框和末项按钮呼吸感
-                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        // 上下各留 12.dp，配合元素自身 4.dp 达到与设置项一致的 16.dp 呼吸边距
+                        Column(modifier = Modifier.padding(vertical = 12.dp)) {
                             // 切换方案时重建输入框，保证文本状态跟随当前方案
                             key(profile.id) {
                                 ProfileTextField(
@@ -505,4 +523,28 @@ private fun ProfileTextField(
             null
         },
     )
+}
+
+/** 配置方案操作按钮：等宽单行，避免在卡片内折行。 */
+@Composable
+private fun ProfileActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        minWidth = 0.dp,
+        minHeight = 36.dp,
+        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        MiuixText(
+            text = text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
