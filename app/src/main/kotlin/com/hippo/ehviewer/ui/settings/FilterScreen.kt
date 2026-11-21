@@ -42,6 +42,7 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.DropdownFilterChip
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.readableWidth
@@ -119,6 +120,7 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
                 }
                 WindowDialog(
                     show = true,
+                    modifier = Modifier.glassRim(),
                     onDismissRequest = { cont.cancel() },
                     title = stringResource(id = R.string.add_filter),
                 ) {

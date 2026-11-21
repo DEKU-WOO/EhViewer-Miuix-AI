@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.lerp
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.util.unreachable
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
@@ -71,6 +72,7 @@ fun BoxScope.PausableAlertDialog(
     var showDialog by remember { mutableStateOf(true) }
     WindowDialog(
         show = showDialog,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { showDialog = false },
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {

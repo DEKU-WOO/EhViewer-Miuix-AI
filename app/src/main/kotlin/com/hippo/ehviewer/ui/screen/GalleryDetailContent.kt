@@ -93,6 +93,7 @@ import com.ehviewer.core.ui.component.FilledTertiaryIconToggleButton
 import com.ehviewer.core.ui.component.GalleryDetailRating
 import com.ehviewer.core.ui.component.GalleryRatingBar
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Magnet
 import com.ehviewer.core.ui.util.AdaptiveBreakpoints
@@ -256,6 +257,7 @@ fun GalleryDetailContent(
             dialog { cont ->
                 WindowBottomSheet(
                     show = true,
+                    modifier = Modifier.glassRim(topOnly = true),
                     onDismissRequest = { cont.cancel() },
                 ) {
                     GalleryInfoBottomSheet(galleryDetail)
@@ -297,6 +299,7 @@ fun GalleryDetailContent(
             dialog { cont ->
                 WindowBottomSheet(
                     show = true,
+                    modifier = Modifier.glassRim(topOnly = true),
                     onDismissRequest = { cont.cancel() },
                 ) {
                     Column(

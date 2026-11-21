@@ -58,6 +58,7 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.asyncInVM
@@ -286,6 +287,7 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                             fun dispose() = cont.resume(Unit)
                             WindowBottomSheet(
                                 show = true,
+                                modifier = Modifier.glassRim(topOnly = true),
                                 onDismissRequest = { dispose() },
                             ) {
                                 ReaderPageSheetMeta(
@@ -409,6 +411,7 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                             var isColorFilter by remember { mutableStateOf(false) }
                             WindowBottomSheet(
                                 show = true,
+                                modifier = Modifier.glassRim(topOnly = true),
                                 backgroundColor = Color.Black,
                                 onDismissRequest = { dispose() },
                                 enableWindowDim = !isColorFilter,

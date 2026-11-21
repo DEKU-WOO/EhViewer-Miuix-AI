@@ -71,6 +71,7 @@ import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.MenuBook
@@ -580,6 +581,7 @@ fun SearchBarScreen(
             if (filter != null) {
                 WindowBottomSheet(
                     show = showFilterSheet,
+                    modifier = Modifier.glassRim(topOnly = true),
                     onDismissRequest = { showFilterSheet = false },
                 ) {
                     CompositionLocalProvider(LocalBackdrop provides null) {

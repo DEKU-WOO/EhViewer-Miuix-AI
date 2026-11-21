@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
+import com.ehviewer.core.ui.component.glassRim
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -74,6 +75,7 @@ fun CookieSignInDialog(
 
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.cookie_sign_in_dialog_title),
     ) {

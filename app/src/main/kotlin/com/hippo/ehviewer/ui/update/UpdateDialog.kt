@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.util.isAtLeastO
 import com.hippo.ehviewer.BuildConfig
 import com.hippo.ehviewer.ui.component.MarkdownText
@@ -105,6 +106,7 @@ fun UpdateDialog(
 
     WindowDialog(
         show = show,
+        modifier = Modifier.glassRim(),
         title = stringResource(R.string.update_dialog_title),
         summary = summaryText,
         onDismissRequest = onDismiss,

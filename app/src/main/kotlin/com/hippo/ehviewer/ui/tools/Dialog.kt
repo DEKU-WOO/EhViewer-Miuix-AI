@@ -71,6 +71,7 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.LabeledCheckbox
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.ifNotNullThen
 import com.ehviewer.core.ui.util.ifTrueThen
@@ -166,6 +167,7 @@ suspend fun <R> awaitResult(
     }
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { cont.cancel() },
         title = title?.let { stringResource(id = it) },
     ) {
@@ -356,6 +358,7 @@ suspend fun awaitInputText(
     var error by remember(cont) { mutableStateOf<String?>(null) }
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = {
             cont.cancel()
             onUserDismiss?.invoke()
@@ -436,6 +439,7 @@ suspend fun awaitInputTextWithCheckBox(
     var checkedState by remember { mutableStateOf(checked) }
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { cont.cancel() },
         title = title?.let { stringResource(id = it) },
     ) {
@@ -513,6 +517,7 @@ suspend fun awaitConfirmationOrCancel(
 ) = dialog<Unit> { cont ->
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { cont.cancel() },
         title = title?.let { stringResource(id = it) },
     ) {
@@ -576,6 +581,7 @@ suspend fun awaitSelectDate(
     )
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { cont.cancel() },
         maxWidth = 560.dp,
     ) {
@@ -614,6 +620,7 @@ context(_: DialogState)
 suspend fun <R> showNoButton(respectDefaultWidth: Boolean = true, block: @Composable Continuation<R>.() -> Unit): R = dialog { cont ->
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { cont.cancel() },
         maxWidth = if (!respectDefaultWidth) 560.dp else MiuixDialogDefaults.MaxWidth,
     ) {
@@ -630,6 +637,7 @@ suspend fun awaitSelectTime(
     val state = rememberTimePickerState(initialHour, initialMinute)
     WindowDialog(
         show = true,
+        modifier = Modifier.glassRim(),
         onDismissRequest = { cont.cancel() },
     ) {
         Column(
