@@ -46,8 +46,8 @@ import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
-import com.ehviewer.core.ui.util.launch
 import com.ehviewer.core.ui.util.readableWidth
+import com.ehviewer.core.util.launch
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.asMutableState
 import com.hippo.ehviewer.client.AiConnectionTestResult
