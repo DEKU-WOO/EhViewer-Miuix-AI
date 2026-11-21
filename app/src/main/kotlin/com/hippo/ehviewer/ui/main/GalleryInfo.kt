@@ -171,30 +171,12 @@ fun GalleryInfoListItem(
                     color = EhUtils.getCategoryTextColor(categoryColor),
                     style = MiuixTheme.textStyles.footnote2,
                 )
-                val displayTags = remember(info.simpleTags) {
-                    info.simpleTags?.filterNot { it.startsWith("language:") }?.take(2)
-                }
-                if (!displayTags.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    displayTags.forEach { rawTag ->
-                        val tagText = rawTag.substringAfter(':')
-                        Text(
-                            text = tagText,
-                            modifier = Modifier
-                                .clip(SquircleShape(4.dp))
-                                .background(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f))
-                                .padding(horizontal = 5.dp, vertical = 2.dp),
-                            style = MiuixTheme.textStyles.footnote2,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
-                }
+                // 分类徽章与上传时间之间保持留白，不再插入简化标签，避免挤压右侧时间
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = info.posted.orEmpty(),
+                    maxLines = 1,
+                    softWrap = false,
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )

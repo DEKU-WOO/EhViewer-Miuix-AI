@@ -746,9 +746,9 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                                     },
                                     onStop = { launchIO { DownloadManager.stopDownload(info.gid) } },
                                     info = info,
+                                    thumbHeight = height,
                                     selectMode = selectMode,
                                     showProgress = showProgress,
-                                    modifier = Modifier.height(height),
                                     interactionSource = interactionSource,
                                 )
                             }

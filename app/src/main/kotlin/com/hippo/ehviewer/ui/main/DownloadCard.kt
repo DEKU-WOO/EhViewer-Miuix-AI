@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -19,11 +21,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
@@ -56,11 +60,18 @@ fun DownloadCard(
     onStart: () -> Unit,
     onStop: () -> Unit,
     info: DownloadInfo,
+    thumbHeight: Dp,
     selectMode: Boolean,
     showProgress: Boolean,
     modifier: Modifier = Modifier,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
-) = CrystalCard(modifier = modifier, onClick = onClick, onLongClick = onLongClick, interactionSource = interactionSource) {
+) = CrystalCard(
+    // 高度只锁定下限：缩略图保持设定大小，卡片整体随右侧信息列自然撑开，避免底部标签被裁切
+    modifier = modifier.heightIn(min = thumbHeight),
+    onClick = onClick,
+    onLongClick = onLongClick,
+    interactionSource = interactionSource,
+) {
     Row {
         val thumb = remember {
             movableContentOf<DownloadInfo> {
@@ -73,25 +84,24 @@ fun DownloadCard(
             }
         }
         if (selectMode) {
-            Card {
+            Card(modifier = Modifier.height(thumbHeight)) {
                 thumb(info)
             }
         } else {
-            Card(onClick = onThumbClick) {
+            Card(modifier = Modifier.height(thumbHeight), onClick = onThumbClick) {
                 thumb(info)
             }
         }
         val stateFailed = stringResource(R.string.download_state_failed)
         val stateFailed2 = stringResource(R.string.download_state_failed_2, info.legacy)
         val downloadState by DownloadManager.collectDownloadState(info.gid)
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(start = 10.dp, top = 8.dp, end = 6.dp, bottom = 8.dp)) {
             Text(
                 text = EhUtils.getSuitableTitle(info),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = MiuixTheme.textStyles.title4,
             )
-            Spacer(modifier = Modifier.weight(1f))
             if (downloadState != DownloadInfo.STATE_DOWNLOAD) {
                 val stateText = when (downloadState) {
                     DownloadInfo.STATE_NONE -> stringResource(R.string.download_state_none)
@@ -147,10 +157,10 @@ fun DownloadCard(
                     )
                 }
             }
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     // Place the rating near the uploader text as there's more visual space
-                    GalleryListCardRating(rating = info.rating, modifier = Modifier.padding(vertical = 2.dp))
+                    GalleryListCardRating(rating = info.rating, modifier = Modifier.padding(vertical = 1.dp))
                     val categoryColor = EhUtils.getCategoryColor(info.category)
                     val categoryText = EhUtils.getCategory(info.category).uppercase()
                     Text(
