@@ -74,7 +74,7 @@ fun BoxScope.ReaderAppBars(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                // 与底部控制栏一致使用圆形/胶囊裁剪，避免 SquircleShape 与阴影叠加出双层圆角
+                // 与底部控制栏一致使用胶囊裁剪，避免 SquircleShape 与阴影叠加出双层圆角
                 shape = CircleShape,
                 elevation = 8.dp,
                 containerColor = MiuixTheme.colorScheme.surfaceContainer,

@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -133,7 +134,7 @@ fun SimpleMenuPreferenceInt(
     val valuesArray = integerArrayResource(id = entryValueRes)
     check(entryArray.size == valuesArray.size)
     val selectedIndex = valuesArray.indexOf(state.value).coerceAtLeast(0)
-    AnchorSpringDropdown(
+    OverlayDropdownPreference(
         title = title,
         summary = summary,
         items = entryArray.toList(),

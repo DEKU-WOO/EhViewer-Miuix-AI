@@ -411,7 +411,6 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                             var isColorFilter by remember { mutableStateOf(false) }
                             WindowBottomSheet(
                                 show = true,
-                                modifier = Modifier.glassRim(topOnly = true),
                                 backgroundColor = Color.Black,
                                 onDismissRequest = { dispose() },
                                 enableWindowDim = !isColorFilter,

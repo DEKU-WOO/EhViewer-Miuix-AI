@@ -33,8 +33,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /**
  * 澎湃 OS 风格的弹窗微光描边（Rim Highlight）。
  *
- * 暗色模式下沿容器内缘绘制 1.dp、10%~35% 白色渐变高光，
- * 让纯黑背景上的弹窗呈现清晰的玻璃悬浮边缘。
+ * 暗色模式下沿容器内缘绘制 0.8.dp、12%~18% 白色渐变高光，
+ * 让纯黑背景上的弹窗呈现玻璃悬浮边缘。
  *
  * @param cornerRadius 容器圆角，需与弹窗自身圆角一致。
  * @param topOnly 底部弹窗只描顶部边缘，避免在屏幕底部画出多余圆角。
@@ -45,13 +45,13 @@ fun Modifier.glassRim(cornerRadius: Dp = 32.dp, topOnly: Boolean = false): Modif
     if (!isDark) return this
     return drawWithContent {
         drawContent()
-        val stroke = 1.dp.toPx()
+        val stroke = 0.8.dp.toPx()
         val radiusPx = cornerRadius.toPx()
         val rimSize = Size(size.width - stroke, size.height - stroke)
         val brush = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.35f),
-            0.55f to Color.White.copy(alpha = 0.20f),
-            1f to Color.White.copy(alpha = 0.10f),
+            0f to Color.White.copy(alpha = 0.18f),
+            0.55f to Color.White.copy(alpha = 0.10f),
+            1f to Color.White.copy(alpha = 0.06f),
         )
         val topLeft = Offset(stroke / 2f, stroke / 2f)
         val radius = CornerRadius(radiusPx)
