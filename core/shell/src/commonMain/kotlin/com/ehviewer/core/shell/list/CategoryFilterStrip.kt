@@ -126,10 +126,12 @@ private fun CategoryAllPill(
         elevation = if (isAllSelected) 3.dp else 1.dp,
         refractionHeight = 8.dp,
         refractionAmount = 8.dp,
-        modifier = Modifier.clickable(role = Role.RadioButton) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onSelectCategory(CategoryChipFlags.ALL)
-        },
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(role = Role.RadioButton) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSelectCategory(CategoryChipFlags.ALL)
+            },
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
@@ -157,17 +159,19 @@ private fun CategoryPill(
         elevation = if (selected) 3.dp else 1.dp,
         refractionHeight = 8.dp,
         refractionAmount = 8.dp,
-        modifier = Modifier.clickable(role = Role.RadioButton) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            if (selected) {
-                val newCat = currentSelection and spec.flag.inv()
-                onSelectCategory(if (newCat == 0) CategoryChipFlags.ALL else newCat)
-            } else if (isAllSelected) {
-                onSelectCategory(spec.flag)
-            } else {
-                onSelectCategory(currentSelection or spec.flag)
-            }
-        },
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(role = Role.RadioButton) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                if (selected) {
+                    val newCat = currentSelection and spec.flag.inv()
+                    onSelectCategory(if (newCat == 0) CategoryChipFlags.ALL else newCat)
+                } else if (isAllSelected) {
+                    onSelectCategory(spec.flag)
+                } else {
+                    onSelectCategory(currentSelection or spec.flag)
+                }
+            },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),

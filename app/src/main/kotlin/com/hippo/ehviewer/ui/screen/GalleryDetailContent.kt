@@ -751,6 +751,7 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
             val addFailed = stringResource(R.string.add_to_favorite_failure)
             FilledTertiaryIconToggleButton(
                 checked = favSlot != NOT_FAVORITED,
+                checkedBackgroundColor = MiuixTheme.colorScheme.surfaceContainerHigh,
                 onCheckedChange = {
                     launchIO {
                         favoritesLock.mutate {
@@ -773,6 +774,7 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
                 Icon(
                     imageVector = getFavoriteIcon(favSlot != NOT_FAVORITED),
                     contentDescription = null,
+                    tint = if (favSlot != NOT_FAVORITED) EhUtils.favoriteIconColor else MiuixTheme.colorScheme.onSurface,
                 )
             }
             Text(text = favButtonText)

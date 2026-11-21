@@ -272,10 +272,6 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
                         title = stringResource(id = R.string.black_dark_theme),
                         state = Settings.blackDarkTheme.asMutableState(),
                     )
-                    SwitchPreference(
-                        title = stringResource(id = R.string.harmonize_category_color),
-                        state = Settings.harmonizeCategoryColor.asMutableState(),
-                    )
                 }
 
                 SmallTitle(text = stringResource(id = R.string.settings_eh_show_gallery_comments))

@@ -285,7 +285,6 @@ fun GalleryDetailErrorTip(error: String, onClick: () -> Unit) = Column(
 class GalleryDetailTitleState(
     val title: String,
     val translationEnabled: Boolean,
-    val translated: Boolean,
     val onTranslateOrToggle: () -> Unit,
 )
 
@@ -294,8 +293,7 @@ class GalleryDetailTitleState(
  *
  * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）下仅做轻量入队，请求由 [AiTranslationManager]
  *   的全局队列在后台完成，页面销毁不会中断翻译，译写入库后由数据库 Flow 驱动刷新；
- * - 手动模式下点击翻译按钮触发；
- * - 已翻译后再次触发可在原文与译文之间切换显示。
+ * - 点击标题可手动入队翻译，已翻译后再次点击可在原文与译文之间切换显示。
  */
 @Composable
 fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailTitleState {
@@ -335,7 +333,6 @@ fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailT
     return GalleryDetailTitleState(
         title = if (showTranslated) translated ?: original else original,
         translationEnabled = enabled,
-        translated = translated != null,
         onTranslateOrToggle = {
             if (translated != null) {
                 showTranslated = !showTranslated

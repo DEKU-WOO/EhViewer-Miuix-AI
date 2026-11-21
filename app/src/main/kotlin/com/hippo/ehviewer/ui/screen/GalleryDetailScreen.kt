@@ -3,10 +3,30 @@ package com.hippo.ehviewer.ui.screen
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
 import androidx.collection.SieveCache
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,11 +34,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.fastFirst
 import androidx.compose.ui.util.fastJoinToString
+import androidx.compose.ui.util.fastRoundToInt
+import androidx.compose.ui.util.lerp
 import androidx.lifecycle.viewModelScope
 import com.ehviewer.core.data.model.findBaseInfo
 import com.ehviewer.core.database.model.DownloadInfo
@@ -66,24 +100,27 @@ import com.hippo.ehviewer.util.displayString
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlin.math.abs
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import moe.tarsin.coroutines.runSuspendCatching
 import moe.tarsin.snackbar
 import moe.tarsin.tip
+import top.yukonga.miuix.kmp.anim.folmeSpring
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Share
-import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 typealias VoteTag = suspend GalleryDetail.(String, Int) -> Unit
@@ -185,9 +222,10 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
                 backdrop = backdrop,
                 scrollBehavior = scrollBehavior,
             ) {
-                TopAppBar(
+                GalleryDetailTopAppBar(
                     title = title,
-                    largeTitle = title,
+                    titleClickable = titleState.translationEnabled,
+                    onTitleClick = titleState.onTranslateOrToggle,
                     navigationIcon = { NavigationIcon() },
                     scrollBehavior = scrollBehavior,
                     color = if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
@@ -200,11 +238,6 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
                             },
                         ) {
                             Icon(imageVector = MiuixIcons.Share, contentDescription = null)
-                        }
-                        if (titleState.translationEnabled) {
-                            IconButton(onClick = titleState.onTranslateOrToggle) {
-                                Icon(imageVector = MiuixIcons.Translate, contentDescription = null)
-                            }
                         }
                         if (windowSizeClass.isExpanded) {
                             IconButton(
@@ -357,3 +390,217 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
         }
     }
 }
+
+private val galleryDetailTitleStyle = TextStyle(
+    fontSize = 16.sp,
+    lineHeight = 20.sp,
+    fontWeight = FontWeight.Medium,
+)
+
+/** 保留 MIUIX 顶栏布局与折叠动画，仅将详情页标题替换为可点击的紧凑文本。 */
+@Composable
+private fun GalleryDetailTopAppBar(
+    title: String,
+    titleClickable: Boolean,
+    onTitleClick: () -> Unit,
+    navigationIcon: @Composable () -> Unit,
+    actions: @Composable RowScope.() -> Unit,
+    scrollBehavior: ScrollBehavior,
+    color: Color,
+) {
+    val scrolledOffset = remember(scrollBehavior) { { scrollBehavior.state.heightOffset } }
+    val largeTitleAlpha = remember(scrollBehavior) {
+        {
+            1f - (scrollBehavior.state.collapsedFraction * 3f).coerceIn(0f, 1f)
+        }
+    }
+    val updateHeightOffsetLimit = remember(scrollBehavior) {
+        { height: Int ->
+            val limit = -height.toFloat()
+            if (scrollBehavior.state.heightOffsetLimit != limit) {
+                scrollBehavior.state.heightOffsetLimit = limit
+            }
+            Unit
+        }
+    }
+    val smallTitleVisible by remember(scrollBehavior) {
+        derivedStateOf { scrollBehavior.state.collapsedFraction * 3f >= 1f }
+    }
+    val largeTitleVisible by remember(scrollBehavior) {
+        derivedStateOf { scrollBehavior.state.collapsedFraction * 3f < 1f }
+    }
+    val smallTitleAlpha = remember { Animatable(if (smallTitleVisible) 1f else 0f) }
+    val smallTitleTranslationY = remember { Animatable(if (smallTitleVisible) 0f else 20f) }
+
+    LaunchedEffect(smallTitleVisible) {
+        if (smallTitleVisible) {
+            val showSpec = folmeSpring<Float>(damping = 1.0f, response = 0.3f)
+            launch { smallTitleAlpha.animateTo(1f, showSpec) }
+            launch { smallTitleTranslationY.animateTo(0f, showSpec) }
+        } else {
+            val hideSpec = folmeSpring<Float>(damping = 1.0f, response = 0.15f)
+            launch { smallTitleAlpha.animateTo(0f, hideSpec) }
+            launch { smallTitleTranslationY.animateTo(20f, hideSpec) }
+        }
+    }
+
+    val animatedTitleColor by animateColorAsState(
+        targetValue = MiuixTheme.colorScheme.onSurface,
+        animationSpec = tween(durationMillis = 50),
+    )
+    val animatedLargeTitleColor by animateColorAsState(
+        targetValue = MiuixTheme.colorScheme.onSurface,
+        animationSpec = tween(durationMillis = 50),
+    )
+
+    Layout(
+        content = {
+            Box(
+                Modifier
+                    .layoutId("navigationIcon")
+                    .padding(start = TopAppBarDefaults.NavigationIconPadding),
+            ) {
+                navigationIcon()
+            }
+            Box(
+                Modifier
+                    .layoutId("title")
+                    .padding(horizontal = TopAppBarDefaults.TitlePadding)
+                    .graphicsLayer {
+                        alpha = smallTitleAlpha.value
+                        translationY = smallTitleTranslationY.value
+                    },
+            ) {
+                Text(
+                    text = title,
+                    color = animatedTitleColor,
+                    style = galleryDetailTitleStyle,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false,
+                    modifier = Modifier.clickable(
+                        enabled = titleClickable && smallTitleVisible,
+                        onClick = onTitleClick,
+                    ),
+                )
+            }
+            Box(
+                Modifier
+                    .layoutId("actionIcons")
+                    .padding(end = TopAppBarDefaults.ActionIconPadding),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
+            }
+            Box(
+                Modifier
+                    .layoutId("largeTitle")
+                    .padding(top = TopAppBarDefaults.CollapsedHeight)
+                    .padding(horizontal = TopAppBarDefaults.TitlePadding)
+                    .graphicsLayer { alpha = largeTitleAlpha() },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(0, scrolledOffset().fastRoundToInt())
+                        }
+                        .onSizeChanged { updateHeightOffsetLimit(it.height) },
+                ) {
+                    Text(
+                        text = title,
+                        color = animatedLargeTitleColor,
+                        style = galleryDetailTitleStyle,
+                        modifier = Modifier.clickable(
+                            enabled = titleClickable && largeTitleVisible,
+                            onClick = onTitleClick,
+                        ),
+                    )
+                }
+            }
+        },
+        modifier = Modifier
+            .background(color)
+            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+            .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
+            .clipToBounds()
+            .pointerInput(Unit) {
+                detectTapGestures { /* Consume click */ }
+            },
+    ) { measurables, constraints ->
+        val navigationIconPlaceable = measurables
+            .fastFirst { it.layoutId == "navigationIcon" }
+            .measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val actionIconsPlaceable = measurables
+            .fastFirst { it.layoutId == "actionIcons" }
+            .measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val maxTitleWidth = if (constraints.maxWidth == Constraints.Infinity) {
+            constraints.maxWidth
+        } else {
+            (constraints.maxWidth - navigationIconPlaceable.width - actionIconsPlaceable.width).coerceAtLeast(0)
+        }
+        val titleMaxWidth = if (maxTitleWidth == Constraints.Infinity) {
+            maxTitleWidth
+        } else {
+            (maxTitleWidth * DETAIL_TITLE_WIDTH_FRACTION).fastRoundToInt()
+        }
+        val titlePlaceable = measurables
+            .fastFirst { it.layoutId == "title" }
+            .measure(constraints.copy(minWidth = 0, maxWidth = titleMaxWidth, minHeight = 0))
+        val largeTitlePlaceable = measurables
+            .fastFirst { it.layoutId == "largeTitle" }
+            .measure(
+                constraints.copy(
+                    minWidth = 0,
+                    minHeight = 0,
+                    maxHeight = Constraints.Infinity,
+                ),
+            )
+
+        val collapsedHeight = TopAppBarDefaults.CollapsedHeight.roundToPx()
+        val expansion = (largeTitlePlaceable.height - collapsedHeight).coerceAtLeast(0)
+        val barHeight = if (expansion > 0) {
+            val offset = scrolledOffset()
+            val collapseFraction = if (offset.isNaN()) {
+                0f
+            } else {
+                (abs(offset) / expansion.toFloat()).coerceIn(0f, 1f)
+            }
+            lerp(
+                start = collapsedHeight,
+                stop = collapsedHeight + expansion,
+                fraction = 1f - collapseFraction,
+            )
+        } else {
+            collapsedHeight
+        }
+        val contentTop = barHeight + TopAppBarDefaults.LargeTitleBottomPadding.roundToPx()
+        val verticalCenter = collapsedHeight / 2
+
+        layout(constraints.maxWidth, contentTop) {
+            navigationIconPlaceable.placeRelative(
+                x = 0,
+                y = verticalCenter - navigationIconPlaceable.height / 2,
+            )
+            var titleX = (constraints.maxWidth - titlePlaceable.width) / 2
+            if (titleX < navigationIconPlaceable.width) {
+                titleX += navigationIconPlaceable.width - titleX
+            } else if (titleX + titlePlaceable.width > constraints.maxWidth - actionIconsPlaceable.width) {
+                titleX += (constraints.maxWidth - actionIconsPlaceable.width) - (titleX + titlePlaceable.width)
+            }
+            titlePlaceable.placeRelative(
+                x = titleX,
+                y = verticalCenter - titlePlaceable.height / 2,
+            )
+            actionIconsPlaceable.placeRelative(
+                x = constraints.maxWidth - actionIconsPlaceable.width,
+                y = verticalCenter - actionIconsPlaceable.height / 2,
+            )
+            largeTitlePlaceable.placeRelative(x = 0, y = 0)
+        }
+    }
+}
+
+private const val DETAIL_TITLE_WIDTH_FRACTION = 0.9f
