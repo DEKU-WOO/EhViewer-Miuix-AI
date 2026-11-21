@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +31,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.component.LiquidGlassSurface
-import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.util.AdaptiveBreakpoints
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.hippo.ehviewer.ui.main.NavigationIcon
@@ -74,7 +74,8 @@ fun BoxScope.ReaderAppBars(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = SquircleShape(20.dp),
+                // 与底部控制栏一致使用圆形/胶囊裁剪，避免 SquircleShape 与阴影叠加出双层圆角
+                shape = CircleShape,
                 elevation = 8.dp,
                 containerColor = MiuixTheme.colorScheme.surfaceContainer,
             ) {

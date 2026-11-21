@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.SadPanda
@@ -95,7 +96,8 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .glassRim(cornerRadius = 16.dp),
                 ) {
                     PreferenceHeader(
                         icon = EhIcons.Default.SadPanda,

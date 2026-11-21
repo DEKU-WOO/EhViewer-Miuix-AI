@@ -85,7 +85,6 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 context(ctx: Context)
@@ -174,7 +173,7 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                     val languageKeys = remember(languages) { languages.keys.toList() }
                     val languageValues = remember(languages) { languages.values.toList() }
                     val selectedLangIndex = languageKeys.indexOf(currentLanguage).coerceAtLeast(0)
-                    OverlayDropdownPreference(
+                    AnchorSpringDropdown(
                         title = stringResource(id = R.string.settings_advanced_app_language_title),
                         items = languageValues,
                         selectedIndex = selectedLangIndex,

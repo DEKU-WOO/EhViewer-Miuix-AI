@@ -82,7 +82,6 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -324,7 +323,8 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .glassRim(cornerRadius = 16.dp),
                 ) {
                     SwitchPreference(
                         title = stringResource(id = R.string.settings_ai_translation_enable),
@@ -335,10 +335,11 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .glassRim(cornerRadius = 16.dp),
                 ) {
                     val mode = Settings.aiTranslationMode.asMutableState()
-                    OverlayDropdownPreference(
+                    AnchorSpringDropdown(
                         title = stringResource(id = R.string.settings_ai_translation_mode),
                         items = listOf(
                             stringResource(id = R.string.settings_ai_translation_mode_auto),
@@ -354,10 +355,11 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .glassRim(cornerRadius = 16.dp),
                 ) {
                     if (profiles.isNotEmpty()) {
-                        OverlayDropdownPreference(
+                        AnchorSpringDropdown(
                             title = stringResource(id = R.string.settings_ai_translation_profile),
                             items = profiles.map { it.name },
                             selectedIndex = profiles.indexOfFirst { it.id == activeProfile?.id }.coerceAtLeast(0),
@@ -401,7 +403,8 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .glassRim(cornerRadius = 16.dp),
                 ) {
                     val profile = activeProfile
                     if (profile != null) {
@@ -424,7 +427,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                         AiProfileStore.updateProfile(profile.id) { it.copy(apiKey = text) }
                                     },
                                 )
-                                OverlayDropdownPreference(
+                                AnchorSpringDropdown(
                                     title = stringResource(R.string.settings_ai_translation_model_select),
                                     items = profile.models,
                                     selectedIndex = profile.models.indexOf(profile.selectedModel).coerceAtLeast(0),
@@ -470,7 +473,8 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .glassRim(cornerRadius = 16.dp),
                 ) {
                     BasicComponent(
                         title = stringResource(R.string.settings_ai_translation_export),
