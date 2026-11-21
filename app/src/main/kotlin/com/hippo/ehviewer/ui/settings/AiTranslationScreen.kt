@@ -364,7 +364,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -385,60 +385,63 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 ) {
                     val profile = activeProfile
                     if (profile != null) {
-                        // 切换方案时重建输入框，保证文本状态跟随当前方案
-                        key(profile.id) {
-                            ProfileTextField(
-                                title = stringResource(R.string.settings_ai_translation_api_url),
-                                value = profile.apiUrl,
-                                onValueChange = { text ->
-                                    AiProfileStore.updateProfile(profile.id) { it.copy(apiUrl = text) }
-                                },
-                            )
-                            ProfileTextField(
-                                title = stringResource(R.string.settings_ai_translation_api_key),
-                                value = profile.apiKey,
-                                password = true,
-                                onValueChange = { text ->
-                                    AiProfileStore.updateProfile(profile.id) { it.copy(apiKey = text) }
-                                },
-                            )
-                            OverlayDropdownPreference(
-                                title = stringResource(R.string.settings_ai_translation_model_select),
-                                items = profile.models,
-                                selectedIndex = profile.models.indexOf(profile.selectedModel).coerceAtLeast(0),
-                                showValue = true,
-                                onSelectedIndexChange = { index ->
-                                    profile.models.getOrNull(index)?.let { model ->
-                                        AiProfileStore.updateProfile(profile.id) { it.copy(selectedModel = model) }
-                                    }
-                                },
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TextButton(text = addModelTitle, onClick = ::addModel)
+                        // 首尾各留 12.dp：Card 自身无内边距，靠这里给输入框和末项按钮呼吸感
+                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                            // 切换方案时重建输入框，保证文本状态跟随当前方案
+                            key(profile.id) {
+                                ProfileTextField(
+                                    title = stringResource(R.string.settings_ai_translation_api_url),
+                                    value = profile.apiUrl,
+                                    onValueChange = { text ->
+                                        AiProfileStore.updateProfile(profile.id) { it.copy(apiUrl = text) }
+                                    },
+                                )
+                                ProfileTextField(
+                                    title = stringResource(R.string.settings_ai_translation_api_key),
+                                    value = profile.apiKey,
+                                    password = true,
+                                    onValueChange = { text ->
+                                        AiProfileStore.updateProfile(profile.id) { it.copy(apiKey = text) }
+                                    },
+                                )
+                                OverlayDropdownPreference(
+                                    title = stringResource(R.string.settings_ai_translation_model_select),
+                                    items = profile.models,
+                                    selectedIndex = profile.models.indexOf(profile.selectedModel).coerceAtLeast(0),
+                                    showValue = true,
+                                    onSelectedIndexChange = { index ->
+                                        profile.models.getOrNull(index)?.let { model ->
+                                            AiProfileStore.updateProfile(profile.id) { it.copy(selectedModel = model) }
+                                        }
+                                    },
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    TextButton(text = addModelTitle, onClick = ::addModel)
+                                    TextButton(
+                                        text = stringResource(R.string.settings_ai_translation_model_delete),
+                                        onClick = ::deleteSelectedModel,
+                                    )
+                                }
                                 TextButton(
-                                    text = stringResource(R.string.settings_ai_translation_model_delete),
-                                    onClick = ::deleteSelectedModel,
+                                    text = stringResource(
+                                        if (testing) {
+                                            R.string.settings_ai_translation_testing
+                                        } else {
+                                            R.string.settings_ai_translation_test
+                                        },
+                                    ),
+                                    onClick = ::testConnection,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
                                 )
                             }
-                            TextButton(
-                                text = stringResource(
-                                    if (testing) {
-                                        R.string.settings_ai_translation_testing
-                                    } else {
-                                        R.string.settings_ai_translation_test
-                                    },
-                                ),
-                                onClick = ::testConnection,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                            )
                         }
                     }
                 }
@@ -482,7 +485,7 @@ private fun ProfileTextField(
         label = title,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         lineLimits = TextFieldLineLimits.SingleLine,
         outputTransformation = if (password && hidden) {
             OutputTransformation { replace(0, length, "\u2022".repeat(length)) }

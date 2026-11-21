@@ -232,7 +232,9 @@ private fun NavItemConfigRow(
         modifier = modifier
             .fillMaxWidth()
             .height(rowHeight)
-            .clip(SquircleShape(8.dp))
+            // 高亮层向内缩进，避免与 Card 的 16.dp 圆角叠加成双层圆角
+            .padding(horizontal = 4.dp)
+            .clip(SquircleShape(12.dp))
             .background(background)
             .clickable(
                 interactionSource = interactionSource,

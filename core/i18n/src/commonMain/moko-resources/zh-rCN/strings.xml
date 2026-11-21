@@ -319,7 +319,7 @@
     <string name="settings_eh_detail_layout_single">单列</string>
     <string name="settings_eh_detail_layout_dual">双栏</string>
     <string name="settings_eh_show_jpn_title">显示日文标题</string>
-    <string name="settings_eh_show_jpn_title_summary">需同时在 EHentai 网站设置中启用 Japanese Title</string>
+    <string name="settings_eh_show_jpn_title_summary">需同时在 EHentai 网站设置中启用日文标题</string>
     <string name="settings_eh_show_gallery_pages">显示画廊页数</string>
     <string name="settings_eh_show_gallery_pages_summary">在画廊列表中显示页数</string>
     <string name="settings_eh_show_reading_progress">显示阅读进度</string>
@@ -331,7 +331,7 @@
     <string name="settings_eh_show_gallery_comment_threshold_summary">隐藏低于或等于此分数的评论（-101 禁用）</string>
     <string name="settings_eh_show_tag_translations">显示标签翻译</string>
     <string name="settings_eh_show_tag_translations_summary">显示翻译后的标签而非原始文字（需花费时间来下载数据文件）</string>
-    <string name="settings_eh_tag_translations_source">补充翻译（由 EhTagTranslation 提供）</string>
+    <string name="settings_eh_tag_translations_source">补充翻译（EhTagTranslation 提供）</string>
     <string name="settings_eh_tag_translations_source_url">https://github.com/EhTagTranslation/Editor/wiki</string>
     <string name="settings_eh_filter">屏蔽列表</string>
     <string name="settings_eh_filter_summary">根据标题、上传者、标签、评论者屏蔽画廊或评论</string>
