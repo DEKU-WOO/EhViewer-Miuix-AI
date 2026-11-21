@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,10 +27,6 @@ import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.SadPanda
 import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.readableWidth
-import com.hippo.ehviewer.Settings
-import com.hippo.ehviewer.asMutableState
-import com.hippo.ehviewer.collectAsState
-import com.hippo.ehviewer.ui.MainNavItems
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.destinations.AboutScreenDestination
 import com.hippo.ehviewer.ui.destinations.AdvancedScreenDestination
@@ -42,17 +35,13 @@ import com.hippo.ehviewer.ui.destinations.BottomNavItemsScreenDestination
 import com.hippo.ehviewer.ui.destinations.DownloadScreenDestination
 import com.hippo.ehviewer.ui.destinations.EhScreenDestination
 import com.hippo.ehviewer.ui.destinations.PrivacyScreenDestination
-import com.hippo.ehviewer.ui.direction
 import com.hippo.ehviewer.ui.main.NavigationIcon
-import com.hippo.ehviewer.ui.titleRes
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Download
@@ -61,7 +50,6 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.Tune
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
@@ -140,62 +128,17 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                         navigator = navigator,
                     )
                     PreferenceHeader(
-                        icon = MiuixIcons.Info,
-                        title = R.string.settings_about,
-                        childRoute = AboutScreenDestination,
-                        navigator = navigator,
-                    )
-                    PreferenceHeader(
                         icon = MiuixIcons.More,
                         title = R.string.desktop_nav_items_title,
                         childRoute = BottomNavItemsScreenDestination,
                         navigator = navigator,
                     )
-                }
-                // 大屏导航栏样式：平板/横屏下可在侧边栏与悬浮底栏间切换，Auto 按窗口尺寸判定
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                ) {
-                    SimpleMenuPreferenceInt(
-                        title = stringResource(id = R.string.desktop_nav_bar_style),
-                        summary = stringResource(id = R.string.desktop_nav_bar_style_summary),
-                        entry = com.hippo.ehviewer.R.array.nav_bar_style_entries,
-                        entryValueRes = com.hippo.ehviewer.R.array.nav_bar_style_entry_values,
-                        state = Settings.navBarStyle.asMutableState(),
+                    PreferenceHeader(
+                        icon = MiuixIcons.Info,
+                        title = R.string.settings_about,
+                        childRoute = AboutScreenDestination,
+                        navigator = navigator,
                     )
-                }
-                // 底栏未显示的页面在此保留入口，避免自定义底栏后页面不可达
-                val rawNavConfig by Settings.bottomNavItems.collectAsState()
-                val hiddenNavItems = remember(rawNavConfig) {
-                    val config = MainNavItems.decode(rawNavConfig)
-                    config.order.filter { it in config.hidden }
-                }
-                if (hiddenNavItems.isNotEmpty()) {
-                    SmallTitle(
-                        text = stringResource(id = R.string.settings_hidden_pages),
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    )
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        hiddenNavItems.forEach { item ->
-                            ArrowPreference(
-                                title = stringResource(id = item.titleRes),
-                                startAction = {
-                                    Icon(
-                                        imageVector = item.icon(),
-                                        contentDescription = null,
-                                        tint = MiuixTheme.colorScheme.primary,
-                                    )
-                                },
-                                onClick = { navigator.navigate(item.direction) },
-                            )
-                        }
-                    }
                 }
                 Spacer(modifier = Modifier.height(LocalBottomBarContentPadding.current))
             }

@@ -52,6 +52,7 @@ import com.ehviewer.core.ui.icons.filled.Home
 import com.ehviewer.core.ui.icons.filled.Subscriptions
 import com.ehviewer.core.ui.icons.filled.Whatshot
 import com.hippo.ehviewer.Settings
+import com.hippo.ehviewer.asMutableState
 import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.MainNavConfig
 import com.hippo.ehviewer.ui.MainNavItem
@@ -188,6 +189,20 @@ fun AnimatedVisibilityScope.BottomNavItemsScreen(navigator: DestinationsNavigato
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             )
+            // 大屏导航栏样式：平板/横屏下可在侧边栏与悬浮底栏间切换，Auto 按窗口尺寸判定
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            ) {
+                SimpleMenuPreferenceInt(
+                    title = stringResource(id = R.string.desktop_nav_bar_style),
+                    summary = stringResource(id = R.string.desktop_nav_bar_style_summary),
+                    entry = com.hippo.ehviewer.R.array.nav_bar_style_entries,
+                    entryValueRes = com.hippo.ehviewer.R.array.nav_bar_style_entry_values,
+                    state = Settings.navBarStyle.asMutableState(),
+                )
+            }
         }
     }
 }

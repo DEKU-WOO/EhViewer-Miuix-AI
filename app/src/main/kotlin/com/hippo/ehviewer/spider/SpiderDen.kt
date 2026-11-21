@@ -15,6 +15,7 @@
  */
 package com.hippo.ehviewer.spider
 
+import android.graphics.Bitmap
 import android.webkit.MimeTypeMap
 import arrow.fx.coroutines.autoCloseable
 import arrow.fx.coroutines.closeable
@@ -30,6 +31,7 @@ import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.moveTo
 import com.ehviewer.core.files.openFileDescriptor
 import com.ehviewer.core.files.sendTo
+import com.ehviewer.core.files.write
 import com.ehviewer.core.model.GalleryDetail
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.util.logcat
@@ -49,12 +51,14 @@ import com.hippo.ehviewer.jni.archiveWriteClose
 import com.hippo.ehviewer.jni.archiveWriteEntry
 import com.hippo.ehviewer.jni.archiveWriteOpen
 import com.hippo.ehviewer.ktbuilder.diskCache
+import com.hippo.ehviewer.util.AdsPlaceholderFile
 import com.hippo.ehviewer.util.FileUtils
 import com.hippo.ehviewer.util.copyTo
 import com.hippo.ehviewer.util.sha1
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.request
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
@@ -245,6 +249,33 @@ class SpiderDen(val info: GalleryInfo) {
                 check(expected == actual) { "File hash mismatch: expected $expected, but got $actual\nURL: $url" }
             }
         }
+    }
+
+    // 「屏蔽外部广告」开启时，被屏蔽的广告页写入占位图并计入已完成，
+    // 避免外部广告图拉取失败导致整本画廊被判为失败、CBZ 无法打包。
+    suspend fun saveAdsPlaceholder(index: Int): Boolean {
+        val hasPlaceholder = AdsPlaceholderFile.exists()
+        val extension = if (hasPlaceholder) {
+            FileUtils.getExtensionFromFilename(AdsPlaceholderFile.name)?.lowercase() ?: "jpg"
+        } else {
+            "jpg"
+        }
+        val bytes = if (hasPlaceholder) null else blankImageBytes()
+        return saveResponseMeta(index, extension) { outFile ->
+            if (bytes == null) {
+                AdsPlaceholderFile sendTo outFile
+            } else {
+                outFile.write { write(bytes) }
+            }
+        }
+    }
+
+    // 未设置占位图时退化为一张 1x1 白色 JPEG，保证广告页仍有一个可打包进 CBZ 的图片条目
+    private fun blankImageBytes(): ByteArray = ByteArrayOutputStream().use { out ->
+        Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            .apply { eraseColor(android.graphics.Color.WHITE) }
+            .compress(Bitmap.CompressFormat.JPEG, 90, out)
+        out.toByteArray()
     }
 
     fun saveToPath(index: Int, file: Path): Boolean {

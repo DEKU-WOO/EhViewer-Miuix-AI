@@ -33,7 +33,9 @@ import com.hippo.ehviewer.client.EhUrl.referer
 import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.client.exception.FatalException
 import com.hippo.ehviewer.client.exception.QuotaExceededException
+import com.hippo.ehviewer.util.detectAds
 import com.hippo.ehviewer.util.displayString
+import com.hippo.ehviewer.util.hasAds
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -599,6 +601,7 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             var skipHathKey: String? = null
             var originImageUrl: String? = null
             var error: String? = null
+            var failure: Throwable? = null
             var forceHtml = false
             val original = Settings.downloadOriginImage.value || orgImg
             runSuspendCatching {
@@ -686,6 +689,17 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             }.onFailure {
                 if (it is FatalException) notifyFatal(it)
                 error = it.displayString()
+                failure = it
+            }
+            // 「屏蔽外部广告」开启时，被屏蔽的广告页视为已成功下载：
+            // 写入占位图并计入已完成页数，避免整本画廊被判为失败、CBZ 无法打包。
+            val stripAds = isDownloadMode &&
+                failure !is CancellationException &&
+                galleryInfo.hasAds &&
+                detectAds(index, size) &&
+                index !in spiderDen
+            if (stripAds && spiderDen.saveAdsPlaceholder(index)) {
+                return updatePageState(index, STATE_FINISHED)
             }
             updatePageState(index, STATE_FAILED, error)
         }
