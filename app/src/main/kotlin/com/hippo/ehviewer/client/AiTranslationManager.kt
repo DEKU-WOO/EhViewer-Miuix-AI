@@ -9,21 +9,28 @@ import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.util.concurrent.ConcurrentHashMap
 
 /** AI 翻译结果：成功时携带译文，失败时携带可直接展示给用户的错误原因。 */
 sealed interface AiTranslationResult {
     data class Success(val title: String) : AiTranslationResult
     data class Failure(val message: String) : AiTranslationResult
+}
+
+/** 测试连接结果：成功时携带耗时，失败时携带可直接展示的状态码与错误信息。 */
+sealed interface AiConnectionTestResult {
+    data class Success(val elapsedMs: Long) : AiConnectionTestResult
+    data class Failure(val message: String) : AiConnectionTestResult
 }
 
 object AiTranslationManager {
@@ -46,12 +53,13 @@ object AiTranslationManager {
             return AiTranslationResult.Failure("标题为空，无需翻译")
         }
 
-        val apiUrl = Settings.aiTranslationApiUrl.value.trim().trimEnd('/')
-        val apiKey = Settings.aiTranslationApiKey.value.trim()
-        val model = Settings.aiTranslationModel.value.trim()
+        val profile = AiProfileStore.activeProfile()
+            ?: return AiTranslationResult.Failure("未配置 API 方案")
+        val apiUrl = profile.apiUrl.trim().trimEnd('/')
+        val apiKey = profile.apiKey.trim()
+        val model = profile.selectedModel.trim()
         if (apiUrl.isBlank()) return AiTranslationResult.Failure("未配置 API 地址")
         if (apiKey.isBlank()) return AiTranslationResult.Failure("未配置 API Key")
-
         // 1. 查询本地 Room 数据库缓存
         runCatching { db.galleryTranslationDao().getTranslation(gid) }
             .getOrNull()
@@ -86,6 +94,38 @@ object AiTranslationManager {
         }
     }
 
+    /**
+     * 用给定的接口地址、Key 与模型发送一次轻量请求，验证当前配置是否可用。
+     *
+     * 失败时直接把 HTTP 状态码和响应片段交还调用方展示，避免用户只能看到笼统错误。
+     */
+    suspend fun testConnection(apiUrl: String, apiKey: String, model: String): AiConnectionTestResult {
+        val url = apiUrl.trim().trimEnd('/')
+        val key = apiKey.trim()
+        val targetModel = model.trim()
+        if (url.isBlank()) return AiConnectionTestResult.Failure("未配置 API 地址")
+        if (key.isBlank()) return AiConnectionTestResult.Failure("未配置 API Key")
+        if (targetModel.isBlank()) return AiConnectionTestResult.Failure("未选择模型")
+
+        val start = System.currentTimeMillis()
+        return try {
+            val response = if (isOpenAiCompatible(url)) {
+                postOpenAi(url, key, targetModel, "ping", maxTokens = 16)
+            } else {
+                postGemini(url, key, targetModel, "ping")
+            }
+            val body = response.bodyAsText()
+            if (response.status.isSuccess()) {
+                AiConnectionTestResult.Success(System.currentTimeMillis() - start)
+            } else {
+                AiConnectionTestResult.Failure("HTTP ${response.status.value}：${body.take(200)}")
+            }
+        } catch (e: Exception) {
+            val reason = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+            AiConnectionTestResult.Failure(reason)
+        }
+    }
+
     private suspend fun requestAiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
         val text = "请将以下漫画/画廊标题准确翻译为简洁流畅的简体中文。不要解释，直接输出翻译结果：\n$prompt"
 
@@ -110,36 +150,40 @@ object AiTranslationManager {
         return true
     }
 
-    private suspend fun requestOpenAiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
+    private suspend fun postOpenAi(
+        apiUrl: String,
+        apiKey: String,
+        model: String,
+        prompt: String,
+        maxTokens: Int? = null,
+    ): HttpResponse {
         val endpoint = if (apiUrl.endsWith("/chat/completions")) apiUrl else "$apiUrl/chat/completions"
+        val maxTokensField = maxTokens?.let { ",\n                \"max_tokens\": $it" }.orEmpty()
         val requestBody = """
             {
                 "model": "$model",
                 "messages": [
                     {"role": "user", "content": ${jsonEncode(prompt)}}
                 ],
-                "temperature": 0.3
+                "temperature": 0.3$maxTokensField
             }
         """.trimIndent()
 
-        val response = httpClient.post(endpoint) {
+        return httpClient.post(endpoint) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $apiKey")
             // 共享 ktorClient 的全局请求超时仅 10s，翻译请求单独放宽
             timeout { requestTimeoutMillis = 30_000 }
             setBody(requestBody)
         }
-        val body = response.bodyAsText()
-        if (!response.status.isSuccess()) {
-            throw IllegalStateException("HTTP ${response.status.value}：${body.take(200)}")
-        }
-
-        val jsonObject = json.parseToJsonElement(body).jsonObject
-        val message = jsonObject["choices"]?.jsonArray?.getOrNull(0)?.jsonObject?.get("message")?.jsonObject
-        return message?.get("content")?.jsonPrimitive?.content?.trim().orEmpty()
     }
 
-    private suspend fun requestGeminiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
+    private suspend fun postGemini(
+        apiUrl: String,
+        apiKey: String,
+        model: String,
+        prompt: String,
+    ): HttpResponse {
         val targetModel = model.ifBlank { "gemini-1.5-flash" }
         // 兼容形如 https://generativelanguage.googleapis.com/v1beta 或带模型的完整 URL
         val endpoint = if (apiUrl.contains("/models/")) {
@@ -160,12 +204,28 @@ object AiTranslationManager {
             }
         """.trimIndent()
 
-        val response = httpClient.post(endpoint) {
+        return httpClient.post(endpoint) {
             contentType(ContentType.Application.Json)
             // 共享 ktorClient 的全局请求超时仅 10s，翻译请求单独放宽
             timeout { requestTimeoutMillis = 30_000 }
             setBody(requestBody)
         }
+    }
+
+    private suspend fun requestOpenAiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
+        val response = postOpenAi(apiUrl, apiKey, model, prompt)
+        val body = response.bodyAsText()
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException("HTTP ${response.status.value}：${body.take(200)}")
+        }
+
+        val jsonObject = json.parseToJsonElement(body).jsonObject
+        val message = jsonObject["choices"]?.jsonArray?.getOrNull(0)?.jsonObject?.get("message")?.jsonObject
+        return message?.get("content")?.jsonPrimitive?.content?.trim().orEmpty()
+    }
+
+    private suspend fun requestGeminiTranslation(apiUrl: String, apiKey: String, model: String, prompt: String): String {
+        val response = postGemini(apiUrl, apiKey, model, prompt)
         val body = response.bodyAsText()
         if (!response.status.isSuccess()) {
             throw IllegalStateException("HTTP ${response.status.value}：${body.take(200)}")

@@ -13,12 +13,18 @@ import com.ehviewer.core.network.EhCookieStore
 import com.ehviewer.core.preferences.DataStorePreferences
 import com.ehviewer.core.preferences.PrefDelegate
 import com.ehviewer.core.preferences.edit
+import com.hippo.ehviewer.client.AiProfileStore
+import com.hippo.ehviewer.client.ApiProfile
+import com.hippo.ehviewer.client.DEFAULT_AI_API_URL
+import com.hippo.ehviewer.client.DEFAULT_AI_MODEL_ID
+import com.hippo.ehviewer.client.DEFAULT_AI_PROFILE_NAME
 import com.hippo.ehviewer.client.data.FavListUrlBuilder
 import com.hippo.ehviewer.download.DownloadsFilterMode
 import com.hippo.ehviewer.download.SortMode
 import eu.kanade.tachiyomi.ui.reader.setting.OrientationType
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingModeType
 import java.util.Locale
+import java.util.UUID
 import kotlin.reflect.KProperty
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -134,10 +140,16 @@ object Settings : DataStorePreferences(null) {
 
     // AI Translation
     val aiTranslationEnabled = boolPref("ai_translation_enabled", false)
-    val aiTranslationApiUrl = stringPref("ai_translation_api_url", "https://api.openai.com/v1")
+
+    /** 旧版单一 API 配置，仅用于升级时迁移到 [aiProfiles]。 */
+    val aiTranslationApiUrl = stringPref("ai_translation_api_url", DEFAULT_AI_API_URL)
     val aiTranslationApiKey = stringPref("ai_translation_api_key", "")
-    val aiTranslationModel = stringPref("ai_translation_model", "gpt-4o-mini")
+    val aiTranslationModel = stringPref("ai_translation_model", DEFAULT_AI_MODEL_ID)
     val aiTranslationMode = intPref("ai_translation_mode", 0)
+
+    /** 多套 API 配置方案（JSON 序列化的 [ApiProfile] 列表）与当前激活方案 id。 */
+    val aiProfiles = stringPref("ai_profiles", "")
+    val aiActiveProfileId = stringPref("ai_active_profile_id", "")
 
     // Misc
     val languageFilter = intPref("language_filter", -1)
@@ -220,6 +232,22 @@ object Settings : DataStorePreferences(null) {
             val orientation = pref[orientationMode]
             if (OrientationType.entries.none { it.prefValue == orientation }) {
                 pref.remove(orientationMode)
+            }
+            // 旧版是单一 apiUrl/apiKey/model，升级后包装成第一套方案，避免用户配置丢失
+            if (pref[aiProfiles].isBlank()) {
+                val legacyModel = pref[aiTranslationModel].ifBlank { DEFAULT_AI_MODEL_ID }
+                val migrated = ApiProfile(
+                    id = UUID.randomUUID().toString(),
+                    name = DEFAULT_AI_PROFILE_NAME,
+                    apiUrl = pref[aiTranslationApiUrl].ifBlank { DEFAULT_AI_API_URL },
+                    apiKey = pref[aiTranslationApiKey],
+                    models = listOf(legacyModel),
+                    selectedModel = legacyModel,
+                )
+                pref[aiProfiles] = AiProfileStore.encode(listOf(migrated))
+                pref[aiActiveProfileId] = migrated.id
+            } else if (pref[aiActiveProfileId].isBlank()) {
+                pref[aiActiveProfileId] = AiProfileStore.decode(pref[aiProfiles]).firstOrNull()?.id.orEmpty()
             }
         }
     }
