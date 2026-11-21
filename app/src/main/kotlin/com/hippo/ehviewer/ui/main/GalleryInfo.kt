@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,12 +44,12 @@ import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.listThumbGenerator
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
+import com.hippo.ehviewer.client.AiEnqueueResult
 import com.hippo.ehviewer.client.AiTranslationManager
-import com.hippo.ehviewer.client.AiTranslationResult
 import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.util.FavouriteStatusRouter
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filter
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -283,10 +282,12 @@ fun GalleryInfoGridItem(
 /**
  * 画廊标题（带 AI 翻译）。
  *
- * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）：进入列表即自动翻译并展示译文；
- * - 手动模式：点击标题触发翻译；
- * - 已翻译后再次点击可在原文与译文之间切换显示。
- * - 翻译失败时：自动模式保持原标题静默（避免列表弹出一串提示），手动点击（含自动模式下补点）会 Toast 出具体原因。
+ * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）：进入列表即把标题轻量入队，真正的请求由
+ *   [AiTranslationManager] 的全局队列在后台完成；卡片滑出屏幕不会取消请求，
+ *   译写入库后由数据库 Flow 驱动本组件重组显示，因此快速滑动也不会漏翻；
+ * - 手动模式：点击标题入队翻译；
+ * - 已翻译后再次点击可在原文与译文之间切换显示；
+ * - 翻译失败时：自动模式保持原标题静默，手动触发会 Toast 出具体原因。
  */
 @Composable
 fun GalleryTitleText(
@@ -300,31 +301,34 @@ fun GalleryTitleText(
     val triggerMode by remember { Settings.aiTranslationMode.valueFlow() }
         .collectAsState(initial = Settings.aiTranslationMode.value)
     val original = remember(info.gid) { EhUtils.getSuitableTitle(info) }
-    var translated by remember(info.gid) { mutableStateOf<String?>(null) }
-    var showTranslated by remember(info.gid) { mutableStateOf(false) }
-    var translating by remember(info.gid) { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    val translation by remember(info.gid) {
+        AiTranslationManager.translationFlow(info.gid)
+    }.collectAsState(initial = null)
+    val translated = translation
+        ?.takeIf { it.originalTitle == original }
+        ?.translatedTitle
+        ?.takeIf { it.isNotBlank() && it != original }
+    var showTranslated by remember(info.gid) { mutableStateOf(true) }
+    var reportFailure by remember(info.gid) { mutableStateOf(false) }
     val context = LocalContext.current
 
-    suspend fun translate(reportError: Boolean) {
-        if (!enabled || translated != null || translating) return
-        translating = true
-        when (val result = AiTranslationManager.getOrTranslateTitle(info.gid, original)) {
-            is AiTranslationResult.Success -> {
-                if (result.title.isNotBlank() && result.title != original) {
-                    translated = result.title
-                    showTranslated = true
-                }
-            }
-            is AiTranslationResult.Failure -> {
-                if (reportError) Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
-            }
+    // 仅做轻量入队：请求不绑定卡片生命周期，滑出屏幕也不会被取消
+    LaunchedEffect(info.gid, enabled, triggerMode, original) {
+        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) {
+            AiTranslationManager.enqueueTranslation(info.gid, original)
         }
-        translating = false
     }
 
-    LaunchedEffect(info.gid, enabled, triggerMode) {
-        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate(reportError = false)
+    // 只在用户手动触发时提示失败原因，自动模式保持静默，避免快速滑动时刷屏 Toast
+    LaunchedEffect(info.gid) {
+        AiTranslationManager.failures
+            .filter { it.gid == info.gid }
+            .collect { failure ->
+                if (reportFailure) {
+                    reportFailure = false
+                    Toast.makeText(context, failure.message, Toast.LENGTH_LONG).show()
+                }
+            }
     }
 
     // 手动模式下点击标题即翻译（失败会 Toast）；自动模式不拦截点击，避免影响卡片本身的跳转
@@ -339,7 +343,13 @@ fun GalleryTitleText(
                 if (translated != null) {
                     showTranslated = !showTranslated
                 } else {
-                    scope.launch { translate(reportError = true) }
+                    when (val result = AiTranslationManager.enqueueTranslation(info.gid, original)) {
+                        is AiEnqueueResult.Rejected ->
+                            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        AiEnqueueResult.AlreadyChinese ->
+                            Toast.makeText(context, "标题已是中文，无需翻译", Toast.LENGTH_SHORT).show()
+                        AiEnqueueResult.Queued, AiEnqueueResult.AlreadyQueued -> reportFailure = true
+                    }
                 }
             }
         } else {

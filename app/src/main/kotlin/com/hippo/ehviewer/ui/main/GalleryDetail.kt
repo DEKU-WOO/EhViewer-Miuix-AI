@@ -25,7 +25,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,10 +48,10 @@ import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.detailThumbGenerator
 import com.ehviewer.core.ui.util.thenIf
 import com.hippo.ehviewer.Settings
+import com.hippo.ehviewer.client.AiEnqueueResult
 import com.hippo.ehviewer.client.AiTranslationManager
-import com.hippo.ehviewer.client.AiTranslationResult
 import com.hippo.ehviewer.client.EhUtils
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filter
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -293,7 +292,8 @@ class GalleryDetailTitleState(
 /**
  * 详情页标题（带 AI 翻译）。
  *
- * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）下自动翻译并展示译文；
+ * - 自动模式（[AI_TRANSLATION_MODE_AUTO]）下仅做轻量入队，请求由 [AiTranslationManager]
+ *   的全局队列在后台完成，页面销毁不会中断翻译，译写入库后由数据库 Flow 驱动刷新；
  * - 手动模式下点击翻译按钮触发；
  * - 已翻译后再次触发可在原文与译文之间切换显示。
  */
@@ -303,31 +303,33 @@ fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailT
         .collectAsState(initial = Settings.aiTranslationEnabled.value)
     val triggerMode by remember { Settings.aiTranslationMode.valueFlow() }
         .collectAsState(initial = Settings.aiTranslationMode.value)
-    var translated by remember(gid) { mutableStateOf<String?>(null) }
-    var showTranslated by remember(gid) { mutableStateOf(false) }
-    var translating by remember(gid) { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    val translation by remember(gid) {
+        AiTranslationManager.translationFlow(gid)
+    }.collectAsState(initial = null)
+    val translated = translation
+        ?.takeIf { it.originalTitle == original }
+        ?.translatedTitle
+        ?.takeIf { it.isNotBlank() && it != original }
+    var showTranslated by remember(gid) { mutableStateOf(true) }
+    var reportFailure by remember(gid) { mutableStateOf(false) }
     val context = LocalContext.current
 
-    suspend fun translate(reportError: Boolean) {
-        if (!enabled || translated != null || translating || original.isBlank()) return
-        translating = true
-        when (val result = AiTranslationManager.getOrTranslateTitle(gid, original)) {
-            is AiTranslationResult.Success -> {
-                if (result.title.isNotBlank() && result.title != original) {
-                    translated = result.title
-                    showTranslated = true
-                }
-            }
-            is AiTranslationResult.Failure -> {
-                if (reportError) Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
-            }
+    // 仅入队，不在此处等待网络结果，避免页面销毁时取消正在进行的翻译
+    LaunchedEffect(gid, enabled, triggerMode, original) {
+        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) {
+            AiTranslationManager.enqueueTranslation(gid, original)
         }
-        translating = false
     }
 
-    LaunchedEffect(gid, enabled, triggerMode, original) {
-        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) translate(reportError = false)
+    LaunchedEffect(gid) {
+        AiTranslationManager.failures
+            .filter { it.gid == gid }
+            .collect { failure ->
+                if (reportFailure) {
+                    reportFailure = false
+                    Toast.makeText(context, failure.message, Toast.LENGTH_LONG).show()
+                }
+            }
     }
 
     return GalleryDetailTitleState(
@@ -338,7 +340,13 @@ fun rememberGalleryDetailTitleState(gid: Long, original: String): GalleryDetailT
             if (translated != null) {
                 showTranslated = !showTranslated
             } else {
-                scope.launch { translate(reportError = true) }
+                when (val result = AiTranslationManager.enqueueTranslation(gid, original)) {
+                    is AiEnqueueResult.Rejected ->
+                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                    AiEnqueueResult.AlreadyChinese ->
+                        Toast.makeText(context, "标题已是中文，无需翻译", Toast.LENGTH_SHORT).show()
+                    AiEnqueueResult.Queued, AiEnqueueResult.AlreadyQueued -> reportFailure = true
+                }
             }
         },
     )
