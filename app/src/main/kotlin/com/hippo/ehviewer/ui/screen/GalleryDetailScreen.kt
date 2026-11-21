@@ -392,8 +392,8 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
 }
 
 private val galleryDetailTitleStyle = TextStyle(
-    fontSize = 16.sp,
-    lineHeight = 20.sp,
+    fontSize = 20.sp,
+    lineHeight = 24.sp,
     fontWeight = FontWeight.Medium,
 )
 
