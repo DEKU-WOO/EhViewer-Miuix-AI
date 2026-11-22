@@ -1,12 +1,16 @@
 package com.hippo.ehviewer.sync
 
+import com.ehviewer.core.files.isDirectory
+import com.ehviewer.core.files.isFile
+import com.ehviewer.core.files.list
+import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.util.logcat
 import com.ehviewer.core.util.withIOContext
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.downloadDir
 import com.hippo.ehviewer.download.downloadLocation
-import java.io.File
+import okio.Path
 
 data class WebDavSyncResult(
     val uploaded: Int,
@@ -25,7 +29,7 @@ object WebDavGallerySync {
         if (!WebDavClient.isConfigured()) {
             throw WebDavClient.WebDavException("未配置 WebDAV 地址")
         }
-        val localRoot = runCatching { downloadLocation.toFile() }.getOrNull()
+        val localRoot = runCatching { downloadLocation }.getOrNull()
             ?: throw WebDavClient.WebDavException("无法访问本地下载目录")
         if (!localRoot.isDirectory) {
             throw WebDavClient.WebDavException("本地下载目录不存在")
@@ -46,7 +50,7 @@ object WebDavGallerySync {
             val dirname = info.dirname ?: return@forEach
             localNames += dirname
             if (remoteByName.containsKey(dirname)) return@forEach
-            val dir = runCatching { info.downloadDir?.toFile() }.getOrNull() ?: return@forEach
+            val dir = info.downloadDir ?: return@forEach
             if (!dir.isDirectory) return@forEach
             runCatching {
                 uploadDirectory(dir, "$rootUrl/${WebDavClient.encodeSegment(dirname)}")
@@ -58,9 +62,7 @@ object WebDavGallerySync {
         }
 
         // 2. 上传下载目录顶层的 .cbz / .zip 画廊文件
-        val topArchives = localRoot.listFiles()
-            ?.filter { it.isFile && it.name.isArchive() }
-            .orEmpty()
+        val topArchives = localRoot.list().filter { it.isFile && it.name.isArchive() }
         topArchives.forEach { file ->
             localNames += file.name
             if (remoteByName.containsKey(file.name)) return@forEach
@@ -76,7 +78,7 @@ object WebDavGallerySync {
         // 3. 拉回本地缺失的远端画廊
         remoteEntries.forEach { entry ->
             if (entry.name in localNames) return@forEach
-            val target = File(localRoot, entry.name)
+            val target = localRoot / entry.name
             runCatching {
                 if (entry.isDirectory) {
                     downloadDirectory(entry.url, target)
@@ -95,9 +97,9 @@ object WebDavGallerySync {
         WebDavSyncResult(uploaded = uploaded, downloaded = downloaded, failed = failed)
     }
 
-    private fun uploadDirectory(local: File, remoteUrl: String) {
+    private fun uploadDirectory(local: Path, remoteUrl: String) {
         WebDavClient.ensureDirectory(remoteUrl)
-        local.listFiles()?.sortedBy { it.name }?.forEach { child ->
+        local.list().sortedBy { it.name }.forEach { child ->
             if (child.name.startsWith(".")) return@forEach
             val childUrl = "$remoteUrl/${WebDavClient.encodeSegment(child.name)}"
             when {
@@ -107,10 +109,10 @@ object WebDavGallerySync {
         }
     }
 
-    private fun downloadDirectory(remoteUrl: String, target: File) {
+    private fun downloadDirectory(remoteUrl: String, target: Path) {
         target.mkdirs()
         WebDavClient.list(remoteUrl).forEach { entry ->
-            val child = File(target, entry.name)
+            val child = target / entry.name
             if (entry.isDirectory) {
                 downloadDirectory(entry.url, child)
             } else {

@@ -9,6 +9,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -272,15 +273,18 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                         summary = stringResource(id = R.string.settings_download_download_origin_image_summary),
                         state = Settings.downloadOriginImage.asMutableState(),
                     )
+                    val saveAsCbz = Settings.saveAsCbz.asMutableState()
                     SwitchPreference(
                         title = stringResource(id = R.string.settings_download_save_as_cbz),
-                        state = Settings.saveAsCbz.asMutableState(),
+                        state = saveAsCbz,
                     )
-                    SwitchPreference(
-                        title = stringResource(id = R.string.settings_download_archive_metadata),
-                        summary = stringResource(id = R.string.settings_download_archive_metadata_summary),
-                        state = Settings.archiveMetadata.asMutableState(),
-                    )
+                    AnimatedVisibility(visible = saveAsCbz.value) {
+                        SwitchPreference(
+                            title = stringResource(id = R.string.settings_download_archive_metadata),
+                            summary = stringResource(id = R.string.settings_download_archive_metadata_summary),
+                            state = Settings.archiveMetadata.asMutableState(),
+                        )
+                    }
                     WorkPreference(
                         title = stringResource(id = R.string.settings_download_reload_metadata),
                         summary = stringResource(id = R.string.settings_download_reload_metadata_summary),

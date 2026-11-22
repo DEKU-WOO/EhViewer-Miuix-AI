@@ -17,11 +17,9 @@ package com.hippo.ehviewer.spider
 
 import android.graphics.Bitmap
 import android.webkit.MimeTypeMap
-import arrow.fx.coroutines.autoCloseable
-import arrow.fx.coroutines.closeable
 import arrow.fx.coroutines.parMap
-import arrow.fx.coroutines.resourceScope
 import com.ehviewer.core.database.model.DownloadArtist
+import com.ehviewer.core.files.SystemFileSystem
 import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.find
@@ -29,7 +27,6 @@ import com.ehviewer.core.files.isDirectory
 import com.ehviewer.core.files.list
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.moveTo
-import com.ehviewer.core.files.openFileDescriptor
 import com.ehviewer.core.files.sendTo
 import com.ehviewer.core.files.write
 import com.ehviewer.core.model.GalleryDetail
@@ -48,9 +45,6 @@ import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.downloadLocation
 import com.hippo.ehviewer.download.tempDownloadDir
 import com.hippo.ehviewer.image.PathSource
-import com.hippo.ehviewer.jni.archiveWriteClose
-import com.hippo.ehviewer.jni.archiveWriteEntry
-import com.hippo.ehviewer.jni.archiveWriteOpen
 import com.hippo.ehviewer.ktbuilder.diskCache
 import com.hippo.ehviewer.util.AdsPlaceholderFile
 import com.hippo.ehviewer.util.FileUtils
@@ -59,12 +53,19 @@ import com.hippo.ehviewer.util.sha1
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.request
+import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.concurrent.read
 import kotlin.concurrent.write
 import okio.Path
 import okio.Path.Companion.toOkioPath
+import okio.inputStream
+import okio.outputStream
 import splitties.init.appCtx
 
 class SpiderDen(val info: GalleryInfo) {
@@ -377,7 +378,7 @@ class SpiderDen(val info: GalleryInfo) {
                 t.addSuppressed(deleteError)
             }
             logcat(CBZ_TAG, LogPriority.ERROR) {
-                "CBZ 归档失败：gid=$gid，pages=$pages，tempDir=$tempDownloadDir，target=$file\n${t.stackTraceToString()}"
+                "CBZ 归档失败：gid=$gid，pages=$pages，tempDir=$tempDownloadDir，target=$file，${t.javaClass.simpleName}: ${t.message}\n${t.stackTraceToString()}"
             }
             true
         }
@@ -401,7 +402,7 @@ class SpiderDen(val info: GalleryInfo) {
 
     suspend fun exportAsCbz(file: Path) = downloadDir!!.find(archiveName)?.sendTo(file) ?: archiveTo(file)
 
-    private suspend fun archiveTo(file: Path, pages: Int = info.pages) = resourceScope {
+    private suspend fun archiveTo(file: Path, pages: Int = info.pages) {
         val dir = requireNotNull(downloadDir) { "下载目录为空，无法创建 $file" }
         val comicInfoFile = dir / COMIC_INFO_FILE
         val savedPages = if (info.pages == 0 && comicInfoFile.exists()) {
@@ -413,49 +414,73 @@ class SpiderDen(val info: GalleryInfo) {
         check(pageCount > 0) { "无效页数：pages=$pages，info.pages=${info.pages}，savedPages=$savedPages" }
         if (info.pages <= 0) info.pages = pageCount
 
-        val comicInfo = closeable {
-            if (!comicInfoFile.exists()) {
-                try {
-                    writeComicInfo()
-                } catch (t: Throwable) {
-                    if (t is kotlinx.coroutines.CancellationException) throw t
-                    logcat(CBZ_TAG, LogPriority.WARN) {
-                        "CBZ 元数据在线更新失败，改用本地信息：gid=$gid\n${t.stackTraceToString()}"
-                    }
-                    writeComicInfo(info.getComicInfo(), comicInfoFile)
+        val includeMetadata = saveAsCbz && Settings.archiveMetadata.value
+        if (includeMetadata && !comicInfoFile.exists()) {
+            try {
+                writeComicInfo()
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                logcat(CBZ_TAG, LogPriority.WARN) {
+                    "CBZ 元数据在线更新失败，改用本地信息：gid=$gid，${t.javaClass.simpleName}: ${t.message}\n${t.stackTraceToString()}"
                 }
+                writeComicInfo(info.getComicInfo(), comicInfoFile)
             }
-            comicInfoFile.openFileDescriptor("r")
         }
-        // rwt 同时创建并截断旧文件，避免重试时残留上一段 ZIP 数据。
-        val arcFd = closeable { file.openFileDescriptor("rwt") }
-        val handle = archiveWriteOpen(arcFd.fd)
-        check(handle != 0L) { "无法打开 CBZ 写入器：gid=$gid，target=$file" }
-        var failure: Throwable? = null
+
+        val cacheDir = File(appCtx.cacheDir, "cbz")
+        check(cacheDir.isDirectory || cacheDir.mkdirs()) { "无法创建 CBZ 私有缓存目录：$cacheDir" }
+        val tempArchive = File.createTempFile("gallery-$gid-", ".cbz", cacheDir)
         try {
-            for (idx in 0 until pageCount) {
-                try {
-                    getImageSource(idx).use { source ->
-                        source.source.openFileDescriptor("r").use { pfd ->
-                            archiveWriteEntry(handle, pfd.fd, perFilename(idx, source.type))
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(tempArchive))).use { zip ->
+                for (idx in 0 until pageCount) {
+                    try {
+                        getImageSource(idx).use { source ->
+                            SystemFileSystem.source(source.source).inputStream().use { input ->
+                                zip.putNextEntry(ZipEntry(perFilename(idx, source.type)))
+                                try {
+                                    input.copyTo(zip)
+                                } finally {
+                                    zip.closeEntry()
+                                }
+                            }
+                        }
+                    } catch (t: Throwable) {
+                        logcat(CBZ_TAG, LogPriority.ERROR) {
+                            "CBZ 写入页面失败：gid=$gid，page=${idx + 1}/$pageCount，${t.javaClass.simpleName}: ${t.message}\n${t.stackTraceToString()}"
+                        }
+                        throw t
+                    }
+                }
+                if (includeMetadata) {
+                    SystemFileSystem.source(comicInfoFile).inputStream().use { input ->
+                        zip.putNextEntry(ZipEntry(COMIC_INFO_FILE))
+                        try {
+                            input.copyTo(zip)
+                        } finally {
+                            zip.closeEntry()
                         }
                     }
-                } catch (t: Throwable) {
-                    logcat(CBZ_TAG, LogPriority.ERROR) {
-                        "CBZ 写入页面失败：gid=$gid，page=${idx + 1}/$pageCount，target=$file\n${t.stackTraceToString()}"
-                    }
-                    throw t
+                }
+                zip.flush()
+            }
+            check(tempArchive.isFile && tempArchive.length() > 0) { "私有缓存 CBZ 为空：$tempArchive" }
+
+            tempArchive.inputStream().use { input ->
+                SystemFileSystem.sink(file).outputStream().use { output ->
+                    input.copyTo(output)
+                    output.flush()
                 }
             }
-            archiveWriteEntry(handle, comicInfo.fd, COMIC_INFO_FILE)
+            check(file.exists()) { "SAF 写入结束后目标 CBZ 不存在：$file" }
         } catch (t: Throwable) {
-            failure = t
+            if (t is kotlinx.coroutines.CancellationException) throw t
+            logcat(CBZ_TAG, LogPriority.ERROR) {
+                "CBZ 缓存打包或 UniFile 流式写入失败：gid=$gid，temp=$tempArchive，target=$file，${t.javaClass.simpleName}: ${t.message}\n${t.stackTraceToString()}"
+            }
             throw t
         } finally {
-            try {
-                archiveWriteClose(handle)
-            } catch (closeError: Throwable) {
-                failure?.addSuppressed(closeError) ?: throw closeError
+            if (!tempArchive.delete() && tempArchive.exists()) {
+                logcat(CBZ_TAG, LogPriority.WARN) { "CBZ 私有缓存临时文件删除失败：$tempArchive" }
             }
         }
     }

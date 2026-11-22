@@ -1,7 +1,9 @@
 package com.hippo.ehviewer.sync
 
+import com.ehviewer.core.files.SystemFileSystem
+import com.ehviewer.core.files.mkdirs
+import com.ehviewer.core.files.openFileDescriptor
 import com.hippo.ehviewer.Settings
-import java.io.File
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -11,9 +13,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.BufferedSink
+import okio.Path
+import okio.outputStream
 
 /**
  * 极简 WebDAV 客户端（PROPFIND / MKCOL / PUT / GET）。
@@ -123,15 +127,27 @@ object WebDavClient {
         }
     }
 
-    fun upload(file: File, remoteUrl: String) {
-        execute(newRequest("PUT", remoteUrl, body = file.asRequestBody(binaryMediaType)), "PUT").close()
+    fun upload(file: Path, remoteUrl: String) {
+        val body = object : RequestBody() {
+            override fun contentType() = binaryMediaType
+
+            override fun contentLength(): Long = file.openFileDescriptor("r").use { it.statSize }
+
+            override fun writeTo(sink: BufferedSink) {
+                SystemFileSystem.source(file).use { source -> sink.writeAll(source) }
+            }
+        }
+        execute(newRequest("PUT", remoteUrl, body = body), "PUT").close()
     }
 
-    fun download(remoteUrl: String, target: File) {
+    fun download(remoteUrl: String, target: Path) {
         execute(newRequest("GET", remoteUrl), "GET").use { response ->
-            target.parentFile?.mkdirs()
+            target.parent?.mkdirs()
             response.body.byteStream().use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                SystemFileSystem.sink(target).outputStream().use { output ->
+                    input.copyTo(output)
+                    output.flush()
+                }
             }
         }
     }
