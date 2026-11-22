@@ -133,7 +133,11 @@ object AiTranslationManager {
 
     private data class TranslationTask(val gid: Long, val originalTitle: String)
 
-    private class AiRequestException(message: String, val httpStatus: Int? = null) : Exception(message) {
+    private class AiRequestException(
+        message: String,
+        val httpStatus: Int? = null,
+        val contentBlocked: Boolean = false,
+    ) : Exception(message) {
         /** 限流与服务端临时错误可以退避重试；400/403 等由内容触发的错误重试没有意义。 */
         val retryable: Boolean
             get() = httpStatus == 429 || (httpStatus != null && httpStatus >= 500)
@@ -141,6 +145,13 @@ object AiTranslationManager {
         /** 429 限流 / 503 不可用时优先轮换同方案下的备用模型，而不是死磕当前模型。 */
         val shouldRotateModel: Boolean
             get() = httpStatus == 429 || httpStatus == 503
+
+        /**
+         * Key 失效/欠费/风控（401/403）、请求不被接受（400）或内容安全策略拦截时，
+         * 当前方案继续尝试已无意义，直接顺延到下一个配置方案。
+         */
+        val shouldRotateProfile: Boolean
+            get() = httpStatus == 401 || httpStatus == 403 || httpStatus == 400 || contentBlocked
     }
 
     init {
@@ -210,33 +221,66 @@ object AiTranslationManager {
         }
         if (pending.isEmpty()) return
 
-        val config = resolveConfig()
-        if (config == null) {
+        val configs = resolveConfigs()
+        if (configs.isEmpty()) {
             pending.forEach { failTask(it, "未配置 API 方案或 Key") }
             return
         }
 
         if (pending.size == 1) {
-            translateSingle(pending.first(), config)
+            translateSingle(pending.first(), configs)
             return
         }
 
-        val translated = try {
-            requestBatchTranslation(config, pending)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // 批次整体失败（400/403/429 或响应解析失败）时禁止静默丢弃：
-            // 拆成单条依次重试，确保只有真正违规的那一条失败，其余正常标题仍能译出。
-            pending.forEach { translateSingle(it, config) }
+        // 批量请求只在当前方案内轮换模型；若仍失败则降级为逐条翻译，
+        // 由 translateSingle 完成「模型轮换 + 跨方案兜底」的双层容错。
+        val config = configs.first()
+        var translated: Map<Long, String>? = null
+        var lastError = "未知错误"
+        batchModelLoop@ for ((modelIndex, model) in config.models.withIndex()) {
+            if (modelIndex > 0) {
+                // 换模型意味着上一个模型已限流/不可用，无需再额外等待
+                logcat("AiTranslation") { "批量翻译轮换备用模型：$model" }
+            }
+            val modelConfig = config.copy(model = model)
+            var attempt = 0
+            while (attempt <= MAX_RETRY_ATTEMPTS) {
+                if (attempt > 0) delay(RETRY_DELAY_MS)
+                try {
+                    translated = requestBatchTranslation(modelConfig, pending)
+                    break@batchModelLoop
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: AiRequestException) {
+                    lastError = e.message ?: "未知错误"
+                    when {
+                        // 当前方案 Key 失效/请求被拒/内容被拦截：不再浪费批量请求，直接逐条降级
+                        e.shouldRotateProfile -> break@batchModelLoop
+                        e.shouldRotateModel -> break
+                        !e.retryable || attempt == MAX_RETRY_ATTEMPTS -> break
+                    }
+                } catch (e: Exception) {
+                    lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
+                    break
+                }
+                attempt++
+            }
+        }
+
+        val result = translated
+        if (result == null) {
+            // 批次整体失败时禁止静默丢弃：拆成单条依次执行双层容错，
+            // 确保只有真正违规的那一条失败，其余正常标题仍能译出。
+            logcat("AiTranslation") { "批量翻译失败：$lastError，降级为逐条翻译" }
+            pending.forEach { translateSingle(it, configs) }
             return
         }
 
         pending.forEach { task ->
-            val text = translated[task.gid]
+            val text = result[task.gid]
             if (text.isNullOrBlank()) {
                 // 批量响应里缺少这一条，单独降级重试
-                translateSingle(task, config)
+                translateSingle(task, configs)
             } else {
                 saveTranslation(task, text)
             }
@@ -244,55 +288,62 @@ object AiTranslationManager {
     }
 
     /**
-     * 单条翻译：遇到 429 / 503 / 请求超时时，按顺序轮换当前方案里的其他模型；
-     * 其他可重试错误只在当前模型上退避重试，避免把内容类错误扩散到所有备用模型。
+     * 单条翻译的双层自动容错调度：
+     * 1. 同方案内按顺序轮换 [ApiConfig.models]，429 / 503 / 请求超时时优先换模型；
+     * 2. 当前方案的模型全部失败，或遇到 401/403/400/内容安全策略拦截时，顺延到下一个方案，
+     *    直到任一方案翻译成功；全部失败才标记该条任务失败。
      */
-    private suspend fun translateSingle(task: TranslationTask, config: ApiConfig) {
+    private suspend fun translateSingle(
+        task: TranslationTask,
+        configs: List<ApiConfig> = resolveConfigs(),
+    ) {
+        if (configs.isEmpty()) {
+            failTask(task, "未配置 API 方案或 Key")
+            return
+        }
         var lastError = "未知错误"
-        for (model in config.models) {
-            if (model != config.model) {
-                // 换模型意味着上一个模型已限流/不可用，无需再额外等待
-                logcat("AiTranslation") { "轮换备用模型：$model" }
+        profileLoop@ for ((profileIndex, config) in configs.withIndex()) {
+            if (profileIndex > 0) {
+                logcat("AiTranslation") { "切换备用 API 方案（第 ${profileIndex + 1} 个）" }
             }
-            val modelConfig = config.copy(model = model)
-            var attempt = 0
-            var rotateToNextModel = false
-            while (attempt <= MAX_RETRY_ATTEMPTS) {
-                if (attempt > 0) delay(RETRY_DELAY_MS)
-                try {
-                    val translated = semaphore.withPermit {
-                        requestAiTranslation(modelConfig, task.originalTitle)
-                    }
-                    if (translated.isBlank()) throw AiRequestException("模型未返回翻译内容")
-                    saveTranslation(task, translated)
-                    return
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: AiRequestException) {
-                    lastError = e.message ?: "未知错误"
-                    if (e.shouldRotateModel) {
-                        rotateToNextModel = true
+            for ((modelIndex, model) in config.models.withIndex()) {
+                if (modelIndex > 0) {
+                    // 换模型意味着上一个模型已限流/不可用，无需再额外等待
+                    logcat("AiTranslation") { "轮换备用模型：$model" }
+                }
+                val modelConfig = config.copy(model = model)
+                var attempt = 0
+                while (attempt <= MAX_RETRY_ATTEMPTS) {
+                    if (attempt > 0) delay(RETRY_DELAY_MS)
+                    try {
+                        val translated = semaphore.withPermit {
+                            requestAiTranslation(modelConfig, task.originalTitle)
+                        }
+                        if (translated.isBlank()) throw AiRequestException("模型未返回翻译内容")
+                        saveTranslation(task, translated)
+                        return
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: AiRequestException) {
+                        lastError = e.message ?: "未知错误"
+                        when {
+                            // Key 失效/欠费/风控/内容拦截：本方案剩余模型不必再试
+                            e.shouldRotateProfile -> continue@profileLoop
+                            // 限流/拥堵：换同方案的下一个模型
+                            e.shouldRotateModel -> break
+                            !e.retryable || attempt == MAX_RETRY_ATTEMPTS -> break
+                        }
+                    } catch (e: Exception) {
+                        lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
+                        // 请求超时等网络异常同样视为当前模型不可用，换下一个模型
                         break
                     }
-                    if (!e.retryable || attempt == MAX_RETRY_ATTEMPTS) break
-                } catch (e: Exception) {
-                    lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
-                    // 请求超时同样视为当前模型不可用，轮换到下一个备用模型
-                    if (e.isTimeout()) rotateToNextModel = true
-                    break
+                    attempt++
                 }
-                attempt++
             }
-            if (!rotateToNextModel) break
         }
         failTask(task, lastError)
     }
-
-    /** 判断异常是否属于网络/请求超时（Ktor 的 HttpRequestTimeoutException 等）。 */
-    private fun Throwable.isTimeout(): Boolean =
-        this is java.net.SocketTimeoutException ||
-            this is java.net.ConnectException ||
-            (this::class.simpleName?.contains("Timeout", ignoreCase = true) == true)
 
     private suspend fun findCached(task: TranslationTask): String? =
         runCatching { db.galleryTranslationDao().getTranslation(task.gid) }
@@ -319,10 +370,7 @@ object AiTranslationManager {
         _failures.tryEmit(AiTranslationFailure(task.gid, message))
     }
 
-    /**
-     * 模型列表按「当前选中模型优先、其余备用模型依原顺序」排序，
-     * 供 429/503/超时时的自动轮换使用。
-     */
+    /** 单套候选配置：接口地址、Key、按优先级排序的模型列表与当前尝试的模型。 */
     private data class ApiConfig(
         val apiUrl: String,
         val apiKey: String,
@@ -330,16 +378,27 @@ object AiTranslationManager {
         val model: String = models.first(),
     )
 
-    private fun resolveConfig(): ApiConfig? {
-        val profile = AiProfileStore.activeProfile() ?: return null
-        val apiUrl = profile.apiUrl.trim().trimEnd('/')
-        val apiKey = profile.apiKey.trim()
-        val selected = profile.selectedModel.trim()
-        val models = (listOf(selected) + profile.models.map { it.trim() })
-            .filter { it.isNotBlank() }
-            .distinct()
-        if (apiUrl.isBlank() || apiKey.isBlank() || models.isEmpty()) return null
-        return ApiConfig(apiUrl, apiKey, models)
+    /**
+     * 按「当前激活方案优先、其余方案依原顺序」生成候选配置列表，
+     * 供双层自动容错轮换使用。模型列表按「选中模型优先、其余备用模型依原顺序」排序。
+     */
+    private fun resolveConfigs(): List<ApiConfig> {
+        val all = AiProfileStore.profiles()
+        val active = AiProfileStore.activeProfile()
+        val ordered = if (active == null) all else listOf(active) + all.filterNot { it.id == active.id }
+        return ordered.mapNotNull { profile ->
+            val apiUrl = profile.apiUrl.trim().trimEnd('/')
+            val apiKey = profile.apiKey.trim()
+            val selected = profile.selectedModel.trim()
+            val models = (listOf(selected) + profile.models.map { it.trim() })
+                .filter { it.isNotBlank() }
+                .distinct()
+            if (apiUrl.isBlank() || apiKey.isBlank() || models.isEmpty()) {
+                null
+            } else {
+                ApiConfig(apiUrl, apiKey, models)
+            }
+        }
     }
 
     /**
@@ -556,9 +615,11 @@ object AiTranslationManager {
         val content = (message?.get("content") as? JsonPrimitive)?.content?.trim().orEmpty()
         if (content.isEmpty()) {
             val finishReason = (choice?.get("finish_reason") as? JsonPrimitive)?.content
-            throw IllegalStateException(
-                if (finishReason == "content_filter") "内容被模型安全策略拦截" else "模型未返回翻译内容",
-            )
+            if (finishReason == "content_filter") {
+                // 内容安全策略拦截：换模型/换方案才有意义
+                throw AiRequestException("内容被模型安全策略拦截", contentBlocked = true)
+            }
+            throw IllegalStateException("模型未返回翻译内容")
         }
         return content
     }
@@ -581,9 +642,11 @@ object AiTranslationManager {
         if (content.isEmpty()) {
             val blockReason = ((jsonObject["promptFeedback"] as? JsonObject)?.get("blockReason") as? JsonPrimitive)?.content
                 ?: ((candidate?.get("finishReason")) as? JsonPrimitive)?.content
-            throw IllegalStateException(
-                if (blockReason != null) "内容被模型安全策略拦截（$blockReason）" else "模型未返回翻译内容",
-            )
+            if (blockReason != null) {
+                // 内容安全策略拦截：换模型/换方案才有意义
+                throw AiRequestException("内容被模型安全策略拦截（$blockReason）", contentBlocked = true)
+            }
+            throw IllegalStateException("模型未返回翻译内容")
         }
         return content
     }
