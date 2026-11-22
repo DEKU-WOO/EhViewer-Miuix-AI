@@ -138,6 +138,8 @@ import moe.tarsin.snackbar
 import moe.tarsin.string
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
@@ -147,6 +149,7 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Sort
+import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
@@ -268,205 +271,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 }
             }
         }
-    } else {
-        ProvideSideSheetContent { sheetState ->
-            val quickSearchList = remember { mutableStateListOf<QuickSearch>() }
-            LaunchedEffect(Unit) {
-                val list = EhDB.getAllQuickSearch()
-                quickSearchList.addAll(list)
-            }
-            SmallTopAppBar(
-                title = stringResource(id = R.string.quick_search),
-                color = MiuixTheme.colorScheme.surface,
-                defaultWindowInsetsPadding = false,
-                // 抽屉在平板下仅占 1/3 屏宽，收紧标题左右内边距，把宽度让给标题文本，
-                // 避免「快速搜索」被截断成「快速…」
-                titlePadding = 12.dp,
-                actions = {
-                    val invalidImageQuickSearch = stringResource(R.string.image_search_not_quick_search)
-                    val nameEmpty = stringResource(R.string.name_is_empty)
-                    val dupName = stringResource(R.string.duplicate_name)
-                    IconButton(
-                        onClick = {
-                            launch {
-                                if (urlBuilder.mode == MODE_IMAGE_SEARCH) {
-                                    snackbar(invalidImageQuickSearch)
-                                } else {
-                                    // A refresh can temporarily expose an empty snapshot even when the
-                                    // load state is idle (for example after a failed/empty search). Do
-                                    // not index into it; quick-search names can still be created without
-                                    // the optional progress suffix.
-                                    val firstItem = data.itemSnapshotList.items
-                                        .getOrNull(getFirstVisibleItemIndex())
-                                    val next = firstItem?.gid?.plus(1)
-                                    quickSearchList.fastForEach { q ->
-                                        if (next != null && urlBuilder.equalsQuickSearch(q)) {
-                                            val nextStr = q.name.substringAfterLast('@', "")
-                                            if (nextStr.toLongOrNull() == next) {
-                                                snackbar(string(R.string.duplicate_quick_search, q.name))
-                                                return@launch
-                                            }
-                                        }
-                                    }
-                                    awaitInputTextWithCheckBox(
-                                        initial = quickSearchName ?: urlBuilder.keyword.orEmpty(),
-                                        title = R.string.add_quick_search_dialog_title,
-                                        hint = R.string.quick_search,
-                                        checked = saveProgress,
-                                        checkBoxText = R.string.save_progress,
-                                    ) { input, checked ->
-                                        var text = input.trim()
-                                        ensure(text.isNotBlank()) { nameEmpty }
-                                        if (checked && next != null) text += "@$next"
-                                        ensure(quickSearchList.none { it.name == text }) { dupName }
-                                        val quickSearch = urlBuilder.toQuickSearch(text)
-                                        quickSearch.position = quickSearchList.size
-                                        // Insert to DB first to update the id
-                                        EhDB.insertQuickSearch(quickSearch)
-                                        quickSearchList.add(quickSearch)
-                                        saveProgress = checked
-                                    }
-                                }
-                            }
-                        },
-                        enabled = data.loadState.isIdle,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Add,
-                            contentDescription = stringResource(id = R.string.add),
-                        )
-                    }
-                },
-            )
-            Box(modifier = Modifier.fillMaxSize()) {
-                val dialogState by rememberUpdatedState(contextOf<DialogState>())
-                val quickSearchListState = rememberLazyListState()
-                val hapticFeedback = rememberHapticFeedback()
-                val reorderableLazyListState = rememberReorderableLazyListState(quickSearchListState) { from, to ->
-                    quickSearchList.apply { add(to.index, removeAt(from.index)) }
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.MOVE)
-                }
-                var fromIndex by remember { mutableIntStateOf(-1) }
-                FastScrollLazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                    state = quickSearchListState,
-                    contentPadding = WindowInsets.systemBars.only(WindowInsetsSides.Bottom).asPaddingValues(),
-                ) {
-                    itemsIndexed(quickSearchList, key = { _, item -> item.id!! }) { itemIndex, item ->
-                        val index by rememberUpdatedState(itemIndex)
-                        ReorderableItem(
-                            reorderableLazyListState,
-                            item.id!!,
-                            animateItemModifier = Modifier.thenIf(animateItems) { animateItem() },
-                        ) { isDragging ->
-                            // Not using rememberSwipeToDismissBoxState to prevent LazyColumn from reusing it
-                            // SQLite may reuse ROWIDs from previously deleted rows so they'll have the same key
-                            val dismissState = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, positionalThreshold) }
-                            val deleteAction: suspend () -> Unit = {
-                                dialogState.runCatching {
-                                    awaitConfirmationOrCancel(confirmText = R.string.delete) {
-                                        Text(text = stringResource(R.string.delete_quick_search, item.name))
-                                    }
-                                }.onSuccess {
-                                    EhDB.deleteQuickSearch(item)
-                                    with(quickSearchList) {
-                                        subList(index + 1, size).forEach {
-                                            it.position--
-                                        }
-                                        removeAt(index)
-                                    }
-                                }.onFailure {
-                                    dismissState.reset()
-                                }
-                            }
-                            SwipeToDismissBox(
-                                state = dismissState,
-                                backgroundContent = { DismissDeleteBackground() },
-                                modifier = Modifier.dismissDeleteAction(
-                                    label = stringResource(id = R.string.delete),
-                                    onDelete = { launch { deleteAction() } },
-                                ),
-                                enableDismissFromStartToEnd = false,
-                                onDismiss = { deleteAction() },
-                            ) {
-                                val itemBg = if (isDragging) {
-                                    MiuixTheme.colorScheme.surfaceContainerHigh
-                                } else {
-                                    MiuixTheme.colorScheme.surfaceContainer
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                                        .clip(SquircleShape(12.dp))
-                                        .background(itemBg)
-                                        .clickable(role = Role.Button) {
-                                            if (urlBuilder.mode == MODE_WHATS_HOT) {
-                                                val builder = ListUrlBuilder(item).apply {
-                                                    language = languageFilter
-                                                }
-                                                navigate(builder.asDst())
-                                            } else {
-                                                urlBuilder = ListUrlBuilder(item).apply {
-                                                    language = languageFilter
-                                                }
-                                                data.refresh()
-                                                fabHidden = false
-                                            }
-                                            launch { sheetState.close() }
-                                        }
-                                        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = item.name,
-                                        color = MiuixTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    IconButton(
-                                        onClick = {},
-                                        modifier = Modifier.draggableHandle(
-                                            onDragStarted = {
-                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.START)
-                                                fromIndex = index
-                                            },
-                                            onDragStopped = {
-                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.END)
-                                                if (fromIndex != -1) {
-                                                    if (fromIndex != index) {
-                                                        val range = if (fromIndex < index) fromIndex..index else index..fromIndex
-                                                        val toUpdate = quickSearchList.slice(range)
-                                                        toUpdate.zip(range).forEach { it.first.position = it.second }
-                                                        launchIO { EhDB.updateQuickSearch(toUpdate) }
-                                                    }
-                                                    fromIndex = -1
-                                                }
-                                            },
-                                        ),
-                                    ) {
-                                        Icon(
-                                            imageVector = MiuixIcons.Sort,
-                                            contentDescription = null,
-                                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Await({ delay(200) }) {
-                    if (quickSearchList.isEmpty()) {
-                        Text(
-                            text = stringResource(id = R.string.quick_search_tip),
-                            modifier = Modifier.align(Alignment.Center),
-                        )
-                    }
-                }
-            }
-        }
     }
 
     val openGalleryKeyword = stringResource(R.string.gallery_list_search_bar_open_gallery)
@@ -531,9 +335,99 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         localSearch = false,
         searchBarOffsetY = { searchBarOffsetY },
         trailingIcon = {
-            val sheetState = LocalSideSheetState.current
-            IconButton(onClick = { launch { sheetState.open() } }) {
-                Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
+            if (isTopList) {
+                // 榜单页仍使用侧边抽屉选择榜单
+                val sheetState = LocalSideSheetState.current
+                IconButton(onClick = { launch { sheetState.open() } }) {
+                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist))
+                }
+            } else {
+                // 快速搜索改为图标正下方的悬浮下拉菜单，替代原本占半屏的全高侧边抽屉
+                val quickSearchList = remember { mutableStateListOf<QuickSearch>() }
+                LaunchedEffect(Unit) {
+                    quickSearchList.addAll(EhDB.getAllQuickSearch())
+                }
+                val invalidImageQuickSearch = stringResource(R.string.image_search_not_quick_search)
+                val nameEmpty = stringResource(R.string.name_is_empty)
+                val dupName = stringResource(R.string.duplicate_name)
+                fun saveCurrentQuickSearch() = launch {
+                    if (urlBuilder.mode == MODE_IMAGE_SEARCH) {
+                        snackbar(invalidImageQuickSearch)
+                    } else {
+                        // A refresh can temporarily expose an empty snapshot even when the
+                        // load state is idle (for example after a failed/empty search). Do
+                        // not index into it; quick-search names can still be created without
+                        // the optional progress suffix.
+                        val firstItem = data.itemSnapshotList.items
+                            .getOrNull(getFirstVisibleItemIndex())
+                        val next = firstItem?.gid?.plus(1)
+                        quickSearchList.fastForEach { q ->
+                            if (next != null && urlBuilder.equalsQuickSearch(q)) {
+                                val nextStr = q.name.substringAfterLast('@', "")
+                                if (nextStr.toLongOrNull() == next) {
+                                    snackbar(string(R.string.duplicate_quick_search, q.name))
+                                    return@launch
+                                }
+                            }
+                        }
+                        awaitInputTextWithCheckBox(
+                            initial = quickSearchName ?: urlBuilder.keyword.orEmpty(),
+                            title = R.string.add_quick_search_dialog_title,
+                            hint = R.string.quick_search,
+                            checked = saveProgress,
+                            checkBoxText = R.string.save_progress,
+                        ) { input, checked ->
+                            var text = input.trim()
+                            ensure(text.isNotBlank()) { nameEmpty }
+                            if (checked && next != null) text += "@$next"
+                            ensure(quickSearchList.none { it.name == text }) { dupName }
+                            val quickSearch = urlBuilder.toQuickSearch(text)
+                            quickSearch.position = quickSearchList.size
+                            // Insert to DB first to update the id
+                            EhDB.insertQuickSearch(quickSearch)
+                            quickSearchList.add(quickSearch)
+                            saveProgress = checked
+                        }
+                    }
+                }
+                val quickSearchEntry = DropdownEntry(
+                    items = buildList {
+                        quickSearchList.forEach { item ->
+                            add(
+                                DropdownItem(
+                                    text = item.name,
+                                    selected = urlBuilder.equalsQuickSearch(item),
+                                    onClick = {
+                                        if (urlBuilder.mode == MODE_WHATS_HOT) {
+                                            val builder = ListUrlBuilder(item).apply {
+                                                language = languageFilter
+                                            }
+                                            navigate(builder.asDst())
+                                        } else {
+                                            urlBuilder = ListUrlBuilder(item).apply {
+                                                language = languageFilter
+                                            }
+                                            data.refresh()
+                                            fabHidden = false
+                                        }
+                                    },
+                                ),
+                            )
+                        }
+                        add(
+                            DropdownItem(
+                                text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
+                                onClick = { saveCurrentQuickSearch() },
+                            ),
+                        )
+                    },
+                )
+                WindowIconDropdownMenu(
+                    entry = quickSearchEntry,
+                    maxHeight = 480.dp,
+                ) {
+                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
+                }
             }
             // 手机端底部栏只有 6 项，排行榜没有入口，在热门页补一个
             if (urlBuilder.mode == MODE_WHATS_HOT) {

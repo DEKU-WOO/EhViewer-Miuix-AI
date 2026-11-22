@@ -1,26 +1,14 @@
 package com.hippo.ehviewer.ui.main
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import arrow.core.Either
@@ -31,8 +19,6 @@ import arrow.core.some
 import coil3.compose.AsyncImage
 import coil3.network.HttpException
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.ui.component.RollingNumber
-import com.ehviewer.core.ui.component.RollingNumberPlaceholder
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
 import com.hippo.ehviewer.Settings
@@ -56,18 +42,16 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import moe.tarsin.coroutines.runSwallowingWithUI
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.RemoveContact
-import top.yukonga.miuix.kmp.icon.extended.Reset
+import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 
 private val limitScope = CoroutineScope(Dispatchers.IO)
 private val refreshEvent = MutableSharedFlow<Unit>()
@@ -92,92 +76,58 @@ fun AvatarIcon() {
     if (hasSignedIn) {
         val placeholder = stringResource(id = R.string.please_wait)
         val result by limitFlow.collectAsState()
-        IconButton(
-            onClick = {
-                launch {
-                    refreshEvent.emit(Unit)
-                    awaitConfirmationOrCancel(
-                        title = R.string.image_limits,
-                        showConfirmButton = false,
-                        showCancelButton = false,
-                    ) {
-                        val animatedAlpha by animateFloatAsState(if (remember { result } == result) 0.5f else 1f)
-                        result.onNone {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                InfiniteProgressIndicator()
-                                Spacer(modifier = Modifier.size(dimensionResource(id = com.hippo.ehviewer.R.dimen.keyline_margin)))
-                                Text(text = placeholder)
-                            }
-                        }
-                        result.onSome { current ->
-                            Box(modifier = Modifier.graphicsLayer { alpha = animatedAlpha }) {
-                                when (current) {
-                                    is Either.Left -> Text(text = current.value)
-                                    is Either.Right -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        val (limits, funds) = current.value
-                                        if (limits.maximum > 0) {
-                                            val value by animateFloatAsState(limits.current.toFloat() / limits.maximum)
-                                            LinearProgressIndicator(
-                                                progress = value,
-                                                modifier = Modifier.height(12.dp).fillMaxWidth(),
-                                            )
-                                        }
-                                        when (limits.maximum) {
-                                            -1 -> Text(text = stringResource(id = R.string.image_limits_restricted))
-                                            0 -> Text(text = stringResource(id = R.string.image_limits_normal))
-                                            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(text = stringResource(id = R.string.image_limits_summary))
-                                                RollingNumber(number = limits.current)
-                                                Text(text = " / ")
-                                                RollingNumberPlaceholder(number = limits.maximum)
-                                            }
-                                        }
-                                        Text(text = stringResource(id = R.string.current_funds))
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceAround,
-                                        ) {
-                                            FundsItem(
-                                                type = "GP",
-                                                amount = funds.gp,
-                                            )
-                                            FundsItem(
-                                                type = "C",
-                                                amount = funds.credit,
-                                            )
-                                        }
-                                        if (limits.resetCost > 0) {
-                                            Button(
-                                                onClick = {
-                                                    launchIO {
-                                                        runSwallowingWithUI {
-                                                            invalidateEvent.emit(Unit)
-                                                            EhEngine.resetImageLimits()
-                                                            refreshEvent.emit(Unit)
-                                                        }
+        // 就近悬浮气泡：点击头像后直接在按钮正下方弹出图片配额与资金信息，不再从屏幕底部弹出大面板
+        val menuEntry = DropdownEntry(
+            items = buildList {
+                result.fold(
+                    ifEmpty = {
+                        add(DropdownItem(text = placeholder, enabled = false))
+                    },
+                    ifSome = { current ->
+                        when (current) {
+                            is Either.Left -> add(DropdownItem(text = current.value, enabled = false))
+                            is Either.Right -> {
+                                val (limits, funds) = current.value
+                                val limitSummary = when (limits.maximum) {
+                                    -1 -> stringResource(id = R.string.image_limits_restricted)
+                                    0 -> stringResource(id = R.string.image_limits_normal)
+                                    else -> "${limits.current} / ${limits.maximum}"
+                                }
+                                add(
+                                    DropdownItem(
+                                        text = stringResource(id = R.string.image_limits),
+                                        summary = limitSummary,
+                                        enabled = false,
+                                    ),
+                                )
+                                add(DropdownItem(text = "GP", summary = funds.gp.toString(), enabled = false))
+                                add(DropdownItem(text = "Credits", summary = funds.credit.toString(), enabled = false))
+                                if (limits.resetCost > 0) {
+                                    add(
+                                        DropdownItem(
+                                            text = stringResource(id = R.string.reset_cost, limits.resetCost),
+                                            onClick = {
+                                                launchIO {
+                                                    runSwallowingWithUI {
+                                                        invalidateEvent.emit(Unit)
+                                                        EhEngine.resetImageLimits()
+                                                        refreshEvent.emit(Unit)
                                                     }
-                                                },
-                                                colors = ButtonDefaults.buttonColorsPrimary(),
-                                                modifier = Modifier.align(Alignment.CenterHorizontally),
-                                            ) {
-                                                Icon(
-                                                    imageVector = MiuixIcons.Reset,
-                                                    contentDescription = stringResource(id = R.string.reset),
-                                                )
-                                                Spacer(modifier = Modifier.size(4.dp))
-                                                Text(text = stringResource(id = R.string.reset_cost, limits.resetCost))
-                                            }
-                                        }
-                                    }
+                                                }
+                                            },
+                                        ),
+                                    )
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                )
             },
+        )
+        WindowIconDropdownMenu(
+            entry = menuEntry,
+            maxHeight = 420.dp,
+            onExpandedChange = { expanded -> if (expanded) launch { refreshEvent.emit(Unit) } },
         ) {
             val avatar by Settings.avatar.collectAsState()
             AnimatedContent(targetState = avatar == null) { noAvatar ->

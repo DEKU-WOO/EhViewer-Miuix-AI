@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -60,8 +61,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.database.dao.SearchDao
 import com.ehviewer.core.database.model.Search
@@ -116,7 +117,7 @@ import top.yukonga.miuix.kmp.icon.extended.Image
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 fun interface SuggestionProvider {
     suspend fun providerSuggestions(text: String): List<Suggestion>
@@ -344,9 +345,12 @@ fun SearchBarScreen(
                                 }
                         }
                         .thenIf(expanded) { fillMaxSize() },
+                    // 左右外侧留白对称 16.dp：24.dp 图标中心落在胶囊左右半圆圆心，
+                    // 右侧多图标与左侧放大镜的间距、触控区域完全不变，仅中间自适应输入区吸收变化
+                    insideMargin = DpSize(SearchBarHorizontalPadding, 0.dp),
                     inputField = {
                         val inputFieldModifier = Modifier
-                            .widthIn(max = (maxWidth - SearchBarHorizontalPadding * 2).coerceAtMost(SearchBarMaxWidth))
+                            .widthIn(max = SearchBarMaxWidth)
                             .fillMaxWidth()
 
                         val inputContent = @Composable {
@@ -585,15 +589,20 @@ fun SearchBarScreen(
             }
 
             if (filter != null) {
-                WindowBottomSheet(
+                // 统一为与「清空历史」一致的底部对齐悬浮弹窗：四周等距留白、四角完整大圆角，
+                // 并绘制一整圈连续的微光玻璃描边，替代贴底抽屉
+                WindowDialog(
                     show = showFilterSheet,
-                    modifier = Modifier.glassRim(topOnly = true),
+                    modifier = Modifier.glassRim(cornerRadius = FilterDialogCornerRadius),
                     onDismissRequest = { showFilterSheet = false },
+                    cornerRadius = FilterDialogCornerRadius,
+                    backgroundColor = MiuixTheme.colorScheme.background,
                 ) {
                     CompositionLocalProvider(LocalBackdrop provides null) {
                         Box(
                             modifier = Modifier
-                                .padding(bottom = 16.dp)
+                                .fillMaxWidth()
+                                .heightIn(max = 560.dp)
                                 // 滚动兜底只能加在弹层这一侧：同一个 filter() 也会作为 LazyColumn 的
                                 // item 渲染，在 item 内嵌 verticalScroll 会因无限高度约束直接抛异常
                                 .verticalScroll(rememberScrollState()),
@@ -626,3 +635,4 @@ private val TagTerminators = charArrayOf('"', '$')
 private val WhitespaceRegex = Regex("\\s+")
 private val SearchBarHorizontalPadding = 16.dp
 private val SearchBarMaxWidth = 720.dp
+private val FilterDialogCornerRadius = 32.dp

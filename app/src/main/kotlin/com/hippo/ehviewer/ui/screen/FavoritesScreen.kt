@@ -81,6 +81,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
@@ -92,6 +94,7 @@ import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
+import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
@@ -133,73 +136,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         data.refresh()
     }
 
-    ProvideSideSheetContent { sheetState ->
-        val localFavCount by viewModel.localFavCount.collectAsState(0)
-        SmallTopAppBar(
-            title = stringResource(id = R.string.collections),
-            color = MiuixTheme.colorScheme.surface,
-            defaultWindowInsetsPadding = false,
-        )
-        val scope = currentRecomposeScope
-        LaunchedEffect(Unit) {
-            Settings.favChangesFlow.collect {
-                scope.invalidate()
-            }
-        }
-        val localFav = stringResource(id = R.string.local_favorites) to localFavCount
-        val faves = if (hasSignedIn) {
-            arrayOf(
-                localFav,
-                stringResource(id = R.string.cloud_favorites) to Settings.favCloudCount,
-                *Settings.favCat.zip(Settings.favCount.toTypedArray()).toTypedArray(),
-            )
-        } else {
-            arrayOf(localFav)
-        }
-        Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 4.dp),
-        ) {
-            // 有意的设计差异：收藏分类是单选列表，不是设置项分组，因此不套 Card，
-            // 选中态由行底色表达；与设置页的 Card 分组是两套语义，不要按"缺 Card"处理。
-            faves.forEachIndexed { index, (name, count) ->
-                val isSelected = urlBuilder.favCat == index - 2
-                val bgColor = if (isSelected) MiuixTheme.colorScheme.primaryContainer else Color.Transparent
-                val textColor = if (isSelected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(SquircleShape(12.dp))
-                        .background(bgColor)
-                        .selectable(
-                            selected = isSelected,
-                            role = Role.RadioButton,
-                            onClick = {
-                                val newCat = index - 2
-                                refresh(FavListUrlBuilder(newCat))
-                                Settings.recentFavCat = newCat
-                                fabHidden = false
-                                launch { sheetState.close() }
-                            },
-                        )
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = name,
-                        color = textColor,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = count.toString(),
-                        color = if (isSelected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        style = MiuixTheme.textStyles.body2,
-                    )
-                }
-            }
-        }
-    }
 
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
@@ -218,8 +154,59 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         localSearch = urlBuilder.isLocal,
         searchBarOffsetY = { searchBarOffsetY },
         trailingIcon = {
-            val sheetState = LocalSideSheetState.current
-            IconButton(onClick = { launch { sheetState.open() } }) {
+            val localFavCount by viewModel.localFavCount.collectAsState(0)
+            // 收藏分类数据不是 Compose 快照状态，变更时手动触发本区域重组以刷新数量
+            val scope = currentRecomposeScope
+            LaunchedEffect(Unit) {
+                Settings.favChangesFlow.collect { scope.invalidate() }
+            }
+            // 点击文件夹图标后在图标正下方弹出悬浮菜单，替代原本占半屏的全高侧边抽屉
+            val favItems = buildList {
+                add(
+                    DropdownItem(
+                        text = stringResource(id = R.string.local_favorites),
+                        summary = localFavCount.toString(),
+                        selected = urlBuilder.favCat == -2,
+                        onClick = {
+                            refresh(FavListUrlBuilder(-2))
+                            Settings.recentFavCat = -2
+                            fabHidden = false
+                        },
+                    ),
+                )
+                if (hasSignedIn) {
+                    add(
+                        DropdownItem(
+                            text = stringResource(id = R.string.cloud_favorites),
+                            summary = Settings.favCloudCount.toString(),
+                            selected = urlBuilder.favCat == -1,
+                            onClick = {
+                                refresh(FavListUrlBuilder(-1))
+                                Settings.recentFavCat = -1
+                                fabHidden = false
+                            },
+                        ),
+                    )
+                    Settings.favCat.forEachIndexed { index, name ->
+                        add(
+                            DropdownItem(
+                                text = name,
+                                summary = Settings.favCount[index].toString(),
+                                selected = urlBuilder.favCat == index,
+                                onClick = {
+                                    refresh(FavListUrlBuilder(index))
+                                    Settings.recentFavCat = index
+                                    fabHidden = false
+                                },
+                            ),
+                        )
+                    }
+                }
+            }
+            WindowIconDropdownMenu(
+                entry = DropdownEntry(items = favItems),
+                maxHeight = 480.dp,
+            ) {
                 Icon(imageVector = MiuixIcons.Folder, contentDescription = null)
             }
             AvatarIcon()
