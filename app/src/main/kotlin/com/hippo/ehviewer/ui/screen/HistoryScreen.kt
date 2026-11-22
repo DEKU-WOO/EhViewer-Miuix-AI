@@ -211,7 +211,6 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                             info = info,
                             showPages = showPages,
                             showProgress = showProgress,
-                            showLastPageHint = true,
                             modifier = Modifier.height(cardHeight).padding(horizontal = marginH),
                         )
                     }

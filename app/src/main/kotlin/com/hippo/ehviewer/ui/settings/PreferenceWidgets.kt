@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.annotation.ArrayRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
@@ -68,11 +70,19 @@ fun PreferenceHeader(
     ArrowPreference(
         title = stringResource(title),
         startAction = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.primary,
-            )
+            // 固定图标占位尺寸并居中，保证不同图标库里 intrinsic 尺寸不同的图标
+            // 也能让右侧标题起始横坐标与上下条目严格左对齐
+            Box(
+                modifier = Modifier.size(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MiuixTheme.colorScheme.primary,
+                )
+            }
         },
         onClick = { navigator.navigate(childRoute) },
     )

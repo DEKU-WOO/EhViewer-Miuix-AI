@@ -120,7 +120,9 @@ object EhDB {
         val localTime = db.historyDao().getTime(gid)
         if (localTime == null || localTime <= updatedAt) {
             db.historyDao().upsert(HistoryInfo(gid, updatedAt))
-            db.progressDao().upsert(ProgressInfo(gid, lastPage))
+            // 直接写入本地原生的阅读进度字段：详情页「从第 X 页阅读」按钮与阅读器跳页
+            // 都读取同一张 progress 表，云端页码因此与本地阅读进度 100% 统一
+            putReadProgress(gid, lastPage)
         }
     }
 
