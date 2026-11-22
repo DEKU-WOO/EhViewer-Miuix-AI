@@ -16,10 +16,10 @@
 package com.hippo.ehviewer.spider
 
 import android.graphics.Bitmap
+import android.os.ParcelFileDescriptor
 import android.webkit.MimeTypeMap
 import arrow.fx.coroutines.parMap
 import com.ehviewer.core.database.model.DownloadArtist
-import com.ehviewer.core.files.SystemFileSystem
 import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.find
@@ -27,6 +27,7 @@ import com.ehviewer.core.files.isDirectory
 import com.ehviewer.core.files.list
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.moveTo
+import com.ehviewer.core.files.openFileDescriptor
 import com.ehviewer.core.files.sendTo
 import com.ehviewer.core.files.write
 import com.ehviewer.core.model.GalleryDetail
@@ -64,8 +65,6 @@ import kotlin.concurrent.read
 import kotlin.concurrent.write
 import okio.Path
 import okio.Path.Companion.toOkioPath
-import okio.inputStream
-import okio.outputStream
 import splitties.init.appCtx
 
 class SpiderDen(val info: GalleryInfo) {
@@ -435,7 +434,7 @@ class SpiderDen(val info: GalleryInfo) {
                 for (idx in 0 until pageCount) {
                     try {
                         getImageSource(idx).use { source ->
-                            SystemFileSystem.source(source.source).inputStream().use { input ->
+                            ParcelFileDescriptor.AutoCloseInputStream(source.source.openFileDescriptor("r")).use { input ->
                                 zip.putNextEntry(ZipEntry(perFilename(idx, source.type)))
                                 try {
                                     input.copyTo(zip)
@@ -452,7 +451,7 @@ class SpiderDen(val info: GalleryInfo) {
                     }
                 }
                 if (includeMetadata) {
-                    SystemFileSystem.source(comicInfoFile).inputStream().use { input ->
+                    ParcelFileDescriptor.AutoCloseInputStream(comicInfoFile.openFileDescriptor("r")).use { input ->
                         zip.putNextEntry(ZipEntry(COMIC_INFO_FILE))
                         try {
                             input.copyTo(zip)
@@ -466,7 +465,7 @@ class SpiderDen(val info: GalleryInfo) {
             check(tempArchive.isFile && tempArchive.length() > 0) { "私有缓存 CBZ 为空：$tempArchive" }
 
             tempArchive.inputStream().use { input ->
-                SystemFileSystem.sink(file).outputStream().use { output ->
+                ParcelFileDescriptor.AutoCloseOutputStream(file.openFileDescriptor("wt")).use { output ->
                     input.copyTo(output)
                     output.flush()
                 }

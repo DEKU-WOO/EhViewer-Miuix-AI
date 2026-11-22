@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.sync
 
+import android.os.ParcelFileDescriptor
 import com.ehviewer.core.files.SystemFileSystem
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.openFileDescriptor
@@ -17,7 +18,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okio.BufferedSink
 import okio.Path
-import okio.outputStream
 
 /**
  * 极简 WebDAV 客户端（PROPFIND / MKCOL / PUT / GET）。
@@ -144,7 +144,7 @@ object WebDavClient {
         execute(newRequest("GET", remoteUrl), "GET").use { response ->
             target.parent?.mkdirs()
             response.body.byteStream().use { input ->
-                SystemFileSystem.sink(target).outputStream().use { output ->
+                ParcelFileDescriptor.AutoCloseOutputStream(target.openFileDescriptor("wt")).use { output ->
                     input.copyTo(output)
                     output.flush()
                 }
