@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
@@ -158,6 +160,14 @@ private typealias Sheet = @Composable ColumnScope.(SideSheetState) -> Unit
 val LocalSideSheetContainer = staticCompositionLocalOf<SnapshotStateList<Sheet>> { error("SideSheetContainer not present") }
 val LocalSideSheetState = staticCompositionLocalOf<SideSheetState> { error("SideSheetState not present") }
 
+/**
+ * 侧板内容可写入期望宽度（如快速搜索按标签文本自适应）。
+ *
+ * [MutableSideSheet] 会把请求值夹到「屏宽 1/3 起步、1/2 封顶」后再应用；
+ * 未写入时保持原有宽度策略，因此不影响下载页标签抽屉等其他侧板。
+ */
+val LocalSideSheetWidthRequest = staticCompositionLocalOf<MutableState<Dp?>?> { null }
+
 @Composable
 fun ProvideSideSheetContent(content: Sheet) {
     val container = LocalSideSheetContainer.current
@@ -196,6 +206,12 @@ fun MutableSideSheet(
     } else {
         maxSheetWidth
     }
+    // 快速搜索等侧板内容可按标签文本申请宽度：基数 1/3 屏宽，最多 1/2 屏宽
+    val widthRequest = remember { mutableStateOf<Dp?>(null) }
+    val requestedWidth = widthRequest.value
+    val sheetWidth = requestedWidth
+        ?.coerceIn(width / 3f, width / 2f)
+        ?: effectiveSheetWidth
     // 初始锚点必须取整窗宽：若用小于实际侧板宽的占位值（旧为 360dp），首帧后 onSizeChanged
     // 更新锚点时 closestAnchor 会把停在占位值的 offset 判为更靠近 Open，启动瞬间直接吸附成打开态
     var maxValue by remember { mutableFloatStateOf(windowInfo.containerSize.width.toFloat()) }
@@ -215,6 +231,7 @@ fun MutableSideSheet(
     CompositionLocalProvider(
         LocalSideSheetContainer provides sheet,
         LocalSideSheetState provides drawerState,
+        LocalSideSheetWidthRequest provides widthRequest,
     ) {
         Box(
             modifier = modifier
@@ -314,7 +331,7 @@ fun MutableSideSheet(
                         }
                         .align(Alignment.CenterEnd)
                         .then(predictiveModifier)
-                        .widthIn(max = effectiveSheetWidth)
+                        .widthIn(max = sheetWidth)
                         .fillMaxHeight()
                         .background(
                             color = MiuixTheme.colorScheme.surface,

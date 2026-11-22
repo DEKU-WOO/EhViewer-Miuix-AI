@@ -736,9 +736,89 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
         }
         Spacer(modifier = Modifier.size(keylineMargin))
     }
+    // 平板竖屏：4 个操作图标靠左、星标评分卡靠右合并到同一行；手机与平板横屏保持原布局
+    val tabletPortrait = with(LocalWindowLayout.current) {
+        !isLandscape && widthDp >= AdaptiveBreakpoints.CONTENT_MAX_WIDTH_MIN_DP
+    }
+    fun getAllRatingText(rating: Float, ratingCount: Int): String = string(
+        R.string.rating_text,
+        string(getRatingText(rating)),
+        rating,
+        ratingCount,
+    )
+    var ratingText by rememberSaveable {
+        mutableStateOf(getAllRatingText(galleryDetail.rating, galleryDetail.ratingCount))
+    }
+    val rateSucceed = stringResource(R.string.rate_successfully)
+    val rateFailed = stringResource(R.string.rate_failed)
+    val rateSignInFirst = stringResource(R.string.sign_in_first)
+    fun showRateDialog() {
+        launchIO {
+            if (galleryDetail.apiUid < 0) {
+                snackbar(rateSignInFirst)
+                return@launchIO
+            }
+            val pendingRating = awaitResult(galleryDetail.rating.coerceAtLeast(.5f), title = R.string.rate) {
+                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    var text by remember { mutableIntStateOf(getRatingText(expectedValue)) }
+                    Text(text = stringResource(id = text), style = MiuixTheme.textStyles.body1)
+                    Spacer(modifier = Modifier.size(keylineMargin))
+                    GalleryRatingBar(
+                        rating = expectedValue,
+                        onRatingChange = {
+                            expectedValue = it.coerceAtLeast(.5f)
+                            text = getRatingText(expectedValue)
+                        },
+                    )
+                }
+            }
+            galleryDetail.runSuspendCatching {
+                EhEngine.rateGallery(apiUid, apiKey, gid, token, pendingRating)
+            }.onSuccess { result ->
+                galleryDetail.apply {
+                    rating = result.rating
+                    ratingCount = result.ratingCount
+                }
+                ratingText = getAllRatingText(result.rating, result.ratingCount)
+                snackbar(rateSucceed)
+            }.onFailure {
+                logcat(it)
+                snackbar(rateFailed)
+            }
+        }
+    }
+
+    @Composable
+    fun RatingCard(compact: Boolean) {
+        CrystalCard(onClick = ::showRateDialog) {
+            Column(
+                modifier = Modifier
+                    .padding(if (compact) 6.dp else 8.dp)
+                    .then(if (compact) Modifier else Modifier.fillMaxWidth()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                GalleryDetailRating(rating = galleryDetail.rating, compact = compact)
+                Spacer(modifier = Modifier.size(if (compact) 4.dp else keylineMargin))
+                Text(
+                    text = ratingText,
+                    style = if (compact) MiuixTheme.textStyles.footnote1 else MiuixTheme.textStyles.body1,
+                )
+            }
+        }
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        modifier = if (tabletPortrait) {
+            Modifier.fillMaxWidth()
+        } else {
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+        },
+        horizontalArrangement = if (tabletPortrait) {
+            Arrangement.spacedBy(12.dp)
+        } else {
+            Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+        },
+        verticalAlignment = if (tabletPortrait) Alignment.CenterVertically else Alignment.Top,
     ) {
         val favSlot by FavouriteStatusRouter.collectAsState(galleryDetail) { it }
         val favButtonText = if (favSlot != NOT_FAVORITED) {
@@ -907,64 +987,14 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
                 }
             },
         )
-    }
-    Spacer(modifier = Modifier.size(keylineMargin))
-    fun getAllRatingText(rating: Float, ratingCount: Int): String = string(
-        R.string.rating_text,
-        string(getRatingText(rating)),
-        rating,
-        ratingCount,
-    )
-    var ratingText by rememberSaveable {
-        mutableStateOf(getAllRatingText(galleryDetail.rating, galleryDetail.ratingCount))
-    }
-    val rateSucceed = stringResource(R.string.rate_successfully)
-    val rateFailed = stringResource(R.string.rate_failed)
-    val signInFirst = stringResource(R.string.sign_in_first)
-    fun showRateDialog() {
-        launchIO {
-            if (galleryDetail.apiUid < 0) {
-                snackbar(signInFirst)
-                return@launchIO
-            }
-            val pendingRating = awaitResult(galleryDetail.rating.coerceAtLeast(.5f), title = R.string.rate) {
-                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    var text by remember { mutableIntStateOf(getRatingText(expectedValue)) }
-                    Text(text = stringResource(id = text), style = MiuixTheme.textStyles.body1)
-                    Spacer(modifier = Modifier.size(keylineMargin))
-                    GalleryRatingBar(
-                        rating = expectedValue,
-                        onRatingChange = {
-                            expectedValue = it.coerceAtLeast(.5f)
-                            text = getRatingText(expectedValue)
-                        },
-                    )
-                }
-            }
-            galleryDetail.runSuspendCatching {
-                EhEngine.rateGallery(apiUid, apiKey, gid, token, pendingRating)
-            }.onSuccess { result ->
-                galleryDetail.apply {
-                    rating = result.rating
-                    ratingCount = result.ratingCount
-                }
-                ratingText = getAllRatingText(result.rating, result.ratingCount)
-                snackbar(rateSucceed)
-            }.onFailure {
-                logcat(it)
-                snackbar(rateFailed)
-            }
+        if (tabletPortrait) {
+            Spacer(modifier = Modifier.weight(1f))
+            RatingCard(compact = true)
         }
     }
-    CrystalCard(onClick = ::showRateDialog) {
-        Column(
-            modifier = Modifier.padding(8.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            GalleryDetailRating(rating = galleryDetail.rating)
-            Spacer(modifier = Modifier.size(keylineMargin))
-            Text(text = ratingText)
-        }
+    if (!tabletPortrait) {
+        Spacer(modifier = Modifier.size(keylineMargin))
+        RatingCard(compact = false)
     }
     Spacer(modifier = Modifier.size(keylineMargin))
     val tags = galleryDetail.tagGroups

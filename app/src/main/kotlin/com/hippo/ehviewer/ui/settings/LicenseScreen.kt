@@ -77,11 +77,8 @@ fun AnimatedVisibilityScope.LicenseScreen(navigator: DestinationsNavigator) = Sc
             if (currentLibraries == null) {
                 InfiniteProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .readableWidth()
-                        .fillMaxSize()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                SettingsLazyColumn(
+                    scrollBehavior = scrollBehavior,
                     contentPadding = paddingValues,
                 ) {
                     items(

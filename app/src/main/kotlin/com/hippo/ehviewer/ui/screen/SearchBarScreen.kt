@@ -400,20 +400,26 @@ fun SearchBarScreen(
                             )
                         }
 
-                        if (!expanded) {
-                            LiquidGlassSurface(
-                                shape = CircleShape,
-                                elevation = 4.dp,
-                                refractionHeight = 16.dp,
-                                refractionAmount = 16.dp,
-                                containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
-                                modifier = inputFieldModifier,
-                                backdrop = backdrop,
-                            ) {
+                        // 限宽后把剩余空间全部交给居中容器，平板横竖屏和手机竖屏下左右边距保持对称
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (!expanded) {
+                                LiquidGlassSurface(
+                                    shape = CircleShape,
+                                    elevation = 4.dp,
+                                    refractionHeight = 16.dp,
+                                    refractionAmount = 16.dp,
+                                    containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+                                    modifier = inputFieldModifier,
+                                    backdrop = backdrop,
+                                ) {
+                                    inputContent()
+                                }
+                            } else {
                                 inputContent()
                             }
-                        } else {
-                            inputContent()
                         }
                     },
                     expanded = expanded,

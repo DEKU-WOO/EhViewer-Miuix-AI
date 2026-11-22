@@ -98,8 +98,12 @@ fun GalleryListCardRating(rating: Float, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun GalleryDetailRating(rating: Float) {
-    RatingWidget(rating = rating, ratingSize = 48.dp, ratingInterval = 12.dp)
+fun GalleryDetailRating(rating: Float, compact: Boolean = false) {
+    RatingWidget(
+        rating = rating,
+        ratingSize = if (compact) 28.dp else 48.dp,
+        ratingInterval = if (compact) 4.dp else 12.dp,
+    )
 }
 
 @Composable

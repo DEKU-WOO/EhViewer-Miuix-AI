@@ -124,14 +124,10 @@ fun AnimatedVisibilityScope.BottomNavItemsScreen(navigator: DestinationsNavigato
             }
         },
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .blurBackdropSource(backdrop)
-                // padding 必须位于滚动修饰符之后：作为滚动内容的内边距，内容才能滚入顶栏下方供毛玻璃采样
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState())
-                .padding(paddingValues),
+        SettingsScrollColumn(
+            scrollBehavior = scrollBehavior,
+            contentPadding = paddingValues,
+            modifier = Modifier.blurBackdropSource(backdrop),
         ) {
             Card(
                 modifier = Modifier

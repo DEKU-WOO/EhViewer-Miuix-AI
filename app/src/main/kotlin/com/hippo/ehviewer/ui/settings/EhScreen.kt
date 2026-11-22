@@ -97,13 +97,9 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
                 .blurBackdropSource(backdrop),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier
-                    .readableWidth()
-                    .fillMaxHeight()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues),
+            SettingsScrollColumn(
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
             ) {
                 if (hasSignedIn) {
                     val displayName by Settings.displayName.collectAsState()

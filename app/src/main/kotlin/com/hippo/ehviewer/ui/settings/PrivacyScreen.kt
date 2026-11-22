@@ -69,13 +69,9 @@ fun AnimatedVisibilityScope.PrivacyScreen(navigator: DestinationsNavigator) = Sc
                 .blurBackdropSource(backdrop),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier
-                    .readableWidth()
-                    .fillMaxHeight()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues),
+            SettingsScrollColumn(
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
             ) {
                 SmallTitle(text = stringResource(id = R.string.settings_privacy))
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {

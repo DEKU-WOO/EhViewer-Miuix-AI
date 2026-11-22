@@ -131,14 +131,9 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                 .blurBackdropSource(backdrop),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .readableWidth()
-                    .fillMaxWidth()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues),
+            SettingsScrollColumn(
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
             ) {
                 var downloadLocationState by ::downloadLocation.observed
                 val cannotGetDownloadLocation = stringResource(id = R.string.settings_download_cant_get_download_location)

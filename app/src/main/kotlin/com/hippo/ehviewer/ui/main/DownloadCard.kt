@@ -4,9 +4,11 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -72,7 +74,7 @@ fun DownloadCard(
     onLongClick = onLongClick,
     interactionSource = interactionSource,
 ) {
-    Row {
+    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         val thumb = remember {
             movableContentOf<DownloadInfo> {
                 with(listThumbGenerator) {
@@ -95,13 +97,15 @@ fun DownloadCard(
         val stateFailed = stringResource(R.string.download_state_failed)
         val stateFailed2 = stringResource(R.string.download_state_failed_2, info.legacy)
         val downloadState by DownloadManager.collectDownloadState(info.gid)
-        Column(modifier = Modifier.padding(start = 10.dp, top = 8.dp, end = 6.dp, bottom = 8.dp)) {
-            Text(
-                text = EhUtils.getSuitableTitle(info),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = MiuixTheme.textStyles.title4,
+        Column(modifier = Modifier.fillMaxHeight().padding(start = 8.dp, top = 2.dp, end = 4.dp, bottom = 4.dp)) {
+            // 与在线画廊卡片保持同一标题规范（body1 + 最多 3 行），避免误用详情页大标题
+            GalleryTitleText(
+                info = info,
+                maxLines = 3,
+                style = MiuixTheme.textStyles.body1,
             )
+            // 标题贴顶、作者/星级/分类/状态贴底，与在线卡片一致的上下两端对齐
+            Spacer(modifier = Modifier.weight(1f))
             if (downloadState != DownloadInfo.STATE_DOWNLOAD) {
                 val stateText = when (downloadState) {
                     DownloadInfo.STATE_NONE -> stringResource(R.string.download_state_none)

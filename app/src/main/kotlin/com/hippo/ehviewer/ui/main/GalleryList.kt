@@ -189,7 +189,9 @@ fun GalleryList(
             }
 
             when (val state = data.loadState.refresh) {
-                is LoadState.Loading -> if (!isRefreshing && scrollToTopOnRefresh) {
+                // 仅首次加载（无缓存列表）时显示全屏加载并回到顶部；
+                // 切回已加载页面时保留内存数据与滚动位置，避免 1~2 秒空白/转圈重刷
+                is LoadState.Loading -> if (!isRefreshing && scrollToTopOnRefresh && data.itemCount == 0) {
                     LaunchedEffect(Unit) {
                         onLoading()
                     }

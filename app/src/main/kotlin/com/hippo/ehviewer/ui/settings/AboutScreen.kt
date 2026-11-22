@@ -102,14 +102,9 @@ fun AnimatedVisibilityScope.AboutScreen(navigator: DestinationsNavigator) = Scre
                 .blurBackdropSource(backdrop),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .readableWidth()
-                    .fillMaxWidth()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues),
+            SettingsScrollColumn(
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
             ) {
                 SmallTitle(text = stringResource(id = R.string.settings_about))
                 Card(

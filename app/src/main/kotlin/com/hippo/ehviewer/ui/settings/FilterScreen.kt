@@ -228,11 +228,8 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
             contentAlignment = Alignment.TopCenter,
         ) {
             Await({ allFilterMap.await() }) { filters ->
-                LazyColumn(
-                    modifier = Modifier
-                        .readableWidth()
-                        .fillMaxHeight()
-                        .nestedScroll(scrollBehavior.nestedScrollConnection),
+                SettingsLazyColumn(
+                    scrollBehavior = scrollBehavior,
                     contentPadding = paddingValues,
                 ) {
                     var showTip = true

@@ -85,7 +85,7 @@ fun GalleryInfoListItem(
         Column(modifier = Modifier.padding(start = 8.dp, top = 2.dp, end = 4.dp, bottom = 4.dp)) {
             GalleryTitleText(
                 info = info,
-                maxLines = 2,
+                maxLines = 3,
                 style = MiuixTheme.textStyles.body1,
             )
             Spacer(modifier = Modifier.weight(1f))

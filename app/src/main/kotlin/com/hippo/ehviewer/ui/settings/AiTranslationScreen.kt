@@ -311,14 +311,9 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 .blurBackdropSource(backdrop),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .readableWidth()
-                    .fillMaxWidth()
-                    .nestedScroll(scrollBehavior.nestedScrollConnection)
-                    .verticalScroll(rememberScrollState())
-                    .padding(paddingValues),
+            SettingsScrollColumn(
+                scrollBehavior = scrollBehavior,
+                contentPadding = paddingValues,
             ) {
                 SmallTitle(text = stringResource(id = R.string.settings_ai_translation))
                 Card(
@@ -534,19 +529,10 @@ private fun ProfileActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Button(
+    // 与「添加模型 / 删除当前模型 / 恢复默认」保持一致的圆角矩形按钮，而不是全圆角胶囊
+    TextButton(
+        text = text,
         onClick = onClick,
         modifier = modifier,
-        minWidth = 0.dp,
-        minHeight = 36.dp,
-        insideMargin = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-    ) {
-        MiuixText(
-            text = text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    )
 }
