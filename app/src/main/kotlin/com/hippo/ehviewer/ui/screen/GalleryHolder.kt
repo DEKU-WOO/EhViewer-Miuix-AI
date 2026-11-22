@@ -1,8 +1,10 @@
 package com.hippo.ehviewer.ui.screen
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.HoverInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -13,16 +15,19 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ehviewer.core.ui.component.SquircleShape
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun CheckableItem(
@@ -34,6 +39,13 @@ fun CheckableItem(
     Box(modifier) {
         content(src)
         if (checked) {
+            // 选中态高亮遮罩：半透明主题色覆盖整张卡片，仅绘制不拦截触摸，卡片仍可正常点击
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(SquircleShape(12.dp))
+                    .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.15f)),
+            )
             com.ehviewer.core.ui.component.CheckIndicator(
                 selected = true,
                 role = Role.Checkbox,

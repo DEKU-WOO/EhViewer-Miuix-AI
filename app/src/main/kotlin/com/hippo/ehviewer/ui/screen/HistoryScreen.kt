@@ -147,9 +147,12 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
         val showPages by Settings.showGalleryPages.collectAsState()
         val showProgress by Settings.showReadingProgress.collectAsState()
         FastScrollLazyColumn(
-            modifier = Modifier.nestedScroll(searchBarConnection).readableWidth().fillMaxSize(),
+            // 滚动容器保持全宽：平板左右两侧空白区域也能触摸上下滑动；
+            // 卡片的居中最大宽度约束在每个 item 上单独施加（见下方 SwipeToDismissBox 的 readableWidth）。
+            modifier = Modifier.nestedScroll(searchBarConnection).fillMaxSize(),
             contentPadding = paddingValues,
             verticalArrangement = Arrangement.spacedBy(dimensionResource(com.hippo.ehviewer.R.dimen.gallery_list_interval)),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             items(
                 count = historyData.itemCount,
@@ -170,6 +173,8 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                             DismissDeleteBackground(endPadding = marginH + 16.dp)
                         },
                         modifier = Modifier
+                            .readableWidth()
+                            .fillMaxWidth()
                             .dismissDeleteAction(
                                 label = stringResource(id = R.string.delete),
                                 onDelete = { deleteHistory() },

@@ -31,7 +31,6 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.fork.SwipeToDismissBox
 import androidx.compose.material3.fork.SwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -55,7 +54,6 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
@@ -74,7 +72,6 @@ import com.ehviewer.core.ui.component.FAB_ANIMATE_TIME
 import com.ehviewer.core.ui.component.FabLayout
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.LocalSideSheetState
-import com.ehviewer.core.ui.component.LocalSideSheetWidthRequest
 import com.ehviewer.core.ui.component.ProvideSideSheetContent
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.dismissDeleteAction
@@ -266,6 +263,8 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                         text = name,
                         color = textColor,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -276,21 +275,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             LaunchedEffect(Unit) {
                 val list = EhDB.getAllQuickSearch()
                 quickSearchList.addAll(list)
-            }
-            // 抽屉宽度按最长标签自适应：由 MutableSideSheet 夹到 [1/3 屏宽, 1/2 屏宽]
-            val widthRequest = LocalSideSheetWidthRequest.current
-            val textMeasurer = rememberTextMeasurer()
-            val sheetDensity = LocalDensity.current
-            val labelStyle = MiuixTheme.textStyles.body1
-            LaunchedEffect(quickSearchList.size, sheetDensity) {
-                if (widthRequest == null) return@LaunchedEffect
-                val maxLabelWidthPx = quickSearchList.maxOfOrNull {
-                    textMeasurer.measure(it.name, labelStyle, maxLines = 1).size.width
-                } ?: 0
-                widthRequest.value = with(sheetDensity) { (maxLabelWidthPx + 96.dp.toPx()).toDp() }
-            }
-            DisposableEffect(Unit) {
-                onDispose { widthRequest?.value = null }
             }
             SmallTopAppBar(
                 title = stringResource(id = R.string.quick_search),

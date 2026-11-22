@@ -1,11 +1,16 @@
 package com.ehviewer.core.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -44,11 +49,18 @@ fun CheckIndicator(
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
+            // 实心圆底（主题色）+ 白色粗对勾，让选中卡片右上角的对勾醒目可辨
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(MiuixTheme.colorScheme.primary),
+            )
             Icon(
                 imageVector = MiuixIcons.Ok,
                 contentDescription = contentDescription,
-                tint = MiuixTheme.colorScheme.primary,
-                modifier = Modifier.fillMaxSize(),
+                tint = Color.White,
+                modifier = Modifier.fillMaxSize().padding(3.dp),
             )
         }
     }

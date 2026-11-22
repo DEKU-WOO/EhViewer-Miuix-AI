@@ -793,7 +793,11 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
         CrystalCard(onClick = ::showRateDialog) {
             Column(
                 modifier = Modifier
-                    .padding(if (compact) 6.dp else 8.dp)
+                    .padding(
+                        // 平板竖屏紧凑态：左右各多留出约一颗星的宽度，让星标与评分文字更舒展
+                        horizontal = if (compact) 32.dp else 8.dp,
+                        vertical = if (compact) 6.dp else 8.dp,
+                    )
                     .then(if (compact) Modifier else Modifier.fillMaxWidth()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -807,19 +811,11 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
         }
     }
 
-    Row(
-        modifier = if (tabletPortrait) {
-            Modifier.fillMaxWidth()
-        } else {
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-        },
-        horizontalArrangement = if (tabletPortrait) {
-            Arrangement.spacedBy(12.dp)
-        } else {
-            Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
-        },
-        verticalAlignment = if (tabletPortrait) Alignment.CenterVertically else Alignment.Top,
-    ) {
+    // 平板竖屏：以上方「下载」「阅读」两颗主按钮的中轴线为基准，
+    // 4 个操作图标居中放在左 50% 区域，星级评分卡居中放在右 50% 区域；
+    // 手机 / 平板横屏保持原有横向滚动布局不变。把操作图标抽成局部组合避免重复。
+    @Composable
+    fun ActionIcons() {
         val favSlot by FavouriteStatusRouter.collectAsState(galleryDetail) { it }
         val favButtonText = if (favSlot != NOT_FAVORITED) {
             galleryDetail.favoriteName ?: stringResource(id = R.string.local_favorites)
@@ -987,12 +983,38 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
                 }
             },
         )
-        if (tabletPortrait) {
-            Spacer(modifier = Modifier.weight(1f))
-            RatingCard(compact = true)
-        }
     }
-    if (!tabletPortrait) {
+    if (tabletPortrait) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ActionIcons()
+                }
+            }
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                RatingCard(compact = true)
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.Top,
+        ) {
+            ActionIcons()
+        }
         Spacer(modifier = Modifier.size(keylineMargin))
         RatingCard(compact = false)
     }

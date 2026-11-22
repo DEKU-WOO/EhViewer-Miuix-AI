@@ -104,6 +104,7 @@ import com.ehviewer.core.ui.component.IosLiquidGlassNavigationBar
 import com.ehviewer.core.ui.component.LabeledCheckbox
 import com.ehviewer.core.ui.component.LocalSideSheetState
 import com.ehviewer.core.ui.component.MutableSideSheet
+import com.ehviewer.core.ui.component.SideSheetValue
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
@@ -428,6 +429,15 @@ class MainActivity : AppCompatActivity() {
             val drawerHandle = remember { mutableStateListOf<Long>() }
             var snackbarFabPadding by remember { mutableStateOf(0.dp) }
             val drawerEnabled = drawerHandle.isNotEmpty()
+            // 根治「侧边抽屉自动莫名弹出」：抽屉状态是全局共享且常驻 NavHost 之上的，
+            // 底部导航切换 / 从画廊详情返回 / 进入任意新目的地时，必须强制复位为关闭态；
+            // 否则上一页打开的抽屉会把 Open 态带到下一个带抽屉的页面，造成切换后自动弹出。
+            // 仅目的地变更触发，用户点击图标 / 边缘滑入打开抽屉时路由不变，不会被误关。
+            LaunchedEffect(currentDestination?.route) {
+                if (!sideSheetState.isClosed) {
+                    sideSheetState.snapTo(SideSheetValue.Closed)
+                }
+            }
             val density = LocalDensity.current
             val adaptiveInfo = currentWindowAdaptiveInfoV2()
             val needSignIn by Settings.needSignIn.collectAsState()

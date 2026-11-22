@@ -846,7 +846,13 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
                 DownloadManager.stopRangeDownload(gidList)
             }
-            onClick(MiuixIcons.Delete) {
+            // 多选模式下「删除」为警示性操作：图标与底色改为警示红，提升操作辨识度
+            onClick(
+                icon = MiuixIcons.Delete,
+                autoClose = true,
+                tint = Color.White,
+                containerColor = Color(0xFFE53935),
+            ) {
                 val infoList = checkedInfoMap.takeAndClear()
                 confirmRemoveDownloadRange(infoList)
                 list.removeAll(infoList)

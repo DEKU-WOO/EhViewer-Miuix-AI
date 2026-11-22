@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,9 +29,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -140,8 +143,23 @@ fun GalleryInfoListItem(
                         tint = MiuixTheme.colorScheme.primary,
                     )
                 }
-                info.simpleLanguage?.let {
-                    Text(text = it, style = MiuixTheme.textStyles.footnote1)
+                info.simpleLanguage?.let { lang ->
+                    if (lang == "ZH") {
+                        // 中文画廊：在页数左侧渲染醒目的圆角胶囊徽章，便于未限定语言时快速识别汉化资源
+                        Text(
+                            text = lang,
+                            style = MiuixTheme.textStyles.footnote1,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE53935),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0x26E53935))
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                        )
+                    } else {
+                        // 其他语言（EN / KO / RU 等）保持原有朴素灰色纯文本
+                        Text(text = lang, style = MiuixTheme.textStyles.footnote1)
+                    }
                 }
                 if (info.pages != 0 && showPages) {
                     val readProgress = if (showProgress) {

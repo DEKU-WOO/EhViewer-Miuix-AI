@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.PredictiveBackHandler
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -94,7 +95,10 @@ class FabLayoutState(
 private val fabSyncSchedule = Schedule.linear<Throwable>(100.microseconds)
 
 fun interface FabBuilder {
-    fun onClick(icon: ImageVector, autoClose: Boolean, that: suspend () -> Unit)
+    // 完整版：可指定图标着色与按钮底色（默认 Color.Unspecified 表示沿用原有样式，零副作用）
+    fun onClick(icon: ImageVector, autoClose: Boolean, tint: Color, containerColor: Color, that: suspend () -> Unit)
+    fun onClick(icon: ImageVector, autoClose: Boolean, that: suspend () -> Unit) =
+        onClick(icon, autoClose, Color.Unspecified, Color.Unspecified, that)
     fun onClick(icon: ImageVector, that: suspend () -> Unit) = onClick(icon, true, that)
 }
 
@@ -170,23 +174,33 @@ fun FabLayout(
                 contentAlignment = Alignment.BottomEnd,
             ) {
                 with(secondaryFab) {
-                    forEachIndexed { index, (imageVector, autoClose, onClick) ->
+                    forEachIndexed { index, item ->
+                        // 未指定颜色时严格沿用原有 surfaceContainerHigh 底 + 默认图标着色，保证其他菜单零变化
+                        val fabContainerColor = if (item.containerColor != Color.Unspecified) {
+                            item.containerColor
+                        } else {
+                            MiuixTheme.colorScheme.surfaceContainerHigh
+                        }
                         FloatingActionButton(
                             onClick = {
                                 launch(Dispatchers.Default) {
-                                    onClick()
-                                    if (autoClose) onExpandChanged(false)
+                                    item.action()
+                                    if (item.autoClose) onExpandChanged(false)
                                 }
                             },
                             minWidth = 40.dp,
                             minHeight = 40.dp,
-                            containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+                            containerColor = fabContainerColor,
                             modifier = Modifier.padding(20.dp).offset {
                                 val distance = lerp(0, interval * (size - index) + padding, animatedProgress)
                                 IntOffset(0, -distance)
                             },
                         ) {
-                            Icon(imageVector = imageVector, contentDescription = null)
+                            if (item.tint != Color.Unspecified) {
+                                Icon(imageVector = item.icon, contentDescription = null, tint = item.tint)
+                            } else {
+                                Icon(imageVector = item.icon, contentDescription = null)
+                            }
                         }
                     }
                 }
@@ -214,9 +228,17 @@ fun FabLayout(
     }
 }
 
+private data class FabItem(
+    val icon: ImageVector,
+    val autoClose: Boolean,
+    val action: suspend () -> Unit,
+    val tint: Color = Color.Unspecified,
+    val containerColor: Color = Color.Unspecified,
+)
+
 private fun buildFab(builder: FabBuilder.() -> Unit) = buildList {
-    builder { icon, autoClose, action ->
-        add(Triple(icon, autoClose, action))
+    builder { icon, autoClose, tint, containerColor, action ->
+        add(FabItem(icon, autoClose, action, tint, containerColor))
     }
 }
 
