@@ -82,12 +82,6 @@ object AiTranslationManager {
     /** 全局最大并发请求数，避免瞬间高并发触发 API 限流（429）。 */
     private const val MAX_CONCURRENT_REQUESTS = 2
 
-    /** 命中限流（429）等可重试错误时的退避时长。 */
-    private const val RETRY_DELAY_MS = 1_500L
-
-    /** 可重试错误的最大额外重试次数。 */
-    private const val MAX_RETRY_ATTEMPTS = 2
-
     /** 系统提示词：明确要求翻译日文/英文主体并保留社团方括号信息。 */
     private const val SYSTEM_PROMPT =
         "你是专业的漫画/画廊标题翻译器。请将画廊标题中的日文或英文主体自然翻译为简体中文" +
@@ -138,14 +132,6 @@ object AiTranslationManager {
         val httpStatus: Int? = null,
         val contentBlocked: Boolean = false,
     ) : Exception(message) {
-        /** 限流与服务端临时错误可以退避重试；400/403 等由内容触发的错误重试没有意义。 */
-        val retryable: Boolean
-            get() = httpStatus == 429 || (httpStatus != null && httpStatus >= 500)
-
-        /** 429 限流 / 503 不可用时优先轮换同方案下的备用模型，而不是死磕当前模型。 */
-        val shouldRotateModel: Boolean
-            get() = httpStatus == 429 || httpStatus == 503
-
         /**
          * Key 失效/欠费/风控（401/403）、请求不被接受（400）或内容安全策略拦截时，
          * 当前方案继续尝试已无意义，直接顺延到下一个配置方案。
@@ -232,55 +218,44 @@ object AiTranslationManager {
             return
         }
 
-        // 批量请求只在当前方案内轮换模型；若仍失败则降级为逐条翻译，
-        // 由 translateSingle 完成「模型轮换 + 跨方案兜底」的双层容错。
-        val config = configs.first()
+        // 批量请求同样遵循「单轮双层容错」：每个「方案 + 模型」组合最多尝试一次，
+        // 遇到限流/拥堵/超时换下一个模型，Key 失效/请求被拒/内容拦截则直接顺延下一个方案。
+        val attempted = HashSet<String>()
         var translated: Map<Long, String>? = null
         var lastError = "未知错误"
-        batchModelLoop@ for ((modelIndex, model) in config.models.withIndex()) {
-            if (modelIndex > 0) {
-                // 换模型意味着上一个模型已限流/不可用，无需再额外等待
-                logcat("AiTranslation") { "批量翻译轮换备用模型：$model" }
-            }
-            val modelConfig = config.copy(model = model)
-            var attempt = 0
-            while (attempt <= MAX_RETRY_ATTEMPTS) {
-                if (attempt > 0) delay(RETRY_DELAY_MS)
+        batchAttempt@ for (config in configs) {
+            for (model in config.models) {
+                val modelConfig = config.copy(model = model)
+                attempted += comboKey(modelConfig)
                 try {
                     translated = requestBatchTranslation(modelConfig, pending)
-                    break@batchModelLoop
+                    break@batchAttempt
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: AiRequestException) {
                     lastError = e.message ?: "未知错误"
-                    when {
-                        // 当前方案 Key 失效/请求被拒/内容被拦截：不再浪费批量请求，直接逐条降级
-                        e.shouldRotateProfile -> break@batchModelLoop
-                        e.shouldRotateModel -> break
-                        !e.retryable || attempt == MAX_RETRY_ATTEMPTS -> break
-                    }
+                    // 当前方案 Key 失效/请求被拒/内容被拦截：剩余模型不再尝试，顺延下一个方案
+                    if (e.shouldRotateProfile) break
                 } catch (e: Exception) {
                     lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
-                    break
                 }
-                attempt++
             }
         }
 
         val result = translated
         if (result == null) {
-            // 批次整体失败时禁止静默丢弃：拆成单条依次执行双层容错，
+            // 批次整体失败时禁止静默丢弃：拆成单条继续轮换，已尝试过的组合不再重复请求，
             // 确保只有真正违规的那一条失败，其余正常标题仍能译出。
             logcat("AiTranslation") { "批量翻译失败：$lastError，降级为逐条翻译" }
-            pending.forEach { translateSingle(it, configs) }
+            pending.forEach { translateSingle(it, configs, attempted) }
             return
         }
 
         pending.forEach { task ->
             val text = result[task.gid]
             if (text.isNullOrBlank()) {
-                // 批量响应里缺少这一条，单独降级重试
-                translateSingle(task, configs)
+                // 批量响应里缺少这一条，用剩余未尝试的组合单独补译
+                translateSingle(task, configs, attempted)
             } else {
                 saveTranslation(task, text)
             }
@@ -288,61 +263,52 @@ object AiTranslationManager {
     }
 
     /**
-     * 单条翻译的双层自动容错调度：
-     * 1. 同方案内按顺序轮换 [ApiConfig.models]，429 / 503 / 请求超时时优先换模型；
-     * 2. 当前方案的模型全部失败，或遇到 401/403/400/内容安全策略拦截时，顺延到下一个方案，
-     *    直到任一方案翻译成功；全部失败才标记该条任务失败。
+     * 单条翻译的「有限单轮」双层自动容错调度：
+     * 1. 同方案内按顺序轮换 [ApiConfig.models]：429 / 503 / 超时等失败后换下一个模型；
+     * 2. 当前方案的模型全部失败，或遇到 401/403/400/内容安全策略拦截时，顺延到下一个方案；
+     * 3. 每个「方案 + 模型」组合最多尝试一次，任一组合成功立即返回，全部失败立即结束。
      */
     private suspend fun translateSingle(
         task: TranslationTask,
         configs: List<ApiConfig> = resolveConfigs(),
+        skipKeys: Set<String> = emptySet(),
     ) {
         if (configs.isEmpty()) {
             failTask(task, "未配置 API 方案或 Key")
             return
         }
-        var lastError = "未知错误"
+        var lastError: String? = null
         profileLoop@ for ((profileIndex, config) in configs.withIndex()) {
             if (profileIndex > 0) {
                 logcat("AiTranslation") { "切换备用 API 方案（第 ${profileIndex + 1} 个）" }
             }
-            for ((modelIndex, model) in config.models.withIndex()) {
-                if (modelIndex > 0) {
-                    // 换模型意味着上一个模型已限流/不可用，无需再额外等待
+            for (model in config.models) {
+                val modelConfig = config.copy(model = model)
+                // 该组合在本轮任务中已经尝试过，严格不重复请求
+                if (comboKey(modelConfig) in skipKeys) continue
+                if (model != config.models.first()) {
                     logcat("AiTranslation") { "轮换备用模型：$model" }
                 }
-                val modelConfig = config.copy(model = model)
-                var attempt = 0
-                while (attempt <= MAX_RETRY_ATTEMPTS) {
-                    if (attempt > 0) delay(RETRY_DELAY_MS)
-                    try {
-                        val translated = semaphore.withPermit {
-                            requestAiTranslation(modelConfig, task.originalTitle)
-                        }
-                        if (translated.isBlank()) throw AiRequestException("模型未返回翻译内容")
-                        saveTranslation(task, translated)
-                        return
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: AiRequestException) {
-                        lastError = e.message ?: "未知错误"
-                        when {
-                            // Key 失效/欠费/风控/内容拦截：本方案剩余模型不必再试
-                            e.shouldRotateProfile -> continue@profileLoop
-                            // 限流/拥堵：换同方案的下一个模型
-                            e.shouldRotateModel -> break
-                            !e.retryable || attempt == MAX_RETRY_ATTEMPTS -> break
-                        }
-                    } catch (e: Exception) {
-                        lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
-                        // 请求超时等网络异常同样视为当前模型不可用，换下一个模型
-                        break
+                try {
+                    val translated = semaphore.withPermit {
+                        requestAiTranslation(modelConfig, task.originalTitle)
                     }
-                    attempt++
+                    if (translated.isBlank()) throw AiRequestException("模型未返回翻译内容")
+                    saveTranslation(task, translated)
+                    return
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: AiRequestException) {
+                    lastError = e.message ?: "未知错误"
+                    // Key 失效/欠费/风控/内容拦截：本方案剩余模型不必再试，直接顺延下一个方案
+                    if (e.shouldRotateProfile) continue@profileLoop
+                } catch (e: Exception) {
+                    lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
+                    // 请求超时等网络异常同样视为当前模型不可用，换下一个模型
                 }
             }
         }
-        failTask(task, lastError)
+        failTask(task, lastError ?: "所有已配置的方案与模型均不可用")
     }
 
     private suspend fun findCached(task: TranslationTask): String? =
@@ -400,6 +366,9 @@ object AiTranslationManager {
             }
         }
     }
+
+    /** 唯一标识一个「方案 + 模型」组合，用于保证单次任务内每个组合最多尝试一次。 */
+    private fun comboKey(config: ApiConfig): String = "${config.apiUrl}|${config.apiKey}|${config.model}"
 
     /**
      * 用给定的接口地址、Key 与模型发送一次轻量请求，验证当前配置是否可用。

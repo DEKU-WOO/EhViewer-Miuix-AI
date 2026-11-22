@@ -24,6 +24,7 @@ import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
+import com.ehviewer.core.ui.icons.filled.Compass
 import com.ehviewer.core.ui.icons.filled.SadPanda
 import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.readableWidth
@@ -45,11 +46,10 @@ import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowUpDown
 import top.yukonga.miuix.kmp.icon.extended.Download
-import top.yukonga.miuix.kmp.icon.extended.FileDownloads
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Lock
-import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -124,13 +124,13 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                         navigator = navigator,
                     )
                     PreferenceHeader(
-                        icon = MiuixIcons.More,
+                        icon = EhIcons.Default.Compass,
                         title = R.string.desktop_nav_items_title,
                         childRoute = BottomNavItemsScreenDestination,
                         navigator = navigator,
                     )
                     PreferenceHeader(
-                        icon = MiuixIcons.FileDownloads,
+                        icon = MiuixIcons.Basic.ArrowUpDown,
                         title = R.string.backup_restore_title,
                         childRoute = BackupRestoreScreenDestination,
                         navigator = navigator,

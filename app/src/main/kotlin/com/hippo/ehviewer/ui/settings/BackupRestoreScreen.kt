@@ -338,6 +338,8 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
+                // 悬浮顶栏下方留出安全间距，避免首个分组标题被返回箭头遮挡
+                Spacer(modifier = Modifier.height(12.dp))
                 // 分组一：本地备份
                 SmallTitle(text = stringResource(id = R.string.backup_local_title))
                 Card(
@@ -393,32 +395,39 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
-                    BackupTextField(
-                        title = stringResource(R.string.backup_cloud_server),
-                        value = serverUrl.value,
-                        onValueChange = { serverUrl.value = it },
-                    )
-                    BackupTextField(
-                        title = stringResource(R.string.backup_cloud_token),
-                        value = accessToken.value,
-                        onValueChange = { accessToken.value = it },
-                        password = true,
-                    )
-                    SwitchPreference(
-                        title = stringResource(R.string.backup_cloud_history_switch),
-                        summary = stringResource(R.string.backup_cloud_history_switch_summary),
-                        state = Settings.vpsHistorySyncEnabled.asMutableState(),
-                    )
-                    Preference(
-                        title = stringResource(R.string.backup_cloud_upload),
-                        summary = stringResource(R.string.backup_cloud_upload_summary),
-                        onClick = { uploadSettings() },
-                    )
-                    Preference(
-                        title = stringResource(R.string.backup_cloud_restore),
-                        summary = stringResource(R.string.backup_cloud_restore_summary),
-                        onClick = { restoreFromCloud() },
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BackupTextField(
+                            title = stringResource(R.string.backup_cloud_server),
+                            value = serverUrl.value,
+                            onValueChange = { serverUrl.value = it },
+                        )
+                        BackupTextField(
+                            title = stringResource(R.string.backup_cloud_token),
+                            value = accessToken.value,
+                            onValueChange = { accessToken.value = it },
+                            password = true,
+                        )
+                        SwitchPreference(
+                            title = stringResource(R.string.backup_cloud_history_switch),
+                            summary = stringResource(R.string.backup_cloud_history_switch_summary),
+                            state = Settings.vpsHistorySyncEnabled.asMutableState(),
+                        )
+                        Preference(
+                            title = stringResource(R.string.backup_cloud_upload),
+                            summary = stringResource(R.string.backup_cloud_upload_summary),
+                            onClick = { uploadSettings() },
+                        )
+                        Preference(
+                            title = stringResource(R.string.backup_cloud_restore),
+                            summary = stringResource(R.string.backup_cloud_restore_summary),
+                            onClick = { restoreFromCloud() },
+                        )
+                    }
                 }
 
                 // 分组三：已下载画廊同步（WebDAV）
@@ -428,63 +437,70 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
-                    val webdavUrl = Settings.webdavUrl.asMutableState()
-                    val webdavUser = Settings.webdavUser.asMutableState()
-                    val webdavPassword = Settings.webdavPassword.asMutableState()
-                    val webdavDir = Settings.webdavDir.asMutableState()
-                    BackupTextField(
-                        title = stringResource(R.string.backup_webdav_url),
-                        value = webdavUrl.value,
-                        onValueChange = { webdavUrl.value = it },
-                    )
-                    BackupTextField(
-                        title = stringResource(R.string.backup_webdav_user),
-                        value = webdavUser.value,
-                        onValueChange = { webdavUser.value = it },
-                    )
-                    BackupTextField(
-                        title = stringResource(R.string.backup_webdav_password),
-                        value = webdavPassword.value,
-                        onValueChange = { webdavPassword.value = it },
-                        password = true,
-                    )
-                    BackupTextField(
-                        title = stringResource(R.string.backup_webdav_dir),
-                        value = webdavDir.value,
-                        onValueChange = { webdavDir.value = it },
-                    )
-                    Preference(
-                        title = stringResource(R.string.backup_webdav_test),
-                        onClick = {
-                            launch {
-                                val error = withIOContext {
-                                    runCatching { WebDavClient.testConnection() }
-                                        .onFailure { logcat("WebDav", it) }
-                                        .exceptionOrNull()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        val webdavUrl = Settings.webdavUrl.asMutableState()
+                        val webdavUser = Settings.webdavUser.asMutableState()
+                        val webdavPassword = Settings.webdavPassword.asMutableState()
+                        val webdavDir = Settings.webdavDir.asMutableState()
+                        BackupTextField(
+                            title = stringResource(R.string.backup_webdav_url),
+                            value = webdavUrl.value,
+                            onValueChange = { webdavUrl.value = it },
+                        )
+                        BackupTextField(
+                            title = stringResource(R.string.backup_webdav_user),
+                            value = webdavUser.value,
+                            onValueChange = { webdavUser.value = it },
+                        )
+                        BackupTextField(
+                            title = stringResource(R.string.backup_webdav_password),
+                            value = webdavPassword.value,
+                            onValueChange = { webdavPassword.value = it },
+                            password = true,
+                        )
+                        BackupTextField(
+                            title = stringResource(R.string.backup_webdav_dir),
+                            value = webdavDir.value,
+                            onValueChange = { webdavDir.value = it },
+                        )
+                        Preference(
+                            title = stringResource(R.string.backup_webdav_test),
+                            onClick = {
+                                launch {
+                                    val error = withIOContext {
+                                        runCatching { WebDavClient.testConnection() }
+                                            .onFailure { logcat("WebDav", it) }
+                                            .exceptionOrNull()
+                                    }
+                                    toast(if (error == null) webdavTestDone else webdavTestFailed.format(error.message.orEmpty()))
                                 }
-                                toast(if (error == null) webdavTestDone else webdavTestFailed.format(error.message.orEmpty()))
-                            }
-                        },
-                    )
-                    Preference(
-                        title = stringResource(R.string.backup_webdav_sync),
-                        onClick = {
-                            launch {
-                                toast(webdavSyncing)
-                                val error = withIOContext {
-                                    runCatching { WebDavGallerySync.sync() }
-                                        .onFailure { logcat("WebDav", it) }
-                                        .exceptionOrNull()
+                            },
+                        )
+                        Preference(
+                            title = stringResource(R.string.backup_webdav_sync),
+                            onClick = {
+                                launch {
+                                    toast(webdavSyncing)
+                                    val error = withIOContext {
+                                        runCatching { WebDavGallerySync.sync() }
+                                            .onFailure { logcat("WebDav", it) }
+                                            .exceptionOrNull()
+                                    }
+                                    toast(if (error == null) webdavSyncDone else webdavSyncFailed.format(error.message.orEmpty()))
                                 }
-                                toast(if (error == null) webdavSyncDone else webdavSyncFailed.format(error.message.orEmpty()))
-                            }
-                        },
-                    )
-                    SwitchPreference(
-                        title = stringResource(R.string.backup_webdav_auto),
-                        summary = stringResource(R.string.backup_webdav_auto_summary),
-                        state = webdavAutoSync,
-                    )
+                            },
+                        )
+                        SwitchPreference(
+                            title = stringResource(R.string.backup_webdav_auto),
+                            summary = stringResource(R.string.backup_webdav_auto_summary),
+                            state = webdavAutoSync,
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -510,7 +526,7 @@ private fun BackupTextField(
         label = title,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp),
         lineLimits = TextFieldLineLimits.SingleLine,
         outputTransformation = if (password && hidden) {
             OutputTransformation { replace(0, length, "\u2022".repeat(length)) }
