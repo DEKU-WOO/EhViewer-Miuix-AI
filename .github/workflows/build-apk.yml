@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,7 +40,19 @@ jobs:
           fi
 
       - name: Build APK
-        run: ./gradlew assembleDefaultDebug assembleDefaultRelease
+        run: |
+          set -o pipefail
+          ./gradlew assembleDefaultDebug assembleDefaultRelease 2>&1 | tee build-log.txt
+
+      - name: Publish build log on failure
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -f --orphan ci-log
+          git add -f build-log.txt
+          git commit -m "ci build log"
+          git push -f origin ci-log
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
