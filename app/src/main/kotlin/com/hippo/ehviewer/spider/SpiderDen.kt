@@ -332,10 +332,11 @@ class SpiderDen(val info: GalleryInfo) {
             }
         }
         if (fileSource != null) {
+            val path = requireNotNull(fileSource)
             return object : PathSource {
-                override val source = fileSource
+                override val source = path
                 override val type by lazy {
-                    FileUtils.getExtensionFromFilename(fileSource.name)!!
+                    FileUtils.getExtensionFromFilename(path.name)!!
                 }
 
                 override fun close() = Unit
