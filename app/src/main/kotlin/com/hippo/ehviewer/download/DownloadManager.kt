@@ -62,7 +62,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -97,6 +99,9 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
 
     private val mutableNotifyFlow = MutableSharedFlow<DownloadInfo>(extraBufferCapacity = 1)
     val notifyFlow = mutableNotifyFlow.asSharedFlow()
+
+    private val mutableDownloadListVersion = MutableStateFlow(0L)
+    val downloadListVersion = mutableDownloadListVersion.asStateFlow()
 
     private val mutex = Mutex()
 
@@ -309,20 +314,35 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
     }
 
     suspend fun restoreDownload(galleryInfo: BaseGalleryInfo, dirname: String) {
-        val info = DownloadInfo(galleryInfo.asEntity(), dirname)
-        info.state = DownloadInfo.STATE_NONE
+        mAllInfoMap[galleryInfo.gid]?.let { existing ->
+            if (existing.state == DownloadInfo.STATE_FINISH && existing.dirname == dirname) return
+            existing.state = DownloadInfo.STATE_FINISH
+            val updated = existing.copy(galleryInfo = galleryInfo.asEntity(), dirname = dirname)
+            sortMutex.withLock {
+                val index = allInfoList.indexOfFirst { it.gid == galleryInfo.gid }
+                if (index >= 0) allInfoList[index] = updated else allInfoList.insertWith(updated, sortMode.comparator())
+            }
+            mAllInfoMap[galleryInfo.gid] = updated
+            EhDB.putDownloadInfo(updated)
+            mutableNotifyFlow.emit(updated)
+            mutableDownloadListVersion.value++
+            return
+        }
 
-        // Add to all download list and map
+        val info = DownloadInfo(galleryInfo.asEntity(), dirname)
+        info.state = DownloadInfo.STATE_FINISH
+        info.finished = galleryInfo.pages
+        info.downloaded = galleryInfo.pages
+        info.total = galleryInfo.pages
+
         sortMutex.withLock {
             allInfoList.insertWith(info, sortMode.comparator())
         }
         mAllInfoMap[galleryInfo.gid] = info
-
-        // Save to
         EhDB.putDownloadInfo(info)
 
-        // Notify
         mutableNotifyFlow.emit(info)
+        mutableDownloadListVersion.value++
     }
 
     suspend fun stopDownload(gid: Long) {
