@@ -2,8 +2,13 @@ package com.hippo.ehviewer.ui.screen
 
 import android.content.Context
 import android.view.ViewConfiguration
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.size
@@ -52,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -65,7 +72,6 @@ import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
 import com.ehviewer.core.ui.component.DismissDeleteBackground
-import com.ehviewer.core.ui.component.FabLayout
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalGrid
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalStaggeredGrid
@@ -80,6 +86,7 @@ import com.ehviewer.core.ui.util.WindowLayout
 import com.ehviewer.core.ui.util.ifTrueThen
 import com.ehviewer.core.ui.util.rememberHapticFeedback
 import com.ehviewer.core.ui.util.rememberInVM
+import com.ehviewer.core.ui.util.snackBarPadding
 import com.ehviewer.core.ui.util.takeAndClear
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
@@ -119,6 +126,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -779,46 +787,79 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         }
     }
 
-    // 日常浏览不再显示右下角悬浮按钮，仅长按卡片进入多选后显示批量操作栏
-    if (selectMode) {
-        FabLayout(
-            hidden = false,
-            expanded = true,
-            onExpandChanged = { if (!it) checkedInfoMap.clear() },
-            autoCancel = false,
+    // 多选操作栏不经过主 FAB，进入与退出选择模式时只执行一次淡入/上滑动画。
+    Box(
+        modifier = Modifier.fillMaxSize().navigationBarsPadding().snackBarPadding(),
+        contentAlignment = Alignment.BottomEnd,
+    ) {
+        AnimatedVisibility(
+            visible = selectMode,
+            enter = fadeIn() + slideInVertically { it / 4 },
+            exit = fadeOut() + slideOutVertically { it / 4 },
         ) {
-            onClick(MiuixIcons.SelectAll, autoClose = false) {
-                val info = list.associateBy { it.gid }
-                checkedInfoMap.putAll(info)
-            }
-            onClick(MiuixIcons.Play) {
-                val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
-                DownloadService.startRangeDownload(gidList)
-            }
-            onClick(MiuixIcons.Pause) {
-                val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
-                DownloadManager.stopRangeDownload(gidList)
-            }
-            // 多选模式下「删除」为警示性操作：图标与底色改为警示红，提升操作辨识度
-            onClick(
-                icon = MiuixIcons.Delete,
-                autoClose = true,
-                tint = Color.White,
-                containerColor = Color(0xFFE53935),
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End,
             ) {
-                val infoList = checkedInfoMap.takeAndClear()
-                confirmRemoveDownloadRange(infoList)
-                list.removeAll(infoList)
-            }
-            onClick(MiuixIcons.MoveFile) {
-                val infoList = checkedInfoMap.takeAndClear()
-                val toLabel = showMoveDownloadLabelList(infoList)
-                with(filterState) {
-                    if (label != "" && label != toLabel) {
-                        list.removeAll(infoList)
+                DownloadSelectionAction(MiuixIcons.SelectAll) {
+                    checkedInfoMap.putAll(list.associateBy { it.gid })
+                }
+                DownloadSelectionAction(MiuixIcons.Play) {
+                    val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
+                    DownloadService.startRangeDownload(gidList)
+                }
+                DownloadSelectionAction(MiuixIcons.Pause) {
+                    val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
+                    launch { DownloadManager.stopRangeDownload(gidList) }
+                }
+                DownloadSelectionAction(
+                    icon = MiuixIcons.Delete,
+                    tint = Color.White,
+                    containerColor = Color(0xFFE53935),
+                ) {
+                    val targetIds = checkedInfoMap.keys.toList()
+                    val targets = targetIds.mapNotNull(checkedInfoMap::get)
+                    checkedInfoMap.clear()
+                    launch {
+                        confirmRemoveDownloadRange(targets)
+                        list.removeAll { it.gid in targetIds }
+                    }
+                }
+                DownloadSelectionAction(MiuixIcons.MoveFile) {
+                    val infoList = checkedInfoMap.takeAndClear()
+                    val targetIds = infoList.map { it.gid }
+                    launch {
+                        val toLabel = showMoveDownloadLabelList(infoList)
+                        with(filterState) {
+                            if (label != "" && label != toLabel) {
+                                list.removeAll { it.gid in targetIds }
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DownloadSelectionAction(
+    icon: ImageVector,
+    tint: Color? = null,
+    containerColor: Color = MiuixTheme.colorScheme.surfaceContainerHigh,
+    onClick: () -> Unit,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        minWidth = 40.dp,
+        minHeight = 40.dp,
+        containerColor = containerColor,
+    ) {
+        if (tint == null) {
+            Icon(imageVector = icon, contentDescription = null)
+        } else {
+            Icon(imageVector = icon, contentDescription = null, tint = tint)
         }
     }
 }

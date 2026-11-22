@@ -34,6 +34,7 @@ import com.ehviewer.core.files.sendTo
 import com.ehviewer.core.files.write
 import com.ehviewer.core.model.GalleryDetail
 import com.ehviewer.core.model.GalleryInfo
+import com.ehviewer.core.util.LogPriority
 import com.ehviewer.core.util.logcat
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
@@ -323,27 +324,63 @@ class SpiderDen(val info: GalleryInfo) {
                 }
             }
         }
-        val source = requireNotNull(findImageFile(index)) { "Source $index not found!" }
-        return object : PathSource {
-            override val source = source
-            override val type by lazy {
-                FileUtils.getExtensionFromFilename(source.name)!!
+        val fileSource = findImageFile(index) ?: run {
+            if (mode == SpiderQueen.MODE_DOWNLOAD && copyFromCacheToDownloadDir(index)) {
+                findImageFile(index)
+            } else {
+                null
             }
-
-            override fun close() = Unit
         }
+        if (fileSource != null) {
+            return object : PathSource {
+                override val source = fileSource
+                override val type by lazy {
+                    FileUtils.getExtensionFromFilename(fileSource.name)!!
+                }
+
+                override fun close() = Unit
+            }
+        }
+        if (mode != SpiderQueen.MODE_READ) {
+            val key = getImageKey(gid, index)
+            val snapshot = sCache.openSnapshot(key)
+            if (snapshot != null) {
+                return object : PathSource, AutoCloseable by snapshot {
+                    override val source = snapshot.data
+                    override val type by lazy { snapshot.metadata.toFile().readText() }
+                }
+            }
+        }
+        error("Source $index not found for gallery $gid in $mode mode")
     }
 
-    suspend fun archive() = saveAsCbz && downloadDir?.run {
-        resolve(archiveName).let { file ->
-            runCatching {
-                archiveTo(file)
-            }.onFailure {
-                file.delete()
-                logcat(it)
-            }.isFailure
+    /** 返回 true 表示归档失败；未启用 CBZ 时直接沿用普通下载完成流程。 */
+    suspend fun archive(pages: Int = info.pages): Boolean {
+        if (!saveAsCbz) return false
+        val dir = downloadDir
+        if (dir == null) {
+            logcat(CBZ_TAG, LogPriority.ERROR) { "CBZ 归档失败：gid=$gid，下载目录为空" }
+            return true
         }
-    } == true
+        val file = dir / archiveName
+        return try {
+            archiveTo(file, pages)
+            check(file.exists()) { "归档结束后目标文件不存在" }
+            logcat(CBZ_TAG, LogPriority.INFO) { "CBZ 归档完成：gid=$gid，pages=$pages，target=$file" }
+            false
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
+            try {
+                file.delete()
+            } catch (deleteError: Throwable) {
+                t.addSuppressed(deleteError)
+            }
+            logcat(CBZ_TAG, LogPriority.ERROR) {
+                "CBZ 归档失败：gid=$gid，pages=$pages，tempDir=$tempDownloadDir，target=$file\n${t.stackTraceToString()}"
+            }
+            true
+        }
+    }
 
     // Postpone this to `SpiderQueen.stop` because files may still be in use by reader
     suspend fun postArchive(): Boolean {
@@ -363,32 +400,62 @@ class SpiderDen(val info: GalleryInfo) {
 
     suspend fun exportAsCbz(file: Path) = downloadDir!!.find(archiveName)?.sendTo(file) ?: archiveTo(file)
 
-    private suspend fun archiveTo(file: Path) = resourceScope {
-        val comicInfo = closeable {
-            val f = downloadDir!! / COMIC_INFO_FILE
-            if (!f.exists()) {
-                writeComicInfo()
-            } else if (info.pages == 0) {
-                info.pages = readComicInfo(f)!!.pageCount
-            }
-            f.openFileDescriptor("r")
+    private suspend fun archiveTo(file: Path, pages: Int = info.pages) = resourceScope {
+        val dir = requireNotNull(downloadDir) { "下载目录为空，无法创建 $file" }
+        val comicInfoFile = dir / COMIC_INFO_FILE
+        val savedPages = if (info.pages == 0 && comicInfoFile.exists()) {
+            readComicInfo(comicInfoFile)?.pageCount
+        } else {
+            null
         }
-        val pages = info.pages
-        val arcFd = closeable { file.openFileDescriptor("rw") }
-        val handle = archiveWriteOpen(arcFd.fd)
-        check(handle != 0L) { "Failed to open archive writer" }
-        try {
-            for (idx in 0 until pages) {
-                val f = getImageSource(idx)
-                f.use {
-                    f.source.openFileDescriptor("r").use { pfd ->
-                        archiveWriteEntry(handle, pfd.fd, perFilename(idx, f.type))
+        val pageCount = pages.takeIf { it > 0 } ?: info.pages.takeIf { it > 0 } ?: savedPages ?: 0
+        check(pageCount > 0) { "无效页数：pages=$pages，info.pages=${info.pages}，savedPages=$savedPages" }
+        if (info.pages <= 0) info.pages = pageCount
+
+        val comicInfo = closeable {
+            if (!comicInfoFile.exists()) {
+                try {
+                    writeComicInfo()
+                } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
+                    logcat(CBZ_TAG, LogPriority.WARN) {
+                        "CBZ 元数据在线更新失败，改用本地信息：gid=$gid\n${t.stackTraceToString()}"
                     }
+                    writeComicInfo(info.getComicInfo(), comicInfoFile)
+                }
+            }
+            comicInfoFile.openFileDescriptor("r")
+        }
+        // rwt 同时创建并截断旧文件，避免重试时残留上一段 ZIP 数据。
+        val arcFd = closeable { file.openFileDescriptor("rwt") }
+        val handle = archiveWriteOpen(arcFd.fd)
+        check(handle != 0L) { "无法打开 CBZ 写入器：gid=$gid，target=$file" }
+        var failure: Throwable? = null
+        try {
+            for (idx in 0 until pageCount) {
+                try {
+                    getImageSource(idx).use { source ->
+                        source.source.openFileDescriptor("r").use { pfd ->
+                            archiveWriteEntry(handle, pfd.fd, perFilename(idx, source.type))
+                        }
+                    }
+                } catch (t: Throwable) {
+                    logcat(CBZ_TAG, LogPriority.ERROR) {
+                        "CBZ 写入页面失败：gid=$gid，page=${idx + 1}/$pageCount，target=$file\n${t.stackTraceToString()}"
+                    }
+                    throw t
                 }
             }
             archiveWriteEntry(handle, comicInfo.fd, COMIC_INFO_FILE)
+        } catch (t: Throwable) {
+            failure = t
+            throw t
         } finally {
-            archiveWriteClose(handle)
+            try {
+                archiveWriteClose(handle)
+            } catch (closeError: Throwable) {
+                failure?.addSuppressed(closeError) ?: throw closeError
+            }
         }
     }
 
@@ -429,6 +496,7 @@ private val sCache by lazy {
     }
 }
 private const val TEMP_SUFFIX = ".tmp"
+private const val CBZ_TAG = "CbzArchive"
 private val FileNameRegex = Regex("^\\d{8}\\.\\w{3,4}")
 private val FileHashRegex = Regex("/h/([0-9a-f]{40})")
 

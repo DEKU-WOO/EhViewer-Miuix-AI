@@ -31,9 +31,9 @@ object WebDavGallerySync {
             throw WebDavClient.WebDavException("本地下载目录不存在")
         }
         val rootUrl = WebDavClient.rootUrl()
-        runCatching { WebDavClient.ensureDirectory(rootUrl) }
+        WebDavClient.ensureDirectory(rootUrl)
 
-        val remoteEntries = runCatching { WebDavClient.list(rootUrl) }.getOrDefault(emptyList())
+        val remoteEntries = WebDavClient.list(rootUrl)
         val remoteByName = remoteEntries.associateBy { it.name }
         val localNames = mutableSetOf<String>()
         var uploaded = 0

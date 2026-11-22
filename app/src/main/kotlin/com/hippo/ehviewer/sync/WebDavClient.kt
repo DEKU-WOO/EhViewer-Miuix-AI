@@ -1,16 +1,24 @@
 package com.hippo.ehviewer.sync
 
-import android.util.Base64
 import com.hippo.ehviewer.Settings
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
+import okhttp3.Credentials
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 
 /**
  * 极简 WebDAV 客户端（PROPFIND / MKCOL / PUT / GET）。
  *
+ * 直接使用 OkHttp Request，绕开 HttpURLConnection 对扩展 HTTP 方法的白名单限制。
  * 上传使用固定长度流式写入，避免把整个画廊读进内存导致 OOM。
  */
 object WebDavClient {
@@ -25,6 +33,15 @@ object WebDavClient {
     private val responseRegex = Regex("<[^>]*:response[\\s\\S]*?</[^>]*:response>", RegexOption.IGNORE_CASE)
     private val hrefRegex = Regex("<[^>]*:href[^>]*>([^<]+)</[^>]*:href>", RegexOption.IGNORE_CASE)
     private val collectionRegex = Regex("<[^>]*:collection\\b", RegexOption.IGNORE_CASE)
+    private val xmlMediaType = "application/xml; charset=utf-8".toMediaType()
+    private val binaryMediaType = "application/octet-stream".toMediaType()
+    private val propfindBody = """<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>"""
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build()
 
     fun isConfigured(): Boolean = Settings.webdavUrl.value.isNotBlank()
 
@@ -32,57 +49,47 @@ object WebDavClient {
         URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     fun rootUrl(): String {
-        val dir = Settings.webdavDir.value.trim().trim('/')
-        val base = baseUrl()
-        return if (dir.isEmpty()) base else base + "/" + dir.split('/').joinToString("/") { encodeSegment(it) }
+        val segments = Settings.webdavDir.value.trim().trim('/').split('/').filter { it.isNotEmpty() }
+        return segments.fold(baseUrl()) { url, segment -> "$url/${encodeSegment(segment)}" }
     }
 
     private fun baseUrl(): String = Settings.webdavUrl.value.trim().trimEnd('/')
 
-    private fun open(method: String, url: String, depth: String? = null): HttpURLConnection {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.requestMethod = method
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 30_000
-        connection.instanceFollowRedirects = true
-        val user = Settings.webdavUser.value
-        val password = Settings.webdavPassword.value
-        if (user.isNotBlank() || password.isNotBlank()) {
-            val raw = "$user:$password".toByteArray(Charsets.UTF_8)
-            connection.setRequestProperty("Authorization", "Basic " + Base64.encodeToString(raw, Base64.NO_WRAP))
+    private fun newRequest(method: String, url: String, depth: String? = null, body: RequestBody? = null): Request {
+        return Request.Builder()
+            .url(url)
+            .method(method, body)
+            .apply {
+                val user = Settings.webdavUser.value
+                val password = Settings.webdavPassword.value
+                if (user.isNotBlank() || password.isNotBlank()) {
+                    header("Authorization", Credentials.basic(user, password, Charsets.UTF_8))
+                }
+                depth?.let { header("Depth", it) }
+            }
+            .build()
+    }
+
+    private fun execute(request: Request, method: String, vararg acceptedCodes: Int): Response {
+        val response = client.newCall(request).execute()
+        // 207 Multi-Status 与其他 2xx 一样均为成功；部分服务器的已存在目录返回 405。
+        if (!response.isSuccessful && response.code !in acceptedCodes) {
+            val detail = runCatching { response.body.string().take(512) }.getOrNull()
+            response.close()
+            throw WebDavException("$method HTTP ${response.code}" + detail?.let { ": $it" }.orEmpty())
         }
-        depth?.let { connection.setRequestProperty("Depth", it) }
-        return connection
+        return response
     }
 
     fun testConnection() {
-        // 只探测服务器根地址：远端目录可能尚未创建，不能因此判定连接失败
-        val connection = open("PROPFIND", baseUrl(), "0")
-        try {
-            connection.setRequestProperty("Content-Type", "application/xml; charset=utf-8")
-            connection.doOutput = true
-            val body = """<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>"""
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            val code = connection.responseCode
-            if (code !in 200..299) throw WebDavException("HTTP $code")
-        } finally {
-            connection.disconnect()
-        }
+        execute(newRequest("PROPFIND", baseUrl(), "0", propfindBody.toRequestBody(xmlMediaType)), "PROPFIND").close()
+        ensureDirectory(rootUrl())
     }
 
     /** 列出目录下一级条目（Depth: 1），自动跳过目录自身。 */
     fun list(url: String): List<RemoteEntry> {
-        val connection = open("PROPFIND", url, "1")
-        val text = try {
-            connection.setRequestProperty("Content-Type", "application/xml; charset=utf-8")
-            connection.doOutput = true
-            val body = """<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>"""
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            val code = connection.responseCode
-            if (code !in 200..299) throw WebDavException("PROPFIND HTTP $code")
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
+        val text = execute(newRequest("PROPFIND", url, "1", propfindBody.toRequestBody(xmlMediaType)), "PROPFIND").use { response ->
+            response.body.string()
         }
         val base = URL(url)
         val selfPath = runCatching { URLDecoder.decode(base.path, "UTF-8").trimEnd('/') }.getOrElse { "" }
@@ -101,47 +108,31 @@ object WebDavClient {
         }.toList()
     }
 
-    /** 创建目录；已存在（405）视为成功。 */
+    /** 从 WebDAV 根地址开始逐级创建目录；已存在（405）视为成功。 */
     fun ensureDirectory(url: String) {
-        val connection = open("MKCOL", url)
-        try {
-            val code = connection.responseCode
-            if (code !in 200..299 && code != 405) {
-                throw WebDavException("MKCOL HTTP $code")
+        val base = baseUrl()
+        val target = url.trimEnd('/')
+        if (target != base && !target.startsWith("$base/")) {
+            throw WebDavException("目录不在 WebDAV 根地址下: $url")
+        }
+        val segments = target.removePrefix(base).trim('/').split('/').filter { it.isNotEmpty() }
+        segments.fold(base) { parent, segment ->
+            "$parent/$segment".also { current ->
+                execute(newRequest("MKCOL", current), "MKCOL", 405).close()
             }
-        } finally {
-            connection.disconnect()
         }
     }
 
     fun upload(file: File, remoteUrl: String) {
-        val connection = open("PUT", remoteUrl)
-        try {
-            connection.doOutput = true
-            connection.setFixedLengthStreamingMode(file.length())
-            connection.setRequestProperty("Content-Type", "application/octet-stream")
-            connection.connect()
-            file.inputStream().use { input ->
-                connection.outputStream.use { output -> input.copyTo(output) }
-            }
-            val code = connection.responseCode
-            if (code !in 200..299) throw WebDavException("PUT HTTP $code")
-        } finally {
-            connection.disconnect()
-        }
+        execute(newRequest("PUT", remoteUrl, body = file.asRequestBody(binaryMediaType)), "PUT").close()
     }
 
     fun download(remoteUrl: String, target: File) {
-        val connection = open("GET", remoteUrl)
-        try {
-            val code = connection.responseCode
-            if (code !in 200..299) throw WebDavException("GET HTTP $code")
+        execute(newRequest("GET", remoteUrl), "GET").use { response ->
             target.parentFile?.mkdirs()
-            connection.inputStream.use { input ->
+            response.body.byteStream().use { input ->
                 target.outputStream().use { output -> input.copyTo(output) }
             }
-        } finally {
-            connection.disconnect()
         }
     }
 }

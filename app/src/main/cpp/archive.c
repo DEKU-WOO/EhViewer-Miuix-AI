@@ -494,15 +494,35 @@ typedef struct {
     char buff[8192];
 } archive_writer_ctx;
 
+static void throw_io_exception(JNIEnv *env, const char *message) {
+    jclass exception_class = (*env)->FindClass(env, "java/io/IOException");
+    if (exception_class != NULL) {
+        (*env)->ThrowNew(env, exception_class, message);
+        (*env)->DeleteLocalRef(env, exception_class);
+    }
+}
+
+static void throw_archive_exception(JNIEnv *env, struct archive *arc, const char *fallback) {
+    const char *message = arc ? archive_error_string(arc) : NULL;
+    throw_io_exception(env, message ? message : fallback);
+}
+
 JNIEXPORT jlong JNICALL
 Java_com_hippo_ehviewer_jni_ArchiveKt_archiveWriteOpen(JNIEnv *env, jclass clazz, jint arc_fd) {
     EH_UNUSED(clazz);
-    EH_UNUSED(env);
     struct archive *arc = archive_write_new();
-    if (!arc) return 0;
-    archive_write_set_format_zip(arc);
-    archive_write_zip_set_compression_store(arc);
+    if (!arc) {
+        throw_io_exception(env, "无法分配 ZIP 归档器");
+        return 0;
+    }
+    if (archive_write_set_format_zip(arc) != ARCHIVE_OK ||
+            archive_write_zip_set_compression_store(arc) != ARCHIVE_OK) {
+        throw_archive_exception(env, arc, "无法配置 ZIP 归档器");
+        archive_write_free(arc);
+        return 0;
+    }
     if (archive_write_open_fd(arc, arc_fd) != ARCHIVE_OK) {
+        throw_archive_exception(env, arc, "无法打开 ZIP 输出文件描述符");
         archive_write_free(arc);
         return 0;
     }
@@ -510,10 +530,18 @@ Java_com_hippo_ehviewer_jni_ArchiveKt_archiveWriteOpen(JNIEnv *env, jclass clazz
     if (!ctx) {
         archive_write_close(arc);
         archive_write_free(arc);
+        throw_io_exception(env, "无法分配 ZIP 写入上下文");
         return 0;
     }
     ctx->arc = arc;
     ctx->entry = archive_entry_new();
+    if (!ctx->entry) {
+        archive_write_close(arc);
+        archive_write_free(arc);
+        free(ctx);
+        throw_io_exception(env, "无法分配 ZIP 条目");
+        return 0;
+    }
     return (jlong)(intptr_t)ctx;
 }
 
@@ -521,37 +549,62 @@ JNIEXPORT void JNICALL
 Java_com_hippo_ehviewer_jni_ArchiveKt_archiveWriteEntry(JNIEnv *env, jclass clazz, jlong handle, jint fd, jstring name) {
     EH_UNUSED(clazz);
     archive_writer_ctx *ctx = (archive_writer_ctx *)(intptr_t)handle;
-    if (!ctx || !ctx->arc || !ctx->entry) return;
+    if (!ctx || !ctx->arc || !ctx->entry) {
+        throw_io_exception(env, "ZIP 写入器尚未初始化");
+        return;
+    }
 
     const char *cname = (*env)->GetStringUTFChars(env, name, false);
+    if (!cname) return;
     archive_entry_set_pathname(ctx->entry, cname);
     (*env)->ReleaseStringUTFChars(env, name, cname);
 
     struct stat st;
-    fstat(fd, &st);
+    if (fstat(fd, &st) != 0) {
+        throw_io_exception(env, strerror(errno));
+        archive_entry_clear(ctx->entry);
+        return;
+    }
     archive_entry_copy_stat(ctx->entry, &st);
     archive_entry_set_perm(ctx->entry, 0644);
-    archive_write_header(ctx->arc, ctx->entry);
+    if (archive_write_header(ctx->arc, ctx->entry) != ARCHIVE_OK) {
+        throw_archive_exception(env, ctx->arc, "无法写入 ZIP 条目头");
+        archive_entry_clear(ctx->entry);
+        return;
+    }
 
     ssize_t len;
     while ((len = read(fd, ctx->buff, sizeof(ctx->buff))) > 0) {
-        archive_write_data(ctx->arc, ctx->buff, (size_t)len);
+        la_ssize_t written = archive_write_data(ctx->arc, ctx->buff, (size_t)len);
+        if (written != len) {
+            throw_archive_exception(env, ctx->arc, "ZIP 条目数据写入不完整");
+            archive_entry_clear(ctx->entry);
+            return;
+        }
     }
-    archive_write_finish_entry(ctx->arc);
+    if (len < 0) {
+        throw_io_exception(env, strerror(errno));
+        archive_entry_clear(ctx->entry);
+        return;
+    }
+    if (archive_write_finish_entry(ctx->arc) != ARCHIVE_OK) {
+        throw_archive_exception(env, ctx->arc, "无法结束 ZIP 条目");
+    }
     archive_entry_clear(ctx->entry);
 }
 
 JNIEXPORT void JNICALL
 Java_com_hippo_ehviewer_jni_ArchiveKt_archiveWriteClose(JNIEnv *env, jclass clazz, jlong handle) {
     EH_UNUSED(clazz);
-    EH_UNUSED(env);
     archive_writer_ctx *ctx = (archive_writer_ctx *)(intptr_t)handle;
     if (!ctx) return;
     if (ctx->entry) {
         archive_entry_free(ctx->entry);
     }
     if (ctx->arc) {
-        archive_write_close(ctx->arc);
+        if (archive_write_close(ctx->arc) != ARCHIVE_OK) {
+            throw_archive_exception(env, ctx->arc, "无法完成 ZIP 中央目录写入");
+        }
         archive_write_free(ctx->arc);
     }
     free(ctx);

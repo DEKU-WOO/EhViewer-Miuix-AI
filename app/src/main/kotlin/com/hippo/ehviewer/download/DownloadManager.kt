@@ -370,8 +370,12 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
         stopDownloadInternal(gid)
         val info = mAllInfoMap[gid]
         if (info != null) {
-            // Remove from DB
-            EhDB.removeDownloadInfo(info)
+            try {
+                EhDB.removeDownloadInfo(info)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                logcat(TAG, LogPriority.ERROR) { "删除下载数据库记录失败：gid=$gid\n${t.stackTraceToString()}" }
+            }
 
             // Remove all list and map
             sortMutex.withLock {
@@ -386,27 +390,59 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
             ensureDownload()
 
             if (deleteFiles) {
-                info.downloadDir?.delete()
-                info.tempDownloadDir?.delete()
-                EhDB.removeDownloadDirname(info.gid)
+                try {
+                    info.downloadDir?.delete()
+                } catch (t: Throwable) {
+                    logcat(TAG, LogPriority.ERROR) { "删除下载目录失败：gid=$gid\n${t.stackTraceToString()}" }
+                }
+                try {
+                    info.tempDownloadDir?.delete()
+                } catch (t: Throwable) {
+                    logcat(TAG, LogPriority.ERROR) { "删除临时目录失败：gid=$gid\n${t.stackTraceToString()}" }
+                }
+                try {
+                    EhDB.removeDownloadDirname(info.gid)
+                } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
+                    logcat(TAG, LogPriority.ERROR) { "删除下载路径记录失败：gid=$gid\n${t.stackTraceToString()}" }
+                }
             }
         }
     }
 
     suspend fun deleteRangeDownload(gidList: LongArray) {
-        stopRangeDownloadInternal(gidList)
-        val list = gidList.mapNotNull { gid ->
-            mAllInfoMap.remove(gid)
+        val targetIds = gidList.toList()
+        targetIds.forEach { gid ->
+            try {
+                stopDownloadInternal(gid)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                logcat(TAG, LogPriority.ERROR) { "停止下载任务失败：gid=$gid\n${t.stackTraceToString()}" }
+            }
         }
-        EhDB.removeDownloadInfo(list)
+        val list = targetIds.mapNotNull { gid -> mAllInfoMap.remove(gid) }
+        list.forEach { info ->
+            try {
+                EhDB.removeDownloadInfo(info)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                logcat(TAG, LogPriority.ERROR) { "删除下载数据库记录失败：gid=${info.gid}\n${t.stackTraceToString()}" }
+            }
+        }
+        val idSet = targetIds.toSet()
         sortMutex.withLock {
-            allInfoList.removeAll(list.toSet())
+            allInfoList.removeAll { it.gid in idSet }
         }
 
-        // Update listener
-        list.forEach { mutableNotifyFlow.emit(it) }
+        list.forEach { info ->
+            try {
+                mutableNotifyFlow.emit(info)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                logcat(TAG, LogPriority.ERROR) { "通知下载记录删除失败：gid=${info.gid}\n${t.stackTraceToString()}" }
+            }
+        }
 
-        // Ensure download
         ensureDownload()
     }
 

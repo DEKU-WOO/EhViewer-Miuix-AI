@@ -39,7 +39,9 @@ import com.ehviewer.core.ui.component.LabeledCheckbox
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.HeartBroken
 import com.ehviewer.core.ui.icons.filled.MenuBook
+import com.ehviewer.core.util.LogPriority
 import com.ehviewer.core.util.isAtLeastT
+import com.ehviewer.core.util.logcat
 import com.ehviewer.core.util.mapToLongArray
 import com.ehviewer.core.util.toEpochMillis
 import com.ehviewer.core.util.toLocalDateTime
@@ -365,19 +367,34 @@ suspend fun confirmRemoveDownload(info: GalleryInfo) {
 
 context(_: DialogState)
 suspend fun confirmRemoveDownloadRange(list: Collection<DownloadInfo>) {
-    val text = appCtx.getString(R.string.download_remove_dialog_message_2, list.size)
+    val targets = list.toList()
+    val text = appCtx.getString(R.string.download_remove_dialog_message_2, targets.size)
     val checked = confirmRemoveDownload(text)
     withIOContext {
-        // Delete
-        DownloadManager.deleteRangeDownload(list.mapToLongArray(DownloadInfo::gid))
-        // Delete image files
+        try {
+            DownloadManager.deleteRangeDownload(targets.mapToLongArray(DownloadInfo::gid))
+        } catch (t: Throwable) {
+            if (t is kotlinx.coroutines.CancellationException) throw t
+            logcat("DownloadDelete", LogPriority.ERROR) { "批量移除下载任务失败\n${t.stackTraceToString()}" }
+        }
         if (checked) {
-            list.forEach { info ->
-                // Delete file
-                info.downloadDir?.delete()
-                info.tempDownloadDir?.delete()
-                // Remove download path
-                EhDB.removeDownloadDirname(info.gid)
+            targets.forEach { info ->
+                try {
+                    info.downloadDir?.delete()
+                } catch (t: Throwable) {
+                    logcat("DownloadDelete", LogPriority.ERROR) { "删除下载目录失败：gid=${info.gid}\n${t.stackTraceToString()}" }
+                }
+                try {
+                    info.tempDownloadDir?.delete()
+                } catch (t: Throwable) {
+                    logcat("DownloadDelete", LogPriority.ERROR) { "删除临时目录失败：gid=${info.gid}\n${t.stackTraceToString()}" }
+                }
+                try {
+                    EhDB.removeDownloadDirname(info.gid)
+                } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
+                    logcat("DownloadDelete", LogPriority.ERROR) { "删除下载路径记录失败：gid=${info.gid}\n${t.stackTraceToString()}" }
+                }
             }
         }
     }

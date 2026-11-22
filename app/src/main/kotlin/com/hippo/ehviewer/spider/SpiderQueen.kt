@@ -219,7 +219,7 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
     private val prepareScope = CoroutineScope(coroutineContext + SupervisorJob(coroutineContext.job))
     private val prepareJob = prepareScope.async { doPrepare() }
     private val archiveJob = launch(start = CoroutineStart.LAZY) {
-        val failed = spiderDen.archive()
+        val failed = spiderDen.archive(pageStates.size)
         notifyAllPageDownloaded(failed)
     }
 
