@@ -51,7 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -226,7 +226,7 @@ fun <I, O> LauncherPreference(
  */
 @Composable
 internal fun SettingsScrollColumn(
-    scrollBehavior: MiuixScrollBehavior,
+    scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
@@ -256,7 +256,7 @@ internal fun SettingsScrollColumn(
  */
 @Composable
 internal fun SettingsLazyColumn(
-    scrollBehavior: MiuixScrollBehavior,
+    scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     content: LazyListScope.() -> Unit,
