@@ -145,7 +145,6 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Help
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -280,21 +279,10 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 title = stringResource(id = R.string.quick_search),
                 color = MiuixTheme.colorScheme.surface,
                 defaultWindowInsetsPadding = false,
+                // 抽屉在平板下仅占 1/3 屏宽，收紧标题左右内边距，把宽度让给标题文本，
+                // 避免「快速搜索」被截断成「快速…」
+                titlePadding = 12.dp,
                 actions = {
-                    IconButton(
-                        onClick = {
-                            launch {
-                                awaitConfirmationOrCancel(title = R.string.quick_search, showCancelButton = false) {
-                                    Text(text = stringResource(id = R.string.add_quick_search_tip))
-                                }
-                            }
-                        },
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Help,
-                            contentDescription = stringResource(id = R.string.readme),
-                        )
-                    }
                     val invalidImageQuickSearch = stringResource(R.string.image_search_not_quick_search)
                     val nameEmpty = stringResource(R.string.name_is_empty)
                     val dupName = stringResource(R.string.duplicate_name)
