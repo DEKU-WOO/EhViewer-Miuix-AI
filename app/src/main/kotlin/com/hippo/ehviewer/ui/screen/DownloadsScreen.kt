@@ -632,9 +632,9 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
                     if (dy >= slop) {
-                        BottomBarScrollState.setHidden(true)
+                        BottomBarScrollState.hidden = true
                     } else if (dy <= -slop / 2) {
-                        BottomBarScrollState.setHidden(false)
+                        BottomBarScrollState.hidden = false
                     }
                     val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)

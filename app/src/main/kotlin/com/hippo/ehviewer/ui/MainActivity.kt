@@ -220,11 +220,6 @@ private val navItems = arrayOf<Triple<Direction, Int, ImageVector>>(
  */
 object BottomBarScrollState {
     var hidden by mutableStateOf(false)
-        private set
-
-    fun setHidden(value: Boolean) {
-        hidden = value
-    }
 
     fun reset() {
         hidden = false

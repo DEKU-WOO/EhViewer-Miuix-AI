@@ -146,9 +146,9 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                     val dy = -consumed.y
                     val slop = with(currentDensity) { 8.dp.toPx() }
                     if (dy >= slop) {
-                        BottomBarScrollState.setHidden(true)
+                        BottomBarScrollState.hidden = true
                     } else if (dy <= -slop / 2) {
-                        BottomBarScrollState.setHidden(false)
+                        BottomBarScrollState.hidden = false
                     }
                     val topPaddingPx = with(currentDensity) { currentPaddingValues.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
