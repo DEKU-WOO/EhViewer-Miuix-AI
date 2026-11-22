@@ -50,6 +50,8 @@ import com.ehviewer.core.util.isAtLeastS
 import com.ehviewer.core.util.launchIO
 import com.ehviewer.core.util.logcat
 import com.ehviewer.core.util.withUIContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.hippo.ehviewer.client.EhTagDatabase
 import com.hippo.ehviewer.coil.AnimatedWebPDecoder
 import com.hippo.ehviewer.coil.CropBorderInterceptor
@@ -69,6 +71,8 @@ import com.hippo.ehviewer.ktor.configureClient
 import com.hippo.ehviewer.ktor.configureCommon
 import com.hippo.ehviewer.ktor.isCronetAvailable
 import com.hippo.ehviewer.shortcuts.updateDownloadShortcuts
+import com.hippo.ehviewer.sync.VpsHistorySyncManager
+import com.hippo.ehviewer.sync.updateWebDavAutoSync
 import com.hippo.ehviewer.ui.keepNoMediaFileStatus
 import com.hippo.ehviewer.ui.screen.detailCache
 import com.hippo.ehviewer.ui.tools.dataStateFlow
@@ -113,6 +117,15 @@ class EhApplication : Application(), SingletonImageLoader.Factory {
         }
         CrashHandler.install()
         super.onCreate()
+        // 仅在 App 真正回到前台时增量拉取云端历史，绝不后台常驻轮询
+        lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_START) {
+                    lifecycleScope.launchIO { VpsHistorySyncManager.refreshFromServer() }
+                    lifecycleScope.launchIO { updateWebDavAutoSync(this@EhApplication) }
+                }
+            },
+        )
         System.loadLibrary("ehviewer")
         launch {
             FavouriteStatusRouter.collect { info ->

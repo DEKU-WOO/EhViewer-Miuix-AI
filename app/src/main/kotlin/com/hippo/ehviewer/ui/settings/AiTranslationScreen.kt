@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -37,10 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +51,8 @@ import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.readableWidth
 import com.ehviewer.core.util.launch
+import com.ehviewer.core.util.withIOContext
+import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.asMutableState
 import com.hippo.ehviewer.client.AiConnectionTestResult
@@ -99,7 +100,6 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberBlurBackdrop()
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
 
     // 整页数据都从当前激活方案派生，切换下拉后自动刷新下方所有卡片
     val profilesJson by Settings.aiProfiles.collectAsState()
@@ -118,8 +118,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
     val modelEmpty = stringResource(R.string.settings_ai_translation_model_empty)
     val modelExists = stringResource(R.string.settings_ai_translation_model_exists)
     val keepOneModel = stringResource(R.string.settings_ai_translation_model_keep_one)
-    val exportSuccess = stringResource(R.string.settings_ai_translation_export_success)
-    val importFailed = stringResource(R.string.settings_ai_translation_import_failed)
+    val cacheCleared = stringResource(R.string.settings_ai_translation_cache_cleared)
     var testing by remember { mutableStateOf(false) }
 
     fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -274,18 +273,15 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
         }
     }
 
-    fun exportProfiles() {
-        clipboard.setText(AnnotatedString(AiProfileStore.exportBackup()))
-        toast(exportSuccess)
-    }
-
-    fun importProfiles() {
-        val count = AiProfileStore.importBackup(clipboard.getText()?.text.orEmpty())
-        if (count > 0) {
-            toast(context.getString(R.string.settings_ai_translation_import_success, count))
-        } else {
-            toast(importFailed)
+    fun clearTranslationCache() = launch {
+        awaitConfirmationOrCancel(
+            confirmText = R.string.clear_all,
+            title = R.string.settings_ai_translation_cache_title,
+        ) {
+            MiuixText(text = stringResource(R.string.settings_ai_translation_cache_confirm))
         }
+        withIOContext { EhDB.clearTranslations() }
+        toast(cacheCleared)
     }
 
     Scaffold(
@@ -461,19 +457,17 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_ai_translation_backup_title))
+                SmallTitle(text = stringResource(id = R.string.settings_ai_translation_cache_title))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
+                    val cacheCount by remember { EhDB.translationCountFlow }.collectAsState(0)
                     BasicComponent(
-                        title = stringResource(R.string.settings_ai_translation_export),
-                        onClick = ::exportProfiles,
-                    )
-                    BasicComponent(
-                        title = stringResource(R.string.settings_ai_translation_import),
-                        onClick = ::importProfiles,
+                        title = stringResource(R.string.settings_ai_translation_cache_title),
+                        summary = stringResource(R.string.settings_ai_translation_cache_summary, cacheCount),
+                        onClick = { clearTranslationCache() },
                     )
                 }
             }

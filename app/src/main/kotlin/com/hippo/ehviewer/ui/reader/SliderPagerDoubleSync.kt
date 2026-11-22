@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import com.hippo.ehviewer.gallery.PageLoader
+import com.hippo.ehviewer.sync.VpsHistorySyncManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
@@ -63,6 +64,7 @@ class SliderPagerDoubleSync(
                 currentIndexFlow.drop(1).collect { index ->
                     sliderValue = index + 1
                     pageLoader.startPage = index
+                    pageLoader.info?.gid?.let { VpsHistorySyncManager.onReaderPageChanged(it, index) }
                     onPageSelected()
                 }
             }
@@ -75,6 +77,7 @@ class SliderPagerDoubleSync(
                         pagerState.animateScrollToPage(index)
                     }
                     pageLoader.startPage = index
+                    pageLoader.info?.gid?.let { VpsHistorySyncManager.onReaderPageChanged(it, index) }
                 }
             }
         }

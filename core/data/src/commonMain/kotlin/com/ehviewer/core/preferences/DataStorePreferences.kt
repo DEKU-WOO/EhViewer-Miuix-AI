@@ -1,6 +1,7 @@
 package com.ehviewer.core.preferences
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.byteArrayPreferencesKey
@@ -49,6 +50,34 @@ abstract class DataStorePreferences(private val dataStore: DataStore<Preferences
     suspend fun withMutableSnapshot(block: (MutableSnapshot) -> Unit) {
         dataStore.edit {
             block(MutableSnapshot(it))
+        }
+    }
+
+    /** 导出全部偏好键值，用于本地/云端全量设置备份。 */
+    suspend fun exportEntries(): Map<String, Any> =
+        dataStore.data.first().asMap().entries.associate { it.key.name to it.value }
+
+    /**
+     * 批量写入偏好键值（全量恢复用）。
+     *
+     * 只覆盖备份里存在的键，不会动其他键；类型按值的运行时类型还原为对应的 Preference Key。
+     */
+    suspend fun importEntries(entries: Map<String, Any>) {
+        dataStore.edit { pref ->
+            entries.forEach { (name, value) -> pref.putRaw(name, value) }
+        }
+    }
+
+    private fun MutablePreferences.putRaw(name: String, value: Any) {
+        when (value) {
+            is Boolean -> this[booleanPreferencesKey(name)] = value
+            is Int -> this[intPreferencesKey(name)] = value
+            is Long -> this[longPreferencesKey(name)] = value
+            is Float -> this[floatPreferencesKey(name)] = value
+            is Double -> this[doublePreferencesKey(name)] = value
+            is String -> this[stringPreferencesKey(name)] = value
+            is Set<*> -> this[stringSetPreferencesKey(name)] = value.filterIsInstance<String>().toSet()
+            is ByteArray -> this[byteArrayPreferencesKey(name)] = value
         }
     }
 

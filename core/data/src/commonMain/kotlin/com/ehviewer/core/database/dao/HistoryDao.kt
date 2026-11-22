@@ -51,4 +51,8 @@ interface HistoryDao {
 
     @Query("SELECT EXISTS(SELECT * FROM HISTORY WHERE GID = :gid)")
     suspend fun contains(gid: Long): Boolean
+
+    /** 取本地最后浏览时间，供云同步判断是否应覆盖本地记录。 */
+    @Query("SELECT TIME FROM HISTORY WHERE GID = :gid")
+    suspend fun getTime(gid: Long): Long?
 }

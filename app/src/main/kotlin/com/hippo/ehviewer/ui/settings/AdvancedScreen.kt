@@ -110,18 +110,6 @@ private fun dumplog(uri: Uri): Unit = with(ctx) {
     }
 }
 
-context(ctx: Context)
-private suspend fun exportDatabase(uri: Uri) {
-    ctx.grantUriPermission(BuildConfig.APPLICATION_ID, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    EhDB.exportDB(uri.toOkioPath())
-}
-
-context(ctx: Context)
-private suspend fun importDatabase(uri: Uri) {
-    ctx.grantUriPermission(BuildConfig.APPLICATION_ID, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    EhDB.importDB(uri.toOkioPath())
-}
-
 @Destination<RootGraph>
 @Composable
 fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = Screen(navigator) {
@@ -299,91 +287,16 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_advanced_export_data))
+                SmallTitle(text = stringResource(id = R.string.settings_advanced))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
-                    val exportFailed = stringResource(id = R.string.settings_advanced_export_data_failed)
-                    LauncherPreference(
-                        title = stringResource(id = R.string.settings_advanced_export_data),
-                        summary = stringResource(id = R.string.settings_advanced_export_data_summary),
-                        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
-                        key = ReadableTime.getFilenamableTime() + ".db",
-                    ) { uri ->
-                        uri?.let {
-                            runCatching {
-                                exportDatabase(uri)
-                                launchSnackbar(string(R.string.settings_advanced_export_data_to, uri.displayPath))
-                            }.onFailure {
-                                logcat(it)
-                                launchSnackbar(exportFailed)
-                            }
-                        }
-                    }
-                    val importFailed = stringResource(id = R.string.cant_read_the_file)
-                    val importSucceed = stringResource(id = R.string.settings_advanced_import_data_successfully)
-                    LauncherPreference(
-                        title = stringResource(id = R.string.settings_advanced_import_data),
-                        summary = stringResource(id = R.string.settings_advanced_import_data_summary),
-                        contract = ActivityResultContracts.GetContent(),
-                        key = "application/octet-stream",
-                    ) { uri ->
-                        uri?.let {
-                            runCatching {
-                                importDatabase(uri)
-                                launchSnackbar(importSucceed)
-                            }.onFailure {
-                                logcat(it)
-                                launchSnackbar(importFailed)
-                            }
-                        }
-                    }
-                    val hasSignedIn by Settings.hasSignedIn.collectAsState()
-                    if (hasSignedIn) {
-                        val backupNothing = stringResource(id = R.string.settings_advanced_backup_favorite_nothing)
-                        val backupFailed = stringResource(id = R.string.settings_advanced_backup_favorite_failed)
-                        val backupSucceed = stringResource(id = R.string.settings_advanced_backup_favorite_success)
-                        Preference(
-                            title = stringResource(id = R.string.settings_advanced_backup_favorite),
-                            summary = stringResource(id = R.string.settings_advanced_backup_favorite_summary),
-                        ) {
-                            val favListUrlBuilder = FavListUrlBuilder()
-                            var favTotal = 0
-                            var favIndex = 0
-                            tailrec suspend fun doBackup() {
-                                val result = EhEngine.getFavorites(favListUrlBuilder.build())
-                                if (result.galleryInfoList.isEmpty()) {
-                                    launchSnackbar(backupNothing)
-                                } else {
-                                    if (favTotal == 0) favTotal = result.countArray.sum()
-                                    favIndex += result.galleryInfoList.size
-                                    val status = "($favIndex/$favTotal)"
-                                    EhDB.putLocalFavorites(result.galleryInfoList)
-                                    launchSnackbar(string(R.string.settings_advanced_backup_favorite_start, status))
-                                    if (result.next != null) {
-                                        delay(Settings.downloadDelay.value.toLong())
-                                        favListUrlBuilder.setIndex(result.next, true)
-                                        doBackup()
-                                    }
-                                }
-                            }
-                            launch {
-                                runSuspendCatching {
-                                    doBackup()
-                                }.onSuccess {
-                                    launchSnackbar(backupSucceed)
-                                }.onFailure {
-                                    logcat(it)
-                                    launchSnackbar(backupFailed)
-                                }
-                            }
-                        }
-                    }
                     Preference(title = stringResource(id = R.string.open_by_default)) {
                         openByDefaultSettings()
                     }
+                    val deepCleanFailed = stringResource(id = R.string.settings_advanced_deep_clean_failed)
                     WorkPreference(
                         title = stringResource(id = R.string.settings_advanced_deep_clean),
                         summary = stringResource(id = R.string.settings_advanced_deep_clean_summary),
@@ -394,8 +307,14 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                         ) {
                             Text(text = stringResource(id = R.string.settings_advanced_deep_clean_confirm))
                         }
-                        val result = StorageCleaner.performDeepClean()
-                        launchSnackbar(string(R.string.settings_advanced_deep_clean_done, result.deadDownloadsCount))
+                        runSuspendCatching {
+                            StorageCleaner.performDeepClean()
+                        }.onSuccess { result ->
+                            launchSnackbar(string(R.string.settings_advanced_deep_clean_done, result.deadDownloadsCount))
+                        }.onFailure {
+                            logcat(it)
+                            launchSnackbar(deepCleanFailed)
+                        }
                     }
                 }
             }

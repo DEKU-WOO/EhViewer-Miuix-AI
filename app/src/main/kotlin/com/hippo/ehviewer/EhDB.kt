@@ -36,8 +36,13 @@ import com.ehviewer.core.database.model.QuickSearch
 import com.ehviewer.core.database.roomDb
 import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.sendTo
+import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.model.GalleryInfo
+import com.hippo.ehviewer.client.AiTranslationManager
+import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.download.DownloadManager
+import com.hippo.ehviewer.sync.SyncHistoryEntry
+import com.hippo.ehviewer.sync.VpsHistorySyncManager
 import kotlinx.coroutines.flow.Flow
 import okio.Path
 
@@ -72,6 +77,52 @@ object EhDB {
     suspend fun getReadProgress(gid: Long) = db.progressDao().getPage(gid)
     suspend fun putReadProgress(gid: Long, page: Int) = db.progressDao().upsert(ProgressInfo(gid, page))
     suspend fun clearProgressInfo() = db.progressDao().deleteAll()
+
+    val translationCountFlow get() = db.galleryTranslationDao().flowTranslationCount()
+
+    suspend fun clearTranslations() = db.galleryTranslationDao().clearTranslations()
+
+    suspend fun getGalleryInfo(gid: Long): GalleryEntity? = db.galleryDao().load(gid)
+
+    /**
+     * 批量补全云端历史里本地缺失的标题/封面（E 站官方 gdata 批量接口），
+     *
+     * 若本地还没有该画廊的标题/封面，先用 E 站官方 gdata 接口批量补全元数据，
+     * 再交给 [AiTranslationManager] 按现有自动翻译规则接管中文标题翻译。
+     */
+    suspend fun fillSyncedMetadata(entries: List<SyncHistoryEntry>) {
+        val missing = entries.filter { entry ->
+            val entity = db.galleryDao().load(entry.gid)
+            entity == null || entity.title.isNullOrBlank() || entity.thumbKey.isNullOrBlank()
+        }
+        if (missing.isEmpty()) return
+        val infos = missing.map { BaseGalleryInfo(gid = it.gid, token = it.token) }
+        runCatching { EhEngine.fillGalleryListByApi(infos) }
+        infos.forEach { info ->
+            putGalleryInfo(info.asEntity())
+            if (!info.title.isNullOrBlank()) {
+                AiTranslationManager.enqueueTranslation(info.gid, info.title.orEmpty())
+            }
+        }
+    }
+
+    /** 应用单条云端历史与阅读进度，只在本机记录较旧时覆盖。 */
+    suspend fun applySyncedHistory(gid: Long, token: String, lastPage: Int, updatedAt: Long) {
+        val entity = db.galleryDao().load(gid)
+        if (entity == null || entity.title.isNullOrBlank() || entity.thumbKey.isNullOrBlank()) {
+            val info = BaseGalleryInfo(gid = gid, token = token)
+            runCatching { EhEngine.fillGalleryListByApi(listOf(info)) }
+            putGalleryInfo(info.asEntity())
+            if (!info.title.isNullOrBlank()) {
+                AiTranslationManager.enqueueTranslation(gid, info.title.orEmpty())
+            }
+        }
+        val localTime = db.historyDao().getTime(gid)
+        if (localTime == null || localTime <= updatedAt) {
+            db.historyDao().upsert(HistoryInfo(gid, updatedAt))
+            db.progressDao().upsert(ProgressInfo(gid, lastPage))
+        }
+    }
 
     suspend fun getAllDownloadInfo() = db.downloadsDao().joinList().onEach {
         if (it.state == DownloadInfo.STATE_WAIT || it.state == DownloadInfo.STATE_DOWNLOAD) {
@@ -244,6 +295,8 @@ object EhDB {
     suspend fun putHistoryInfo(galleryInfo: GalleryInfo) {
         putGalleryInfo(galleryInfo.asEntity())
         db.historyDao().upsert(HistoryInfo(galleryInfo.gid))
+        // 新增历史后异步上报 VPS（未启用同步时内部会直接返回）
+        VpsHistorySyncManager.onHistoryAdded(galleryInfo.gid)
     }
 
     suspend fun updateFavoriteSlot(gid: Long, slot: Int) {

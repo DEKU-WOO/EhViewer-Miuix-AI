@@ -31,6 +31,7 @@ import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.destinations.AboutScreenDestination
 import com.hippo.ehviewer.ui.destinations.AdvancedScreenDestination
 import com.hippo.ehviewer.ui.destinations.AiTranslationScreenDestination
+import com.hippo.ehviewer.ui.destinations.BackupRestoreScreenDestination
 import com.hippo.ehviewer.ui.destinations.BottomNavItemsScreenDestination
 import com.hippo.ehviewer.ui.destinations.DownloadScreenDestination
 import com.hippo.ehviewer.ui.destinations.EhScreenDestination
@@ -45,6 +46,7 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.FileDownloads
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.More
@@ -125,6 +127,12 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                         icon = MiuixIcons.More,
                         title = R.string.desktop_nav_items_title,
                         childRoute = BottomNavItemsScreenDestination,
+                        navigator = navigator,
+                    )
+                    PreferenceHeader(
+                        icon = MiuixIcons.FileDownloads,
+                        title = R.string.backup_restore_title,
+                        childRoute = BackupRestoreScreenDestination,
                         navigator = navigator,
                     )
                     PreferenceHeader(

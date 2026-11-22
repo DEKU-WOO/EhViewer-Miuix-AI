@@ -31,12 +31,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.model.GalleryInfo.Companion.NOT_FAVORITED
 import com.ehviewer.core.ui.component.CrystalCard
@@ -70,6 +72,8 @@ fun GalleryInfoListItem(
     showPages: Boolean,
     showProgress: Boolean,
     modifier: Modifier = Modifier,
+    /** 历史页专用：在卡片上额外提示「上次看到第 X 页」。 */
+    showLastPageHint: Boolean = false,
     isInFavScene: Boolean = false,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
 ) = CrystalCard(
@@ -188,6 +192,19 @@ fun GalleryInfoListItem(
                     color = EhUtils.getCategoryTextColor(categoryColor),
                     style = MiuixTheme.textStyles.footnote2,
                 )
+                if (showLastPageHint) {
+                    val lastPage = remember { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0).value
+                    if (lastPage > 0) {
+                        Text(
+                            text = stringResource(R.string.history_last_read_page, lastPage + 1),
+                            maxLines = 1,
+                            softWrap = false,
+                            style = MiuixTheme.textStyles.footnote2,
+                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
                 // 分类徽章与上传时间之间保持留白，不再插入简化标签，避免挤压右侧时间
                 Spacer(modifier = Modifier.weight(1f))
                 Text(

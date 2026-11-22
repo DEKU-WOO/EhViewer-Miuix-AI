@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.fork.SwipeToDismissBox
 import androidx.compose.material3.fork.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ import com.ehviewer.core.util.launch
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
+import com.hippo.ehviewer.sync.VpsHistorySyncManager
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.doGalleryInfoAction
@@ -66,7 +68,9 @@ import kotlinx.coroutines.flow.map
 import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -100,6 +104,9 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
         }.cachedIn(viewModelScope)
     }.collectAsLazyPagingItems()
     FavouriteStatusRouter.Observe(historyData)
+    // 进入历史页时做一次增量拉取（未启用云同步时内部直接返回）
+    LaunchedEffect(Unit) { VpsHistorySyncManager.refreshFromServer() }
+    var isRefreshing by remember { mutableStateOf(false) }
     SearchBarScreen(
         onApplySearch = {
             keyword = it
@@ -146,6 +153,21 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
         val cardHeight by collectListThumbSizeAsState()
         val showPages by Settings.showGalleryPages.collectAsState()
         val showProgress by Settings.showReadingProgress.collectAsState()
+        PullToRefresh(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                if (isRefreshing) return@PullToRefresh
+                isRefreshing = true
+                launch {
+                    VpsHistorySyncManager.refreshFromServer()
+                    historyData.refresh()
+                    delay(300)
+                    isRefreshing = false
+                }
+            },
+            pullToRefreshState = rememberPullToRefreshState(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
         FastScrollLazyColumn(
             // 滚动容器保持全宽：平板左右两侧空白区域也能触摸上下滑动；
             // 卡片的居中最大宽度约束在每个 item 上单独施加（见下方 SwipeToDismissBox 的 readableWidth）。
@@ -189,6 +211,7 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                             info = info,
                             showPages = showPages,
                             showProgress = showProgress,
+                            showLastPageHint = true,
                             modifier = Modifier.height(cardHeight).padding(horizontal = marginH),
                         )
                     }
@@ -196,6 +219,7 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                     Spacer(modifier = Modifier.height(cardHeight).fillMaxWidth())
                 }
             }
+        }
         }
         Await(keyword, { delay(200) }) {
             if (historyData.itemCount == 0) {

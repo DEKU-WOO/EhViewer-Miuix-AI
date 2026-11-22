@@ -3,6 +3,7 @@ package com.hippo.ehviewer.client
 import com.ehviewer.core.database.EhDatabase
 import com.ehviewer.core.database.model.GalleryTranslationEntity
 import com.ehviewer.core.database.roomDb
+import com.ehviewer.core.util.logcat
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.Settings
 import io.ktor.client.plugins.timeout
@@ -136,6 +137,10 @@ object AiTranslationManager {
         /** 限流与服务端临时错误可以退避重试；400/403 等由内容触发的错误重试没有意义。 */
         val retryable: Boolean
             get() = httpStatus == 429 || (httpStatus != null && httpStatus >= 500)
+
+        /** 429 限流 / 503 不可用时优先轮换同方案下的备用模型，而不是死磕当前模型。 */
+        val shouldRotateModel: Boolean
+            get() = httpStatus == 429 || httpStatus == 503
     }
 
     init {
@@ -238,32 +243,56 @@ object AiTranslationManager {
         }
     }
 
-    /** 单条翻译：遇到 429 / 5xx 退避重试，其他错误只影响这一条。 */
+    /**
+     * 单条翻译：遇到 429 / 503 / 请求超时时，按顺序轮换当前方案里的其他模型；
+     * 其他可重试错误只在当前模型上退避重试，避免把内容类错误扩散到所有备用模型。
+     */
     private suspend fun translateSingle(task: TranslationTask, config: ApiConfig) {
-        var attempt = 0
         var lastError = "未知错误"
-        while (attempt <= MAX_RETRY_ATTEMPTS) {
-            if (attempt > 0) delay(RETRY_DELAY_MS)
-            try {
-                val translated = semaphore.withPermit {
-                    requestAiTranslation(config, task.originalTitle)
-                }
-                if (translated.isBlank()) throw AiRequestException("模型未返回翻译内容")
-                saveTranslation(task, translated)
-                return
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: AiRequestException) {
-                lastError = e.message ?: "未知错误"
-                if (!e.retryable || attempt == MAX_RETRY_ATTEMPTS) break
-            } catch (e: Exception) {
-                lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
-                break
+        for (model in config.models) {
+            if (model != config.model) {
+                // 换模型意味着上一个模型已限流/不可用，无需再额外等待
+                logcat("AiTranslation") { "轮换备用模型：$model" }
             }
-            attempt++
+            val modelConfig = config.copy(model = model)
+            var attempt = 0
+            var rotateToNextModel = false
+            while (attempt <= MAX_RETRY_ATTEMPTS) {
+                if (attempt > 0) delay(RETRY_DELAY_MS)
+                try {
+                    val translated = semaphore.withPermit {
+                        requestAiTranslation(modelConfig, task.originalTitle)
+                    }
+                    if (translated.isBlank()) throw AiRequestException("模型未返回翻译内容")
+                    saveTranslation(task, translated)
+                    return
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: AiRequestException) {
+                    lastError = e.message ?: "未知错误"
+                    if (e.shouldRotateModel) {
+                        rotateToNextModel = true
+                        break
+                    }
+                    if (!e.retryable || attempt == MAX_RETRY_ATTEMPTS) break
+                } catch (e: Exception) {
+                    lastError = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "未知错误")
+                    // 请求超时同样视为当前模型不可用，轮换到下一个备用模型
+                    if (e.isTimeout()) rotateToNextModel = true
+                    break
+                }
+                attempt++
+            }
+            if (!rotateToNextModel) break
         }
         failTask(task, lastError)
     }
+
+    /** 判断异常是否属于网络/请求超时（Ktor 的 HttpRequestTimeoutException 等）。 */
+    private fun Throwable.isTimeout(): Boolean =
+        this is java.net.SocketTimeoutException ||
+            this is java.net.ConnectException ||
+            (this::class.simpleName?.contains("Timeout", ignoreCase = true) == true)
 
     private suspend fun findCached(task: TranslationTask): String? =
         runCatching { db.galleryTranslationDao().getTranslation(task.gid) }
@@ -290,15 +319,27 @@ object AiTranslationManager {
         _failures.tryEmit(AiTranslationFailure(task.gid, message))
     }
 
-    private data class ApiConfig(val apiUrl: String, val apiKey: String, val model: String)
+    /**
+     * 模型列表按「当前选中模型优先、其余备用模型依原顺序」排序，
+     * 供 429/503/超时时的自动轮换使用。
+     */
+    private data class ApiConfig(
+        val apiUrl: String,
+        val apiKey: String,
+        val models: List<String>,
+        val model: String = models.first(),
+    )
 
     private fun resolveConfig(): ApiConfig? {
         val profile = AiProfileStore.activeProfile() ?: return null
         val apiUrl = profile.apiUrl.trim().trimEnd('/')
         val apiKey = profile.apiKey.trim()
-        val model = profile.selectedModel.trim()
-        if (apiUrl.isBlank() || apiKey.isBlank() || model.isBlank()) return null
-        return ApiConfig(apiUrl, apiKey, model)
+        val selected = profile.selectedModel.trim()
+        val models = (listOf(selected) + profile.models.map { it.trim() })
+            .filter { it.isNotBlank() }
+            .distinct()
+        if (apiUrl.isBlank() || apiKey.isBlank() || models.isEmpty()) return null
+        return ApiConfig(apiUrl, apiKey, models)
     }
 
     /**

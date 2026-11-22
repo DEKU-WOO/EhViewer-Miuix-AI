@@ -22,6 +22,15 @@ interface GalleryTranslationDao {
     @Query("SELECT * FROM gallery_translations")
     fun flowAllTranslations(): Flow<List<GalleryTranslationEntity>>
 
+    @Query("SELECT COUNT(*) FROM gallery_translations")
+    fun flowTranslationCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM gallery_translations")
+    suspend fun countTranslations(): Int
+
+    @Query("DELETE FROM gallery_translations")
+    suspend fun clearTranslations()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTranslation(translation: GalleryTranslationEntity)
 

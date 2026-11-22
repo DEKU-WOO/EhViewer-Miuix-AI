@@ -151,6 +151,28 @@ object Settings : DataStorePreferences(null) {
     val aiProfiles = stringPref("ai_profiles", "")
     val aiActiveProfileId = stringPref("ai_active_profile_id", "")
 
+    // Backup & Sync
+    /** 本机唯一标识，用于云端设置快照按设备归档。 */
+    val syncDeviceId = stringPref("sync_device_id", "")
+
+    /** 自建 VPS 轻量同步服务地址与访问密钥。 */
+    val vpsServerUrl = stringPref("vps_server_url", "")
+    val vpsToken = stringPref("vps_token", "")
+
+    /** 历史与阅读进度准实时同步开关。 */
+    val vpsHistorySyncEnabled = boolPref("vps_history_sync_enabled", false)
+
+    /** 上次从云端增量拉取历史的时间戳（epoch millis）。 */
+    var vpsLastSyncAt by longPref("vps_last_history_sync_at", 0)
+
+    // WebDAV 已下载画廊同步
+    val webdavUrl = stringPref("webdav_url", "")
+    val webdavUser = stringPref("webdav_user", "")
+    val webdavPassword = stringPref("webdav_password", "")
+    val webdavDir = stringPref("webdav_remote_dir", "EhViewer")
+    val webdavAutoSync = boolPref("webdav_auto_sync", false)
+    var webdavLastSyncAt by longPref("webdav_last_sync_at", 0)
+
     // Misc
     val languageFilter = intPref("language_filter", -1)
     val downloadSortMode = intPref("download_sort_mode", SortMode.Default.flag)
@@ -248,6 +270,10 @@ object Settings : DataStorePreferences(null) {
                 pref[aiActiveProfileId] = migrated.id
             } else if (pref[aiActiveProfileId].isBlank()) {
                 pref[aiActiveProfileId] = AiProfileStore.decode(pref[aiProfiles]).firstOrNull()?.id.orEmpty()
+            }
+            // 云同步需要稳定的本机标识，首次启动时生成一次并持久化
+            if (pref[syncDeviceId].isBlank()) {
+                pref[syncDeviceId] = UUID.randomUUID().toString()
             }
         }
     }

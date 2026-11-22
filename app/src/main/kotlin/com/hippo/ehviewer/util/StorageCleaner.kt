@@ -3,7 +3,6 @@ package com.hippo.ehviewer.util
 import androidx.room.execSQL
 import androidx.room.useWriterConnection
 import com.ehviewer.core.database.model.DownloadInfo
-import com.ehviewer.core.files.deleteContent
 import com.ehviewer.core.files.exists
 import com.ehviewer.core.util.mapToLongArray
 import com.ehviewer.core.util.withIOContext
@@ -12,6 +11,9 @@ import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.archiveFile
 import com.hippo.ehviewer.download.downloadDir
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import okio.Path
 
 data class CleanResult(
     val deadDownloadsCount: Int,
@@ -19,6 +21,9 @@ data class CleanResult(
 )
 
 object StorageCleaner {
+
+    /** 防止清理过程中重复点击导致并发扫描/删除。 */
+    private val deepCleanMutex = Mutex()
 
     fun isDeadDownload(
         info: DownloadInfo,
@@ -39,19 +44,30 @@ object StorageCleaner {
 
     suspend fun cleanCache() = withIOContext {
         runCatching { EhApplication.thumbCache.clear() }
-        runCatching { AppConfig.tempDir.deleteContent() }
-        runCatching { AppConfig.externalTempDir?.deleteContent() }
-        runCatching { AppConfig.externalTempPersistDir?.deleteContent() }
+        safeDeleteContent(AppConfig.tempDir)
+        AppConfig.externalTempDir?.let(::safeDeleteContent)
+        AppConfig.externalTempPersistDir?.let(::safeDeleteContent)
         runCatching { FileUtils.cleanupDirectory(AppConfig.externalCrashDir) }
         runCatching { FileUtils.cleanupDirectory(AppConfig.externalParseErrorDir) }
     }
 
+    /**
+     * 逐个删除目录内容，单个文件被占用/无权限时只跳过该文件，
+     * 不会中断整个清理流程，也不会把异常抛回界面导致崩溃。
+     */
+    private fun safeDeleteContent(path: Path) {
+        val dir = runCatching { path.toFile() }.getOrNull() ?: return
+        dir.listFiles()?.forEach { child ->
+            runCatching { child.deleteRecursively() }
+        }
+    }
+
     suspend fun cleanDeadDownloads(): Int = withIOContext {
-        val allDownloads = DownloadManager.downloadInfoList.toList()
-        val dead = filterDeadDownloads(allDownloads)
+        val allDownloads = runCatching { DownloadManager.downloadInfoList.toList() }.getOrDefault(emptyList())
+        val dead = runCatching { filterDeadDownloads(allDownloads) }.getOrDefault(emptyList())
         if (dead.isNotEmpty()) {
             val gids = dead.mapToLongArray { it.gid }
-            DownloadManager.deleteRangeDownload(gids)
+            runCatching { DownloadManager.deleteRangeDownload(gids) }
             dead.forEach { info ->
                 runCatching { EhDB.removeDownloadDirname(info.gid) }
             }
@@ -71,10 +87,12 @@ object StorageCleaner {
         r1 && r2
     }
 
-    suspend fun performDeepClean(): CleanResult = withIOContext {
-        cleanCache()
-        val deadCount = cleanDeadDownloads()
-        val vacuumOk = vacuumDatabases()
-        CleanResult(deadDownloadsCount = deadCount, vacuumSuccess = vacuumOk)
+    suspend fun performDeepClean(): CleanResult = deepCleanMutex.withLock {
+        withIOContext {
+            cleanCache()
+            val deadCount = cleanDeadDownloads()
+            val vacuumOk = vacuumDatabases()
+            CleanResult(deadDownloadsCount = deadCount, vacuumSuccess = vacuumOk)
+        }
     }
 }
