@@ -121,8 +121,8 @@ class EhApplication : Application(), SingletonImageLoader.Factory {
         lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_START) {
-                    lifecycleScope.launchIO { VpsHistorySyncManager.refreshFromServer() }
-                    lifecycleScope.launchIO { updateWebDavAutoSync(this@EhApplication) }
+                    lifecycleScope.launch(Dispatchers.IO) { VpsHistorySyncManager.refreshFromServer() }
+                    lifecycleScope.launch(Dispatchers.IO) { updateWebDavAutoSync(this@EhApplication) }
                 }
             },
         )
