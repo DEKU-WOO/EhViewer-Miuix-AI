@@ -53,6 +53,7 @@ import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.sync.VpsHistorySyncManager
+import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.doGalleryInfoAction
@@ -143,6 +144,12 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
             object : NestedScrollConnection {
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
+                    val slop = with(currentDensity) { 8.dp.toPx() }
+                    if (dy >= slop) {
+                        BottomBarScrollState.setHidden(true)
+                    } else if (dy <= -slop / 2) {
+                        BottomBarScrollState.setHidden(false)
+                    }
                     val topPaddingPx = with(currentDensity) { currentPaddingValues.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
                     return Offset.Zero // We never consume it

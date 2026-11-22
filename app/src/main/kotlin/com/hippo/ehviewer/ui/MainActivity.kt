@@ -214,6 +214,23 @@ private val navItems = arrayOf<Triple<Direction, Int, ImageVector>>(
     Triple(SettingsScreenDestination, R.string.settings, MiuixIcons.Settings),
 )
 
+/**
+ * 底部悬浮导航栏与顶部搜索栏共用的滚动联动状态。
+ * 列表页上滑时置为隐藏，下拉回弹时恢复；设置页不会写入该状态，从而保持常驻显示。
+ */
+object BottomBarScrollState {
+    var hidden by mutableStateOf(false)
+        private set
+
+    fun setHidden(value: Boolean) {
+        hidden = value
+    }
+
+    fun reset() {
+        hidden = false
+    }
+}
+
 class MainActivity : AppCompatActivity() {
 
     private var shareUrl: String? = null
@@ -437,6 +454,8 @@ class MainActivity : AppCompatActivity() {
                 if (!sideSheetState.isClosed) {
                     sideSheetState.snapTo(SideSheetValue.Closed)
                 }
+                // 切换页面时先恢复底部导航栏；列表页随后会按滚动方向重新同步。
+                BottomBarScrollState.reset()
             }
             val density = LocalDensity.current
             val adaptiveInfo = currentWindowAdaptiveInfoV2()
@@ -465,10 +484,18 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             val isPrimaryDestination = navItems.any { it.first.route == currentDestination?.route }
-            val primaryIndex = MainNavPolicy.getPrimaryBottomIndex(
-                currentDestination,
-                primaryNavItems.map { it.first },
-            )
+            // 设置主页面及其所有二级子页面固定展示底部导航栏，不参与滚动隐藏
+            val settingsPackage = SettingsScreenDestination.route.substringBeforeLast('.') + "."
+            val inSettingsTree = currentDestination?.route?.startsWith(settingsPackage) == true
+            val showBottomBar = isPrimaryDestination || inSettingsTree
+            val primaryIndex = if (inSettingsTree) {
+                primaryNavItems.indexOfFirst { it.first.route == SettingsScreenDestination.route }.coerceAtLeast(0)
+            } else {
+                MainNavPolicy.getPrimaryBottomIndex(
+                    currentDestination,
+                    primaryNavItems.map { it.first },
+                )
+            }
             var lastNavTime by remember { mutableLongStateOf(0L) }
             fun navigateToTab(direction: Direction) {
                 if (currentDestination?.route == direction.route) {
@@ -500,11 +527,11 @@ class MainActivity : AppCompatActivity() {
             val contentBackdrop = rememberBlurBackdrop()
             val navBarBottomPadding = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
             val mainContentBottomPadding = BottomBarInsetsCalculator.calculateMainContentBottomPadding(
-                isPrimaryDestination = isPrimaryDestination,
+                isPrimaryDestination = showBottomBar,
                 navigationChrome = navigationChrome,
                 navBarBottomPadding = navBarBottomPadding,
             )
-            val bottomBarPadding = if (isPrimaryDestination && !showNavigationRail) 88.dp else 0.dp
+            val bottomBarPadding = if (showBottomBar && !showNavigationRail) 88.dp else 0.dp
             val effectiveFabPadding = snackbarFabPadding.coerceAtLeast(bottomBarPadding)
 
             CompositionLocalProvider(
@@ -560,7 +587,7 @@ class MainActivity : AppCompatActivity() {
 
                             if (!showNavigationRail) {
                                 AnimatedVisibility(
-                                    visible = isPrimaryDestination,
+                                    visible = showBottomBar && (!BottomBarScrollState.hidden || inSettingsTree),
                                     enter = slideInVertically { it } + fadeIn(),
                                     exit = slideOutVertically { it } + fadeOut(),
                                     modifier = Modifier.align(Alignment.BottomCenter),

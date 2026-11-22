@@ -93,7 +93,6 @@ import com.hippo.ehviewer.ui.openBrowser
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitSelectAction
 import com.hippo.ehviewer.ui.tools.awaitSelectTags
-import com.hippo.ehviewer.util.AppHelper
 import com.hippo.ehviewer.util.awaitActivityResult
 import com.hippo.ehviewer.util.bgWork
 import com.hippo.ehviewer.util.displayString
@@ -120,7 +119,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Refresh
-import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 typealias VoteTag = suspend GalleryDetail.(String, Int) -> Unit
@@ -230,15 +228,6 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
                     scrollBehavior = scrollBehavior,
                     color = if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
                     actions = {
-                        IconButton(
-                            onClick = {
-                                AppHelper.share(contextOf<MainActivity>(), galleryDetailUrl)
-                                // In case the link is copied to the clipboard
-                                Settings.clipboardTextHashCode = galleryDetailUrl.hashCode()
-                            },
-                        ) {
-                            Icon(imageVector = MiuixIcons.Share, contentDescription = null)
-                        }
                         if (windowSizeClass.isExpanded) {
                             IconButton(
                                 onClick = {

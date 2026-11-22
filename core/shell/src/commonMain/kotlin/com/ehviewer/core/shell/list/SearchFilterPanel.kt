@@ -1,17 +1,17 @@
 package com.ehviewer.core.shell.list
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
@@ -45,7 +45,7 @@ data class FilterActionSpec(
 )
 
 // 库页筛选面板（移动端 SearchFilter 同构移植，数据面全部宿主注入）：
-// 上半段分类胶囊组 + 下半段横向滚动 chip 行（下拉选择/开关/动作）。
+// 上半段分类胶囊组 + 下半段多行流式自动换行 chip 组（下拉选择/开关/动作）。
 // 承载于搜索展开视图头部与筛选底单两处，内部不可再嵌滚动容器（底单侧自行包 verticalScroll）。
 @Composable
 fun SearchFilterPanel(
@@ -67,12 +67,12 @@ fun SearchFilterPanel(
             allLabel = allCategoriesLabel,
             onCategoryChange = onCategoryChange,
         )
-        Row(
+        FlowRow(
             modifier = Modifier
-                .horizontalScroll(rememberScrollState())
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             dropdowns.forEach { spec ->
                 DropdownFilterChip(
@@ -133,10 +133,12 @@ private fun FilterChipPill(
         elevation = if (selected) 2.dp else 1.dp,
         refractionHeight = 8.dp,
         refractionAmount = 8.dp,
-        modifier = Modifier.clickable(role = role) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            onClick()
-        },
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(role = role) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            },
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),

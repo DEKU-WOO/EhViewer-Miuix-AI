@@ -65,7 +65,6 @@ import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
 import com.ehviewer.core.ui.component.DismissDeleteBackground
-import com.ehviewer.core.ui.component.FAB_ANIMATE_TIME
 import com.ehviewer.core.ui.component.FabLayout
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalGrid
@@ -76,10 +75,8 @@ import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.dismissDeleteAction
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.Download
-import com.ehviewer.core.ui.icons.filled.Shuffle
 import com.ehviewer.core.ui.util.HapticFeedbackType
 import com.ehviewer.core.ui.util.WindowLayout
-import com.ehviewer.core.ui.util.asyncState
 import com.ehviewer.core.ui.util.ifTrueThen
 import com.ehviewer.core.ui.util.rememberHapticFeedback
 import com.ehviewer.core.ui.util.rememberInVM
@@ -88,9 +85,7 @@ import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
 import com.ehviewer.core.util.mapToLongArray
-import com.ehviewer.core.util.onEachLatest
 import com.ehviewer.core.util.withNonCancellableContext
-import com.ehviewer.core.util.withUIContext
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.asMutableState
@@ -100,6 +95,7 @@ import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.DownloadService
 import com.hippo.ehviewer.download.DownloadsFilterMode
 import com.hippo.ehviewer.download.SortMode
+import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.collectConfiguredThumbColumns
@@ -113,8 +109,6 @@ import com.hippo.ehviewer.ui.tools.DialogState
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitInputText
 import com.hippo.ehviewer.ui.tools.awaitSelectAction
-import com.hippo.ehviewer.ui.tools.awaitSelectItemWithCheckBox
-import com.hippo.ehviewer.ui.tools.awaitSingleChoice
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -135,7 +129,6 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.Filter
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.icon.extended.More
@@ -152,7 +145,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = Screen(navigator) {
     var gridView by Settings.gridView.asMutableState()
-    var sortMode by Settings.downloadSortMode.asMutableState()
     val filterMode by Settings.downloadFilterMode.collectAsState { DownloadsFilterMode.from(it) }
     val showProgress by Settings.showReadingProgress.collectAsState()
     var filterState by rememberSerializable { mutableStateOf(DownloadsFilterState(filterMode, Settings.recentDownloadLabel.value)) }
@@ -162,8 +154,6 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     var searchBarOffsetY by remember { mutableIntStateOf(0) }
     val animateItems by Settings.animateItems.collectAsState()
 
-    var fabExpanded by remember { mutableStateOf(false) }
-    var fabHidden by remember { mutableStateOf(false) }
     val checkedInfoMap = remember { mutableStateMapOf<Long, DownloadInfo>() }
     val selectMode by rememberUpdatedState(checkedInfoMap.isNotEmpty())
     DrawerHandle(!selectMode && !searchBarExpanded)
@@ -237,11 +227,19 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     fun switchLabel(label: String?) {
         Settings.recentDownloadLabel.value = label
         filterState = filterState.copy(label = label)
-        fabHidden = false
     }
 
     LaunchedEffect(filterState) {
         searchBarOffsetY = 0
+    }
+
+    // 日常浏览仅保留默认的「添加时间降序」，不再提供排序/筛选面板
+    LaunchedEffect(Unit) {
+        if (DownloadManager.isInitialized && Settings.downloadSortMode.value != SortMode.Default.flag) {
+            Settings.downloadSortMode.value = SortMode.Default.flag
+            DownloadManager.sortDownloads(SortMode.Default)
+            invalidateKey = !invalidateKey
+        }
     }
 
     ProvideSideSheetContent { drawerState ->
@@ -542,7 +540,6 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         expanded = searchBarExpanded,
         onExpandedChange = {
             searchBarExpanded = it
-            fabHidden = it
             if (it) checkedInfoMap.clear()
         },
         title = title,
@@ -635,9 +632,9 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
                     if (dy >= slop) {
-                        fabHidden = true
+                        BottomBarScrollState.setHidden(true)
                     } else if (dy <= -slop / 2) {
-                        fabHidden = false
+                        BottomBarScrollState.setHidden(false)
                     }
                     val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
@@ -782,58 +779,14 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         }
     }
 
-    val hideFab by asyncState(
-        produce = { fabHidden },
-        transform = {
-            onEachLatest { hide ->
-                if (!hide) delay(FAB_ANIMATE_TIME.toLong())
-            }
-        },
-    )
-
-    FabLayout(
-        hidden = hideFab && !selectMode,
-        expanded = fabExpanded || selectMode,
-        onExpandChanged = {
-            fabExpanded = it
-            checkedInfoMap.clear()
-        },
-        autoCancel = !selectMode,
-    ) {
-        if (!selectMode) {
-            onClick(EhIcons.Default.Shuffle) {
-                if (list.isNotEmpty()) {
-                    withUIContext { navToReader(list.random().galleryInfo) }
-                }
-            }
-            onClick(MiuixIcons.Sort) {
-                val oldMode = SortMode.from(sortMode)
-                val sortModes = contextOf<Context>().resources.getStringArray(com.hippo.ehviewer.R.array.download_sort_modes).toList()
-                val (selected, checked) = awaitSelectItemWithCheckBox(
-                    sortModes,
-                    R.string.sort_by,
-                    R.string.group_by_download_label,
-                    SortMode.All.indexOfFirst { it.field == oldMode.field && it.order == oldMode.order },
-                    oldMode.groupByDownloadLabel,
-                )
-                val mode = SortMode.All[selected].copy(groupByDownloadLabel = checked)
-                if (mode != oldMode) {
-                    sortMode = mode.flag
-                    isLoading = true
-                    DownloadManager.sortDownloads(mode)
-                    invalidateKey = !invalidateKey
-                }
-            }
-            onClick(MiuixIcons.Filter) {
-                val downloadStates = contextOf<Context>().resources.getStringArray(com.hippo.ehviewer.R.array.download_state).toList()
-                val state = awaitSingleChoice(
-                    downloadStates,
-                    filterState.state + 1,
-                    R.string.download_filter,
-                ) - 1
-                filterState = filterState.copy(state = state)
-            }
-        } else {
+    // 日常浏览不再显示右下角悬浮按钮，仅长按卡片进入多选后显示批量操作栏
+    if (selectMode) {
+        FabLayout(
+            hidden = false,
+            expanded = true,
+            onExpandChanged = { if (!it) checkedInfoMap.clear() },
+            autoCancel = false,
+        ) {
             onClick(MiuixIcons.SelectAll, autoClose = false) {
                 val info = list.associateBy { it.gid }
                 checkedInfoMap.putAll(info)

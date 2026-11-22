@@ -4,11 +4,9 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,7 +24,6 @@ import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Compass
 import com.ehviewer.core.ui.icons.filled.SadPanda
-import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.readableWidth
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.destinations.AboutScreenDestination
@@ -142,7 +139,6 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                         navigator = navigator,
                     )
                 }
-                Spacer(modifier = Modifier.height(LocalBottomBarContentPadding.current))
             }
         }
     }

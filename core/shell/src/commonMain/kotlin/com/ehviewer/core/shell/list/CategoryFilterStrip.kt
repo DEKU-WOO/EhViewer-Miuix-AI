@@ -1,17 +1,12 @@
 package com.ehviewer.core.shell.list
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -173,19 +168,10 @@ private fun CategoryPill(
                 }
             },
     ) {
-        Row(
+        Box(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            contentAlignment = Alignment.Center,
         ) {
-            if (!selected) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(spec.color),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
             CategoryPillText(text = spec.label, selected = selected, color = pillText)
         }
     }

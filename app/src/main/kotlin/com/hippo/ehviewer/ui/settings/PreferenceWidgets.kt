@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +41,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.readableWidth
 import com.hippo.ehviewer.ui.openBrowser
@@ -255,6 +258,8 @@ internal fun SettingsScrollColumn(
                 .fillMaxWidth(),
             content = content,
         )
+        // 设置页及其二级子页始终展示底部悬浮导航栏，预留内容避让高度
+        Spacer(modifier = Modifier.height(LocalBottomBarContentPadding.current))
     }
 }
 
@@ -279,6 +284,7 @@ internal fun SettingsLazyColumn(
             0.dp
         }
         val layoutDirection = LocalLayoutDirection.current
+        val bottomBarPadding = LocalBottomBarContentPadding.current
         LazyColumn(
             modifier = modifier
                 .fillMaxSize()
@@ -287,7 +293,7 @@ internal fun SettingsLazyColumn(
                 start = contentPadding.calculateStartPadding(layoutDirection) + sidePadding,
                 top = contentPadding.calculateTopPadding(),
                 end = contentPadding.calculateEndPadding(layoutDirection) + sidePadding,
-                bottom = contentPadding.calculateBottomPadding(),
+                bottom = contentPadding.calculateBottomPadding() + bottomBarPadding,
             ),
             content = content,
         )

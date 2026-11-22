@@ -62,11 +62,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import arrow.core.raise.ensure
-import arrow.core.raise.ensureNotNull
 import com.ehviewer.core.database.model.QuickSearch
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.shell.list.CategoryFilterStrip
-import com.ehviewer.core.shell.list.HomeFloatingActionCapsule
 import com.ehviewer.core.ui.component.DismissDeleteBackground
 import com.ehviewer.core.ui.component.FAB_ANIMATE_TIME
 import com.ehviewer.core.ui.component.FabLayout
@@ -85,7 +82,6 @@ import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.HapticFeedbackType
 import com.ehviewer.core.ui.util.asyncState
 import com.ehviewer.core.ui.util.rememberHapticFeedback
-import com.ehviewer.core.ui.util.snackBarPadding
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
@@ -107,9 +103,9 @@ import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_WHATS_HOT
 import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser
 import com.hippo.ehviewer.client.parser.GalleryPageUrlParser
 import com.hippo.ehviewer.collectAsState
+import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
-import com.hippo.ehviewer.ui.awaitSelectDate
 import com.hippo.ehviewer.ui.destinations.ProgressScreenDestination
 import com.hippo.ehviewer.ui.destinations.ToplistScreenDestination
 import com.hippo.ehviewer.ui.doGalleryInfoAction
@@ -119,10 +115,8 @@ import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
 import com.hippo.ehviewer.ui.main.GalleryList
 import com.hippo.ehviewer.ui.main.SearchFilter
-import com.hippo.ehviewer.ui.main.galleryCategoryChips
 import com.hippo.ehviewer.ui.tools.DialogState
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
-import com.hippo.ehviewer.ui.tools.awaitInputText
 import com.hippo.ehviewer.ui.tools.awaitInputTextWithCheckBox
 import com.hippo.ehviewer.ui.tools.rememberMutableStateInDataStore
 import com.hippo.ehviewer.util.FavouriteStatusRouter
@@ -131,7 +125,6 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.spec.Direction
 import kotlin.math.roundToInt
-import kotlin.random.Random
 import kotlinx.coroutines.delay
 import moe.tarsin.navigate
 import moe.tarsin.snackbar
@@ -179,7 +172,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     var urlBuilder by viewModel.urlBuilder
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
     var searchBarOffsetY by remember { mutableIntStateOf(0) }
-    var fabHidden by remember { mutableStateOf(false) }
 
     val animateItems by Settings.animateItems.collectAsState()
 
@@ -254,7 +246,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                                 Settings.recentToplist = keyword
                                 urlBuilder = ListUrlBuilder(MODE_TOPLIST, keyword = keyword)
                                 data.refresh()
-                                fabHidden = false
                                 launch { sheetState.close() }
                             },
                         )
@@ -320,7 +311,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         expanded = searchBarExpanded,
         onExpandedChange = {
             searchBarExpanded = it
-            fabHidden = it
         },
         title = suitableTitle,
         searchFieldHint = searchBarHint,
@@ -408,7 +398,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                                                 language = languageFilter
                                             }
                                             data.refresh()
-                                            fabHidden = false
                                         }
                                     },
                                 ),
@@ -437,24 +426,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             }
             AvatarIcon()
         },
-        subHeader = if (urlBuilder.mode == MODE_NORMAL) {
-            {
-                CategoryFilterStrip(
-                    categories = galleryCategoryChips(),
-                    selectedCategory = category,
-                    allLabel = stringResource(R.string.category_all),
-                    onSelectCategory = { newCat ->
-                        category = newCat
-                        // Category changes start a new query; discard the previous paging cursor.
-                        urlBuilder.setRange(0)
-                        urlBuilder.category = newCat
-                        data.refresh()
-                    },
-                )
-            }
-        } else {
-            null
-        },
         filter = {
             SearchFilter(
                 category = category,
@@ -463,61 +434,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 onLanguageChange = { languageFilter = it },
                 advancedOption = advancedSearchOption,
                 onAdvancedOptionChange = { advancedSearchOption = it },
-            )
-        },
-        floatingActionButton = {
-            val gotoTitle = stringResource(R.string.go_to)
-            val invalidNum = stringResource(R.string.error_invalid_number)
-            val outOfRange = stringResource(R.string.error_out_of_range)
-
-            HomeFloatingActionCapsule(
-                visible = !fabHidden,
-                // 避让 snackbar 由宿主注入（共享组件不感知宿主布局）
-                modifier = Modifier.snackBarPadding(),
-                onRefresh = {
-                    urlBuilder.setRange(0)
-                    data.refresh()
-                },
-                onShuffle = if (urlBuilder.mode in arrayOf(MODE_NORMAL, MODE_UPLOADER, MODE_TAG)) {
-                    {
-                        urlBuilder.setRange(Random.nextInt(100))
-                        data.refresh()
-                    }
-                } else {
-                    null
-                },
-                onGoTo = if (urlBuilder.mode != MODE_WHATS_HOT) {
-                    {
-                        launch {
-                            if (isTopList) {
-                                val hint = string(R.string.go_to_hint, urlBuilder.page, TOPLIST_PAGES)
-                                val text = awaitInputText(title = gotoTitle, hint = hint, isNumber = true) { oriText ->
-                                    val goto = ensureNotNull(oriText.trim().toIntOrNull()) { invalidNum }
-                                    ensure(goto in 1..TOPLIST_PAGES) { outOfRange }
-                                }
-                                urlBuilder.page = text.trim().toInt()
-                            } else {
-                                val date = awaitSelectDate()
-                                urlBuilder.setSeek(date)
-                            }
-                            data.refresh()
-                        }
-                    }
-                } else {
-                    null
-                },
-                onLastPage = if (urlBuilder.mode != MODE_WHATS_HOT) {
-                    {
-                        if (isTopList) {
-                            urlBuilder.page = TOPLIST_PAGES
-                        } else {
-                            urlBuilder.setIndex("1", false)
-                        }
-                        data.refresh()
-                    }
-                } else {
-                    null
-                },
             )
         },
     ) { contentPadding ->
@@ -533,9 +449,9 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
                     if (dy >= slop) {
-                        fabHidden = true
+                        BottomBarScrollState.setHidden(true)
                     } else if (dy <= -slop / 2) {
-                        fabHidden = false
+                        BottomBarScrollState.setHidden(false)
                     }
                     val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
@@ -574,7 +490,10 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 urlBuilder.setRange(0)
                 data.refresh()
             },
-            onLoading = { searchBarOffsetY = 0 },
+            onLoading = {
+                searchBarOffsetY = 0
+                BottomBarScrollState.setHidden(false)
+            },
         )
     }
 }

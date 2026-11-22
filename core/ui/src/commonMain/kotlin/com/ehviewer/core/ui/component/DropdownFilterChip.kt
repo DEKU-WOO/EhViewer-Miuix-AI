@@ -75,7 +75,9 @@ fun DropdownFilterChip(
             elevation = if (isSelected) 2.dp else 1.dp,
             refractionHeight = 8.dp,
             refractionAmount = 8.dp,
-            modifier = Modifier.clickable(role = Role.Button) { expanded = true },
+            modifier = Modifier
+                .clip(CircleShape)
+                .clickable(role = Role.Button) { expanded = true },
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),

@@ -43,30 +43,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
-import com.ehviewer.core.ui.component.FAB_ANIMATE_TIME
 import com.ehviewer.core.ui.component.FabLayout
 import com.ehviewer.core.ui.component.LocalSideSheetState
 import com.ehviewer.core.ui.component.ProvideSideSheetContent
 import com.ehviewer.core.ui.component.SquircleShape
-import com.ehviewer.core.ui.icons.EhIcons
-import com.ehviewer.core.ui.icons.filled.GoTo
-import com.ehviewer.core.ui.icons.filled.LastPage
-import com.ehviewer.core.ui.icons.filled.Shuffle
-import com.ehviewer.core.ui.util.asyncState
 import com.ehviewer.core.ui.util.takeAndClear
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.mapToLongArray
-import com.ehviewer.core.util.onEachLatest
-import com.ehviewer.core.util.withUIContext
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.client.data.FavListUrlBuilder
 import com.hippo.ehviewer.collectAsState
+import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
-import com.hippo.ehviewer.ui.awaitSelectDate
 import com.hippo.ehviewer.ui.main.AvatarIcon
 import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
@@ -78,7 +70,6 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
 import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.DropdownEntry
@@ -92,7 +83,6 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
-import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -110,8 +100,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
     var urlBuilder by viewModel.urlBuilder
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
     var searchBarOffsetY by remember { mutableIntStateOf(0) }
-    var fabExpanded by remember { mutableStateOf(false) }
-    var fabHidden by remember { mutableStateOf(false) }
 
     // Derived State
     val keyword = urlBuilder.keyword
@@ -146,7 +134,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         expanded = searchBarExpanded,
         onExpandedChange = {
             searchBarExpanded = it
-            fabHidden = it
             if (it) checkedInfoMap.clear()
         },
         title = title,
@@ -170,7 +157,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                         onClick = {
                             refresh(FavListUrlBuilder(-2))
                             Settings.recentFavCat = -2
-                            fabHidden = false
                         },
                     ),
                 )
@@ -183,7 +169,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                             onClick = {
                                 refresh(FavListUrlBuilder(-1))
                                 Settings.recentFavCat = -1
-                                fabHidden = false
                             },
                         ),
                     )
@@ -196,7 +181,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                                 onClick = {
                                     refresh(FavListUrlBuilder(index))
                                     Settings.recentFavCat = index
-                                    fabHidden = false
                                 },
                             ),
                         )
@@ -225,9 +209,9 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
                     if (dy >= slop) {
-                        fabHidden = true
+                        BottomBarScrollState.setHidden(true)
                     } else if (dy <= -slop / 2) {
-                        fabHidden = false
+                        BottomBarScrollState.setHidden(false)
                     }
                     val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
@@ -302,47 +286,21 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             searchBarOffsetY = { searchBarOffsetY },
             scrollToTopOnRefresh = urlBuilder.favCat != FavListUrlBuilder.FAV_CAT_LOCAL,
             onRefresh = { refresh() },
-            onLoading = { searchBarOffsetY = 0 },
+            onLoading = {
+                searchBarOffsetY = 0
+                BottomBarScrollState.setHidden(false)
+            },
         )
     }
 
-    val hideFab by asyncState(
-        produce = { fabHidden },
-        transform = {
-            onEachLatest { hide ->
-                if (!hide) delay(FAB_ANIMATE_TIME.toLong())
-            }
-        },
-    )
-
-    FabLayout(
-        hidden = hideFab && !selectMode,
-        expanded = fabExpanded || selectMode,
-        onExpandChanged = {
-            fabExpanded = it
-            checkedInfoMap.clear()
-        },
-        autoCancel = !selectMode,
-    ) {
-        if (!selectMode) {
-            if (urlBuilder.isLocal) {
-                onClick(EhIcons.Default.Shuffle) {
-                    EhDB.randomLocalFav()?.let { info ->
-                        withUIContext { navigate(info.asDst()) }
-                    }
-                }
-            }
-            onClick(EhIcons.Default.GoTo) {
-                val date = awaitSelectDate()
-                refresh(urlBuilder.copy(jumpTo = date, prev = null, next = "2"))
-            }
-            onClick(MiuixIcons.Refresh) {
-                refresh()
-            }
-            onClick(EhIcons.Default.LastPage) {
-                refresh(urlBuilder.copy(jumpTo = null, prev = "1-0", next = null))
-            }
-        } else {
+    // 日常浏览不再显示右下角悬浮按钮，仅长按卡片进入多选后显示批量操作栏
+    if (selectMode) {
+        FabLayout(
+            hidden = false,
+            expanded = true,
+            onExpandChanged = { if (!it) checkedInfoMap.clear() },
+            autoCancel = false,
+        ) {
             onClick(MiuixIcons.SelectAll, autoClose = false) {
                 val info = data.itemSnapshotList.items.associateBy { it.gid }
                 checkedInfoMap.putAll(info)
