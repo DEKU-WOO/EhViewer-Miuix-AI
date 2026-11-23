@@ -122,112 +122,28 @@ private const val VPS_PROXY_DOMAIN_RULE = "domain:ehviewer.52613484.xyz"
 
 /** VPS 服务端一键部署脚本（Ubuntu / Debian，root 执行）。 */
 private val VPS_DEPLOY_SCRIPT = """
-#!/usr/bin/env bash
-# EhViewer 同步服务一键部署（Ubuntu / Debian，需 root 执行）
-set -euo pipefail
-
-# 1) 本地回环映射：App 通过代理隧道访问该域名
-grep -q 'ehviewer.52613484.xyz' /etc/hosts || \
-  echo '127.0.0.1 ehviewer.52613484.xyz' >> /etc/hosts
-
-# 2) 单文件同步服务（Python3 + SQLite，兼容 chunked 传输与多字段 JSON）
+grep -q "ehviewer.52613484.xyz" /etc/hosts || echo "127.0.0.1 ehviewer.52613484.xyz" >> /etc/hosts
 mkdir -p /opt/ehviewer-sync
-cat > /opt/ehviewer-sync/server.py <<'PY'
-import json, os, sqlite3
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
-
-DB = "/opt/ehviewer-sync/sync.db"
-TOKEN = os.environ.get("EHVIEWER_TOKEN", "")
-
-def db():
-    conn = sqlite3.connect(DB)
-    conn.execute("CREATE TABLE IF NOT EXISTS history(gid INTEGER PRIMARY KEY, token TEXT, pages INTEGER, last_page INTEGER, updated_at INTEGER)")
-    conn.execute("CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1), data TEXT)")
-    return conn
-
-class Handler(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
-    def log_message(self, *args):
-        pass
-    def send_json(self, code, obj=None):
-        body = json.dumps(obj if obj is not None else {}).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-    def auth(self):
-        return self.headers.get("Authorization", "") == "Bearer " + TOKEN
-    def read_json(self):
-        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
-            data = b""
-            while True:
-                size = int(self.rfile.readline().strip().split(b";")[0], 16)
-                if size == 0:
-                    self.rfile.readline()
-                    break
-                data += self.rfile.read(size)
-                self.rfile.readline()
-        else:
-            data = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
-        return json.loads(data or b"{}")
-    def do_GET(self):
-        if self.path == "/ping":
-            return self.send_json(200, {"ok": True})
-        if not self.auth():
-            return self.send_json(401, {"error": "unauthorized"})
-        conn = db()
-        u = urlparse(self.path)
-        if u.path == "/sync/history":
-            since = int(parse_qs(u.query).get("since", ["0"])[0])
-            rows = conn.execute("SELECT gid,token,pages,last_page,updated_at FROM history WHERE updated_at > ? ORDER BY updated_at", (since,)).fetchall()
-            conn.close()
-            return self.send_json(200, [{"gid": r[0], "token": r[1], "pages": r[2], "last_page": r[3], "updated_at": r[4]} for r in rows])
-        if u.path == "/sync/settings":
-            row = conn.execute("SELECT data FROM settings WHERE id=1").fetchone()
-            conn.close()
-            return self.send_json(200, [json.loads(row[0])] if row else [])
-        conn.close()
-        self.send_json(404)
-    def do_POST(self):
-        if not self.auth():
-            return self.send_json(401, {"error": "unauthorized"})
-        u = urlparse(self.path)
-        data = self.read_json()
-        conn = db()
-        if u.path == "/sync/history":
-            conn.execute("INSERT INTO history(gid,token,pages,last_page,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(gid) DO UPDATE SET token=excluded.token,pages=excluded.pages,last_page=excluded.last_page,updated_at=excluded.updated_at", (data.get("gid"), data.get("token", ""), data.get("pages", 0), data.get("last_page", 0), data.get("updated_at", 0)))
-        elif u.path == "/sync/settings":
-            conn.execute("INSERT INTO settings(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data", (json.dumps(data),))
-        else:
-            conn.close()
-            return self.send_json(404)
-        conn.commit()
-        conn.close()
-        self.send_json(200, {"ok": True})
-
-ThreadingHTTPServer(("0.0.0.0", 8765), Handler).serve_forever()
-PY
-
-# 3) systemd 开机自启，并生成 32 位访问密钥
-TOKEN=${'$'}(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
-cat > /etc/systemd/system/ehviewer-sync.service <<UNIT
+[ -f /opt/ehviewer-sync/token.txt ] || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 > /opt/ehviewer-sync/token.txt
+echo "aW1wb3J0IGpzb24KaW1wb3J0IHNxbGl0ZTMKaW1wb3J0IHRpbWUKZnJvbSBodHRwLnNlcnZlciBpbXBvcnQgQmFzZUhUVFBSZXF1ZXN0SGFuZGxlciwgVGhyZWFkaW5nSFRUUFNlcnZlcgpmcm9tIHVybGxpYi5wYXJzZSBpbXBvcnQgdXJscGFyc2UsIHBhcnNlX3FzCgpEQl9QQVRIID0gIi9vcHQvZWh2aWV3ZXItc3luYy9zeW5jX2RhdGEuZGIiClRPS0VOX1BBVEggPSAiL29wdC9laHZpZXdlci1zeW5jL3Rva2VuLnR4dCIKTUFYX0JPRFlfU0laRSA9IDIgKiAxMDI0ICogMTAyNAoKd2l0aCBvcGVuKFRPS0VOX1BBVEgsICJyIiwgZW5jb2Rpbmc9InV0Zi04IikgYXMgZjoKICAgIEFVVEhfVE9LRU4gPSBmLnJlYWQoKS5zdHJpcCgpCgpkZWYgZ2V0X2RiKCk6CiAgICBjb25uID0gc3FsaXRlMy5jb25uZWN0KERCX1BBVEgsIHRpbWVvdXQ9MTAuMCkKICAgIGNvbm4ucm93X2ZhY3RvcnkgPSBzcWxpdGUzLlJvdwogICAgY29ubi5leGVjdXRlKCJQUkFHTUEgam91cm5hbF9tb2RlPVdBTDsiKQogICAgY29ubi5leGVjdXRlKCJQUkFHTUEgc3luY2hyb25vdXM9Tk9STUFMOyIpCiAgICByZXR1cm4gY29ubgoKZGVmIGluaXRfZGIoKToKICAgIHdpdGggZ2V0X2RiKCkgYXMgY29ubjoKICAgICAgICBjb25uLmV4ZWN1dGUoIiIiQ1JFQVRFIFRBQkxFIElGIE5PVCBFWElTVFMgaGlzdG9yeSAoZ2lkIElOVEVHRVIgUFJJTUFSWSBLRVksIHRva2VuIFRFWFQgTk9UIE5VTEwsIHBhZ2VzIElOVEVHRVIgREVGQVVMVCAwLCBsYXN0X3BhZ2UgSU5URUdFUiBERUZBVUxUIDAsIHVwZGF0ZWRfYXQgSU5URUdFUiBOT1QgTlVMTCkiIiIpCiAgICAgICAgY29ubi5leGVjdXRlKCJDUkVBVEUgSU5ERVggSUYgTk9UIEVYSVNUUyBpZHhfaGlzdG9yeV91cGRhdGVkIE9OIGhpc3RvcnkodXBkYXRlZF9hdCk7IikKICAgICAgICBjb25uLmV4ZWN1dGUoIiIiQ1JFQVRFIFRBQkxFIElGIE5PVCBFWElTVFMgc2V0dGluZ3NfYmFja3VwIChkZXZpY2VfaWQgVEVYVCBOT1QgTlVMTCwgZGV2aWNlX25hbWUgVEVYVCBOT1QgTlVMTCwgYmFja3VwX2RhdGUgVEVYVCBOT1QgTlVMTCwgcHJvZmlsZV9jb3VudCBJTlRFR0VSIERFRkFVTFQgMCwgY29uZmlnX2pzb24gVEVYVCBOT1QgTlVMTCwgdXBkYXRlZF9hdCBJTlRFR0VSIE5PVCBOVUxMLCBQUklNQVJZIEtFWSAoZGV2aWNlX2lkLCBiYWNrdXBfZGF0ZSkpIiIiKQoKY2xhc3MgU3luY0hhbmRsZXIoQmFzZUhUVFBSZXF1ZXN0SGFuZGxlcik6CiAgICBkZWYgX2NoZWNrX2F1dGgoc2VsZik6CiAgICAgICAgYXV0aCA9IHNlbGYuaGVhZGVycy5nZXQoIkF1dGhvcml6YXRpb24iLCAiIikKICAgICAgICBpZiBhdXRoICE9IGYiQmVhcmVyIHtBVVRIX1RPS0VOfSI6CiAgICAgICAgICAgIHNlbGYuc2VuZF9yZXNwb25zZSg0MDEpCiAgICAgICAgICAgIHNlbGYuZW5kX2hlYWRlcnMoKQogICAgICAgICAgICByZXR1cm4gRmFsc2UKICAgICAgICByZXR1cm4gVHJ1ZQoKICAgIGRlZiBfcmVhZF9yYXcoc2VsZik6CiAgICAgICAgaWYgc2VsZi5oZWFkZXJzLmdldCgiVHJhbnNmZXItRW5jb2RpbmciLCAiIikubG93ZXIoKSA9PSAiY2h1bmtlZCI6CiAgICAgICAgICAgIGNodW5rcyA9IFtdCiAgICAgICAgICAgIHdoaWxlIFRydWU6CiAgICAgICAgICAgICAgICBsaW5lID0gc2VsZi5yZmlsZS5yZWFkbGluZSgpLnN0cmlwKCkKICAgICAgICAgICAgICAgIGlmIG5vdCBsaW5lOiBicmVhawogICAgICAgICAgICAgICAgc2l6ZSA9IGludChsaW5lLnNwbGl0KGIiOyIpWzBdLCAxNikKICAgICAgICAgICAgICAgIGlmIHNpemUgPT0gMDoKICAgICAgICAgICAgICAgICAgICBzZWxmLnJmaWxlLnJlYWRsaW5lKCkKICAgICAgICAgICAgICAgICAgICBicmVhawogICAgICAgICAgICAgICAgY2h1bmtzLmFwcGVuZChzZWxmLnJmaWxlLnJlYWQoc2l6ZSkpCiAgICAgICAgICAgICAgICBzZWxmLnJmaWxlLnJlYWRsaW5lKCkKICAgICAgICAgICAgcmV0dXJuIGIiIi5qb2luKGNodW5rcykKICAgICAgICBsZW5ndGggPSBpbnQoc2VsZi5oZWFkZXJzLmdldCgiQ29udGVudC1MZW5ndGgiLCAwKSkKICAgICAgICBpZiBsZW5ndGggPD0gMCBvciBsZW5ndGggPiBNQVhfQk9EWV9TSVpFOgogICAgICAgICAgICByZXR1cm4gYiIiCiAgICAgICAgcmV0dXJuIHNlbGYucmZpbGUucmVhZChsZW5ndGgpCgogICAgZGVmIF9zZW5kX2pzb24oc2VsZiwgY29kZSwgb2JqKToKICAgICAgICBib2R5ID0ganNvbi5kdW1wcyhvYmosIGVuc3VyZV9hc2NpaT1GYWxzZSkuZW5jb2RlKCJ1dGYtOCIpCiAgICAgICAgc2VsZi5zZW5kX3Jlc3BvbnNlKGNvZGUpCiAgICAgICAgc2VsZi5zZW5kX2hlYWRlcigiQ29udGVudC1UeXBlIiwgImFwcGxpY2F0aW9uL2pzb247IGNoYXJzZXQ9dXRmLTgiKQogICAgICAgIHNlbGYuc2VuZF9oZWFkZXIoIkNvbnRlbnQtTGVuZ3RoIiwgc3RyKGxlbihib2R5KSkpCiAgICAgICAgc2VsZi5lbmRfaGVhZGVycygpCiAgICAgICAgc2VsZi53ZmlsZS53cml0ZShib2R5KQoKICAgIGRlZiBkb19HRVQoc2VsZik6CiAgICAgICAgcGFyc2VkID0gdXJscGFyc2Uoc2VsZi5wYXRoKQogICAgICAgIGlmIHBhcnNlZC5wYXRoID09ICIvcGluZyI6CiAgICAgICAgICAgIHNlbGYuX3NlbmRfanNvbigyMDAsIHsic3RhdHVzIjogIm9rIn0pCiAgICAgICAgICAgIHJldHVybgoKICAgICAgICBpZiBub3Qgc2VsZi5fY2hlY2tfYXV0aCgpOgogICAgICAgICAgICByZXR1cm4KICAgICAgICBxcyA9IHBhcnNlX3FzKHBhcnNlZC5xdWVyeSkKICAgICAgICBpZiBwYXJzZWQucGF0aCA9PSAiL3N5bmMvaGlzdG9yeSI6CiAgICAgICAgICAgIHNpbmNlID0gaW50KHFzLmdldCgic2luY2UiLCBbIjAiXSlbMF0pCiAgICAgICAgICAgIHdpdGggZ2V0X2RiKCkgYXMgY29ubjoKICAgICAgICAgICAgICAgIHJvd3MgPSBjb25uLmV4ZWN1dGUoIlNFTEVDVCBnaWQsIHRva2VuLCBwYWdlcywgbGFzdF9wYWdlLCB1cGRhdGVkX2F0IEZST00gaGlzdG9yeSBXSEVSRSB1cGRhdGVkX2F0ID4gPyBPUkRFUiBCWSB1cGRhdGVkX2F0IEFTQyBMSU1JVCAyMDAwIiwgKHNpbmNlLCkpLmZldGNoYWxsKCkKICAgICAgICAgICAgICAgIGl0ZW1zID0gW2RpY3QocikgZm9yIHIgaW4gcm93c10KICAgICAgICAgICAgc2VsZi5fc2VuZF9qc29uKDIwMCwgeyJpdGVtcyI6IGl0ZW1zfSkKICAgICAgICBlbGlmIHBhcnNlZC5wYXRoID09ICIvc3luYy9zZXR0aW5ncyI6CiAgICAgICAgICAgIHdpdGggZ2V0X2RiKCkgYXMgY29ubjoKICAgICAgICAgICAgICAgIHJvd3MgPSBjb25uLmV4ZWN1dGUoIlNFTEVDVCBkZXZpY2VfaWQsIGRldmljZV9uYW1lLCBiYWNrdXBfZGF0ZSwgcHJvZmlsZV9jb3VudCwgY29uZmlnX2pzb24sIHVwZGF0ZWRfYXQgRlJPTSBzZXR0aW5nc19iYWNrdXAgT1JERVIgQlkgYmFja3VwX2RhdGUgREVTQywgdXBkYXRlZF9hdCBERVNDIFdJVEhPVVQgUk9XSUQiLnJlcGxhY2UoIldJVEhPVVQgUk9XSUQiLCJMSU1JVCAyMCIpKS5mZXRjaGFsbCgpCiAgICAgICAgICAgICAgICBpdGVtcyA9IFtdCiAgICAgICAgICAgICAgICBmb3IgciBpbiByb3dzOgogICAgICAgICAgICAgICAgICAgIGQgPSBkaWN0KHIpCiAgICAgICAgICAgICAgICAgICAgZFsiY29uZmlnSnNvbiJdID0gZFsiY29uZmlnX2pzb24iXQogICAgICAgICAgICAgICAgICAgIGRbInNldHRpbmdzX2pzb24iXSA9IGRbImNvbmZpZ19qc29uIl0KICAgICAgICAgICAgICAgICAgICBkWyJzZXR0aW5nc0pzb24iXSA9IGRbImNvbmZpZ19qc29uIl0KICAgICAgICAgICAgICAgICAgICBkWyJkYXRhIl0gPSBkWyJjb25maWdfanNvbiJdCiAgICAgICAgICAgICAgICAgICAgaXRlbXMuYXBwZW5kKGQpCiAgICAgICAgICAgIHNlbGYuX3NlbmRfanNvbigyMDAsIHsiaXRlbXMiOiBpdGVtc30pCiAgICAgICAgZWxzZToKICAgICAgICAgICAgc2VsZi5zZW5kX3Jlc3BvbnNlKDQwNCkKICAgICAgICAgICAgc2VsZi5lbmRfaGVhZGVycygpCgogICAgZGVmIGRvX1BPU1Qoc2VsZik6CiAgICAgICAgaWYgbm90IHNlbGYuX2NoZWNrX2F1dGgoKToKICAgICAgICAgICAgcmV0dXJuCiAgICAgICAgcGFyc2VkID0gdXJscGFyc2Uoc2VsZi5wYXRoKQogICAgICAgIHRyeToKICAgICAgICAgICAgcmF3ID0gc2VsZi5fcmVhZF9yYXcoKQogICAgICAgICAgICBkYXRhID0ganNvbi5sb2FkcyhyYXcuZGVjb2RlKCJ1dGYtOCIpKQogICAgICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgICAgICAgICAgc2VsZi5fc2VuZF9qc29uKDQwMCwgeyJlcnJvciI6IGYiaW52YWxpZCBqc29uOiB7ZX0ifSkKICAgICAgICAgICAgcmV0dXJuCgogICAgICAgIG5vd19tcyA9IGludCh0aW1lLnRpbWUoKSAqIDEwMDApCiAgICAgICAgdHJ5OgogICAgICAgICAgICBpZiBwYXJzZWQucGF0aCA9PSAiL3N5bmMvaGlzdG9yeSI6CiAgICAgICAgICAgICAgICBpdGVtcyA9IGRhdGEgaWYgaXNpbnN0YW5jZShkYXRhLCBsaXN0KSBlbHNlIChkYXRhLmdldCgiaXRlbXMiKSBpZiAiaXRlbXMiIGluIGRhdGEgZWxzZSBbZGF0YV0pCiAgICAgICAgICAgICAgICB3aXRoIGdldF9kYigpIGFzIGNvbm46CiAgICAgICAgICAgICAgICAgICAgZm9yIGl0IGluIGl0ZW1zOgogICAgICAgICAgICAgICAgICAgICAgICBnaWQgPSBpbnQoaXRbImdpZCJdKQogICAgICAgICAgICAgICAgICAgICAgICB0b2tlbiA9IHN0cihpdC5nZXQoInRva2VuIiwgIiIpKQogICAgICAgICAgICAgICAgICAgICAgICBwYWdlcyA9IGludChpdC5nZXQoInBhZ2VzIiwgMCkpCiAgICAgICAgICAgICAgICAgICAgICAgIGxhc3RfcGFnZSA9IGludChpdC5nZXQoImxhc3RfcGFnZSIsIGl0LmdldCgibGFzdFBhZ2UiLCAwKSkpCiAgICAgICAgICAgICAgICAgICAgICAgIHVwZGF0ZWRfYXQgPSBpbnQoaXQuZ2V0KCJ1cGRhdGVkX2F0IiwgaXQuZ2V0KCJ1cGRhdGVkQXQiLCBub3dfbXMpKSkKICAgICAgICAgICAgICAgICAgICAgICAgY29ubi5leGVjdXRlKCIiIklOU0VSVCBJTlRPIGhpc3RvcnkgKGdpZCwgdG9rZW4sIHBhZ2VzLCBsYXN0X3BhZ2UsIHVwZGF0ZWRfYXQpIFZBTFVFUyAoPywgPywgPywgPywgPykgT04gQ09ORkxJQ1QoZ2lkKSBETyBVUERBVEUgU0VUIHRva2VuPUNBU0UgV0hFTiBleGNsdWRlZC50b2tlbiAhPSAnJyBUSEVOIGV4Y2x1ZGVkLnRva2VuIEVMU0UgaGlzdG9yeS50b2tlbiBFTkQsIHBhZ2VzPU1BWChoaXN0b3J5LnBhZ2VzLCBleGNsdWRlZC5wYWdlcyksIGxhc3RfcGFnZT1leGNsdWRlZC5sYXN0X3BhZ2UsIHVwZGF0ZWRfYXQ9ZXhjbHVkZWQudXBkYXRlZF9hdCBXSEVSRSBleGNsdWRlZC51cGRhdGVkX2F0ID49IGhpc3RvcnkudXBkYXRlZF9hdCIiIiwgKGdpZCwgdG9rZW4sIHBhZ2VzLCBsYXN0X3BhZ2UsIHVwZGF0ZWRfYXQpKQogICAgICAgICAgICAgICAgICAgIGNvbm4uZXhlY3V0ZSgiREVMRVRFIElOVE8gaGlzdG9yeSBXSEVSRSBnaWQgTk9UIElOIChTRUxFQ1QgZ2lkIEZST00gaGlzdG9yeSBPUkRFUiBCWSB1cGRhdGVkX2F0IERFU0MgTElNSVQgNTAwMDApIi5yZXBsYWNlKCJJTlRPIiwiRlJPTSIpKQogICAgICAgICAgICAgICAgc2VsZi5fc2VuZF9qc29uKDIwMCwgeyJzdGF0dXMiOiAib2sifSkKICAgICAgICAgICAgZWxpZiBwYXJzZWQucGF0aCA9PSAiL3N5bmMvc2V0dGluZ3MiOgogICAgICAgICAgICAgICAgZGV2aWNlX2lkID0gc3RyKGRhdGEuZ2V0KCJkZXZpY2VfaWQiKSBvciBkYXRhLmdldCgiZGV2aWNlSWQiKSBvciAiZGVmYXVsdF9kZXZpY2UiKQogICAgICAgICAgICAgICAgZGV2aWNlX25hbWUgPSBzdHIoZGF0YS5nZXQoImRldmljZV9uYW1lIikgb3IgZGF0YS5nZXQoImRldmljZU5hbWUiKSBvciAiVW5rbm93biIpCiAgICAgICAgICAgICAgICBiYWNrdXBfZGF0ZSA9IHN0cihkYXRhLmdldCgiYmFja3VwX2RhdGUiKSBvciBkYXRhLmdldCgiYmFja3VwRGF0ZSIpIG9yIHRpbWUuc3RyZnRpbWUoIiVZLSVtLSVkIikpCiAgICAgICAgICAgICAgICBwcm9maWxlX2NvdW50ID0gaW50KGRhdGEuZ2V0KCJwcm9maWxlX2NvdW50Iikgb3IgZGF0YS5nZXQoInByb2ZpbGVDb3VudCIpIG9yIDApCiAgICAgICAgICAgICAgICByYXdfY2ZnID0gZGF0YS5nZXQoImNvbmZpZ19qc29uIikgb3IgZGF0YS5nZXQoImNvbmZpZ0pzb24iKSBvciBkYXRhLmdldCgic2V0dGluZ3NfanNvbiIpIG9yIGRhdGEuZ2V0KCJzZXR0aW5nc0pzb24iKSBvciBkYXRhLmdldCgic2V0dGluZ3MiKSBvciBkYXRhLmdldCgiZGF0YSIpIG9yIGRhdGEuZ2V0KCJwYXlsb2FkIikKICAgICAgICAgICAgICAgIGlmIHJhd19jZmcgaXMgTm9uZToKICAgICAgICAgICAgICAgICAgICBjb25maWdfanNvbiA9IGpzb24uZHVtcHMoZGF0YSwgZW5zdXJlX2FzY2lpPUZhbHNlKQogICAgICAgICAgICAgICAgZWxpZiBpc2luc3RhbmNlKHJhd19jZmcsIHN0cik6CiAgICAgICAgICAgICAgICAgICAgY29uZmlnX2pzb24gPSByYXdfY2ZnCiAgICAgICAgICAgICAgICBlbHNlOgogICAgICAgICAgICAgICAgICAgIGNvbmZpZ19qc29uID0ganNvbi5kdW1wcyhyYXdfY2ZnLCBlbnN1cmVfYXNjaWk9RmFsc2UpCiAgICAgICAgICAgICAgICB1cGRhdGVkX2F0ID0gaW50KGRhdGEuZ2V0KCJ1cGRhdGVkX2F0Iikgb3IgZGF0YS5nZXQoInVwZGF0ZWRBdCIpIG9yIG5vd19tcykKICAgICAgICAgICAgICAgIHdpdGggZ2V0X2RiKCkgYXMgY29ubjoKICAgICAgICAgICAgICAgICAgICBjb25uLmV4ZWN1dGUoIiIiSU5TRVJUIElOVE8gc2V0dGluZ3NfYmFja3VwIChkZXZpY2VfaWQsIGRldmljZV9uYW1lLCBiYWNrdXBfZGF0ZSwgcHJvZmlsZV9jb3VudCwgY29uZmlnX2pzb24sIHVwZGF0ZWRfYXQpIFZBTFVFUyAoPywgPywgPywgPywgPywgPykgT04gQ09ORkxJQ1QoZGV2aWNlX2lkLCBiYWNrdXBfZGF0ZSkgRE8gVVBEQVRFIFNFVCBkZXZpY2VfbmFtZT1leGNsdWRlZC5kZXZpY2VfbmFtZSwgcHJvZmlsZV9jb3VudD1leGNsdWRlZC5wcm9maWxlX2NvdW50LCBjb25maWdfanNvbj1leGNsdWRlZC5jb25maWdfanNvbiwgdXBkYXRlZF9hdD1leGNsdWRlZC51cGRhdGVkX2F0IiIiLCAoZGV2aWNlX2lkLCBkZXZpY2VfbmFtZSwgYmFja3VwX2RhdGUsIHByb2ZpbGVfY291bnQsIGNvbmZpZ19qc29uLCB1cGRhdGVkX2F0KSkKICAgICAgICAgICAgICAgICAgICBjb25uLmV4ZWN1dGUoIkRFTEVURSBGUk9NIHNldHRpbmdzX2JhY2t1cCBXSEVSRSByb3dpZCBOT1QgSU4gKFNFTEVDVCByb3dpZCBGUk9NIHNldHRpbmdzX2JhY2t1cCBPUkRFUiBCWSBiYWNrdXBfZGF0ZSBERVNDLCB1cGRhdGVkX2F0IERFU0MgTElNSVQgMjApIikKICAgICAgICAgICAgICAgIHNlbGYuX3NlbmRfanNvbigyMDAsIHsic3RhdHVzIjogIm9rIn0pCiAgICAgICAgICAgIGVsc2U6CiAgICAgICAgICAgICAgICBzZWxmLnNlbmRfcmVzcG9uc2UoNDA0KQogICAgICAgICAgICAgICAgc2VsZi5lbmRfaGVhZGVycygpCiAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgICAgICAgICBzZWxmLl9zZW5kX2pzb24oNTAwLCB7ImVycm9yIjogZiJ7dHlwZShlKS5fX25hbWVfX306IHtlfSJ9KQoKaWYgX19uYW1lX18gPT0gIl9fbWFpbl9fIjoKICAgIGluaXRfZGIoKQogICAgc2VydmVyID0gVGhyZWFkaW5nSFRUUFNlcnZlcigoIjEyNy4wLjAuMSIsIDg3NjUpLCBTeW5jSGFuZGxlcikKICAgIHNlcnZlci5zZXJ2ZV9mb3JldmVyKCkK" | base64 -d > /opt/ehviewer-sync/server.py
+cat << 'EOF' > /etc/systemd/system/ehviewer-sync.service
 [Unit]
-Description=EhViewer Sync API
+Description=EhViewer Sync Service
 After=network.target
 
 [Service]
-Environment=EHVIEWER_TOKEN=${'$'}TOKEN
+Type=simple
+WorkingDirectory=/opt/ehviewer-sync
 ExecStart=/usr/bin/python3 /opt/ehviewer-sync/server.py
 Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
-UNIT
+EOF
 systemctl daemon-reload
 systemctl enable --now ehviewer-sync
-echo "部署完成，访问密钥 Token: ${'$'}TOKEN"
+cat /opt/ehviewer-sync/token.txt && echo ""
 """.trimIndent()
 
 @Composable

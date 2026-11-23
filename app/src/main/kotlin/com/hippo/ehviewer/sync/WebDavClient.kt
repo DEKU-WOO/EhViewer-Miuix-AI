@@ -28,6 +28,8 @@ object WebDavClient {
     class WebDavException(message: String) : Exception(message)
 
     private const val HEX_DIGITS = "0123456789ABCDEF"
+    private const val MAX_REDIRECTS = 5
+    private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
 
     data class RemoteEntry(
         val name: String,
@@ -194,39 +196,88 @@ object WebDavClient {
     }
 
     /**
-     * 下载到 target，并校验实际写入字节数与服务端 Content-Length 一致。
+     * 下载到 target。
      *
-     * 只接受 200/206：重定向由 OkHttp 自动跟随，其余状态码（401/403/404 等）
-     * 直接抛出带状态码与 URL 的异常，禁止把空响应体当成 0 字节文件落盘。
+     * 手动接管 301/302/303/307/308（最多 5 次）以便兼容 fnOS 跨端口跳转，
+     * 每次请求都会重新附加 Basic 鉴权头；兼容 Transfer-Encoding: chunked
+     * （contentLength == -1 时直接循环读取到 EOF）。仅接受 200/206，
+     * 出错信息包含状态码、Content-Type 与实际请求的末尾路径。
      */
     fun download(remoteUrl: String, target: Path): Long {
-        val call = downloadClient.newCall(newRequest("GET", remoteUrl))
-        activeCall = call
+        var requestUrl = remoteUrl
+        var redirects = 0
         try {
-            call.execute().use { response ->
-                if (response.code != 200 && response.code != 206) {
-                    val detail = runCatching { response.body.string().take(256) }.getOrNull()
+            var response: Response? = null
+            while (response == null) {
+                val call = downloadClient.newCall(newRequest("GET", requestUrl))
+                activeCall = call
+                val current = call.execute()
+                if (current.code in REDIRECT_CODES) {
+                    val contentType = current.header("Content-Type") ?: "unknown"
+                    val location = current.header("Location")
+                    current.close()
+                    if (location.isNullOrBlank() || redirects >= MAX_REDIRECTS) {
+                        throw WebDavException(
+                            "GET 重定向失败：HTTP ${current.code}, type=$contentType, path=${tailPath(requestUrl)}",
+                        )
+                    }
+                    requestUrl = URL(URL(requestUrl), location).toString()
+                    redirects++
+                } else {
+                    response = current
+                }
+            }
+            val resp = response ?: throw WebDavException("GET 未返回响应：$remoteUrl")
+            resp.use {
+                val contentType = resp.header("Content-Type") ?: "unknown"
+                val path = tailPath(requestUrl)
+                if (resp.code != 200 && resp.code != 206) {
+                    val detail = runCatching { resp.body.string().take(256) }.getOrNull()
                     throw WebDavException(
-                        "GET HTTP ${response.code}: $remoteUrl" + detail?.let { " - $it" }.orEmpty(),
+                        "GET HTTP ${resp.code}, type=$contentType, path=$path" +
+                            detail?.let { " - $it" }.orEmpty(),
                     )
                 }
                 target.parent?.mkdirs()
-                val expected = response.body.contentLength()
-                val written = response.body.byteStream().use { input ->
+                // chunked 响应 contentLength 为 -1，循环读到 EOF 即可
+                val expected = resp.body.contentLength()
+                val written = resp.body.byteStream().use { input ->
                     ParcelFileDescriptor.AutoCloseOutputStream(target.openFileDescriptor("wt")).use { output ->
-                        input.copyTo(output, bufferSize = 32 * 1024).also { output.flush() }
+                        val buffer = ByteArray(32 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            if (read > 0) {
+                                output.write(buffer, 0, read)
+                                total += read
+                            }
+                        }
+                        output.flush()
+                        total
                     }
                 }
                 if (written <= 0L) {
-                    throw WebDavException("下载内容为空（HTTP ${response.code}）：$remoteUrl")
+                    throw WebDavException(
+                        "GET HTTP ${resp.code}, type=$contentType, path=$path (0 字节)",
+                    )
                 }
                 if (expected >= 0 && written != expected) {
-                    throw WebDavException("下载不完整：$remoteUrl expected=$expected actual=$written")
+                    throw WebDavException(
+                        "下载不完整：HTTP ${resp.code}, type=$contentType, path=$path, expected=$expected actual=$written",
+                    )
                 }
                 return written
             }
         } finally {
-            if (activeCall === call) activeCall = null
+            activeCall = null
         }
+    }
+
+    /** 仅保留路径最后两段，用于异常信息中定位实际请求的文件。 */
+    private fun tailPath(url: String): String {
+        val path = runCatching { URL(url).path }.getOrDefault(url)
+        val segments = path.trimEnd('/').split('/').filter { it.isNotEmpty() }
+        return "..." + segments.takeLast(2).joinToString("/", prefix = "/")
     }
 }
