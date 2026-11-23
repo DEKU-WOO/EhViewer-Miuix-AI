@@ -1,10 +1,13 @@
 package com.hippo.ehviewer.sync
 
 import android.os.ParcelFileDescriptor
+import com.ehviewer.core.files.delete
+import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.find
 import com.ehviewer.core.files.isDirectory
 import com.ehviewer.core.files.isFile
 import com.ehviewer.core.files.list
+import com.ehviewer.core.files.metadataOrNull
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.openFileDescriptor
 import com.ehviewer.core.model.BaseGalleryInfo
@@ -14,6 +17,7 @@ import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.client.EhUrl
+import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.download.archiveFile
@@ -27,14 +31,12 @@ import com.hippo.ehviewer.spider.readCompatFromPath
 import com.hippo.ehviewer.spider.toSimpleTags
 import java.io.File
 import java.util.zip.ZipInputStream
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.withContext
 import okio.Path
 import okio.Path.Companion.toOkioPath
 import splitties.init.appCtx
@@ -43,13 +45,16 @@ data class WebDavSyncResult(
     val uploaded: Int,
     val downloaded: Int,
     val failed: Int,
-)
+) {
+    val success: Int get() = uploaded + downloaded
+}
 
 data class WebDavSyncState(
     val isSyncing: Boolean = false,
     val stage: String = "",
     val current: Int = 0,
     val total: Int = 0,
+    val title: String = "",
 )
 
 /**
@@ -59,40 +64,45 @@ data class WebDavSyncState(
  * 目录内文件逐个流式上传/下载，不会一次性读入内存。
  */
 object WebDavGallerySync {
+    const val MODE_BOTH = 0
+    const val MODE_UPLOAD_ONLY = 1
+    const val MODE_DOWNLOAD_ONLY = 2
+
     private val mutableSyncState = MutableStateFlow(WebDavSyncState())
     val syncState = mutableSyncState.asStateFlow()
 
     private val syncMutex = Mutex()
-    private val syncScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun syncAsync(onComplete: (Result<WebDavSyncResult>) -> Unit) {
-        if (!syncMutex.tryLock()) return
-        syncScope.launch {
-            val result = try {
-                runCatching { syncLocked() }.onFailure { logcat("WebDavSync", it) }
-            } finally {
-                finishSync()
-            }
-            withContext(Dispatchers.Main) { onComplete(result) }
+    /**
+     * 执行一次同步。已有同步在运行时返回 null，避免手动与自动任务重复传输。
+     *
+     * 调用方应位于前台服务或 WorkManager 中，保证进程不被系统回收。
+     */
+    suspend fun sync(): WebDavSyncResult? = withIOContext {
+        if (!syncMutex.tryLock()) {
+            logcat("WebDavSync") { "已有同步任务在运行，跳过本次请求" }
+            return@withIOContext null
         }
-    }
-
-    suspend fun sync(): WebDavSyncResult = withIOContext {
-        if (!syncMutex.tryLock()) return@withIOContext WebDavSyncResult(0, 0, 0)
         try {
             syncLocked()
         } finally {
-            finishSync()
+            mutableSyncState.value = WebDavSyncState()
+            syncMutex.unlock()
         }
     }
 
-    private fun finishSync() {
-        mutableSyncState.value = WebDavSyncState()
-        syncMutex.unlock()
+    private fun updateProgress(stage: String, current: Int, total: Int, title: String = "") {
+        mutableSyncState.value = WebDavSyncState(
+            isSyncing = true,
+            stage = stage,
+            current = current,
+            total = total,
+            title = title,
+        )
     }
 
     private suspend fun syncLocked(): WebDavSyncResult {
-        mutableSyncState.value = WebDavSyncState(isSyncing = true, stage = "正在扫描...")
+        updateProgress("正在扫描", 0, 0)
         if (!WebDavClient.isConfigured()) {
             throw WebDavClient.WebDavException("未配置 WebDAV 地址")
         }
@@ -115,11 +125,27 @@ object WebDavGallerySync {
         }
         topArchives.forEach { localNames += it.name }
 
-        val total = downloads.count { info ->
-            val dirname = info.dirname
-            dirname != null && !remoteByName.containsKey(dirname) && info.downloadDir?.isDirectory == true
-        } + topArchives.count { !remoteByName.containsKey(it.name) } + remoteEntries.count { entry ->
-            entry.name !in localNames && (entry.isDirectory || entry.name.isArchive())
+        val mode = Settings.webdavSyncMode.value
+        val allowUpload = mode != MODE_DOWNLOAD_ONLY
+        val allowDownload = mode != MODE_UPLOAD_ONLY
+
+        val total = run {
+            val uploadTotal = if (allowUpload) {
+                downloads.count { info ->
+                    val dirname = info.dirname
+                    dirname != null && !remoteByName.containsKey(dirname) && info.downloadDir?.isDirectory == true
+                } + topArchives.count { !remoteByName.containsKey(it.name) }
+            } else {
+                0
+            }
+            val downloadTotal = if (allowDownload) {
+                remoteEntries.count { entry ->
+                    entry.name !in localNames && (entry.isDirectory || entry.name.isArchive())
+                }
+            } else {
+                0
+            }
+            uploadTotal + downloadTotal
         }
         var current = 0
         var uploaded = 0
@@ -127,71 +153,108 @@ object WebDavGallerySync {
         var failed = 0
 
         // 1. 上传本地新增画廊文件夹
-        downloads.forEach { info ->
-            val dirname = info.dirname ?: return@forEach
-            if (remoteByName.containsKey(dirname)) return@forEach
-            val dir = info.downloadDir ?: return@forEach
-            if (!dir.isDirectory) return@forEach
-            mutableSyncState.value = WebDavSyncState(true, "正在上传...", current, total)
-            runCatching {
-                uploadDirectory(dir, "$rootUrl/${WebDavClient.encodeSegment(dirname)}")
-                uploaded++
-            }.onFailure {
-                failed++
-                logcat("WebDavSync", it)
-            }
-            current++
-            mutableSyncState.value = WebDavSyncState(true, "正在上传...", current, total)
-        }
-
-        // 2. 上传下载目录顶层的 .cbz / .zip 画廊文件
-        topArchives.forEach { file ->
-            if (remoteByName.containsKey(file.name)) return@forEach
-            mutableSyncState.value = WebDavSyncState(true, "正在上传...", current, total)
-            runCatching {
-                WebDavClient.upload(file, "$rootUrl/${WebDavClient.encodeSegment(file.name)}")
-                uploaded++
-            }.onFailure {
-                failed++
-                logcat("WebDavSync", it)
-            }
-            current++
-            mutableSyncState.value = WebDavSyncState(true, "正在上传...", current, total)
-        }
-
-        // 3. 拉回本地缺失的远端画廊
-        remoteEntries.forEach { entry ->
-            if (entry.name in localNames) return@forEach
-            if (!entry.isDirectory && !entry.name.isArchive()) {
-                localNames += entry.name
-                return@forEach
-            }
-            mutableSyncState.value = WebDavSyncState(true, "正在下载...", current, total)
-            val target = localRoot / entry.name
-            runCatching {
-                if (entry.isDirectory) {
-                    downloadDirectory(entry.url, target)
-                    check(restoreDownload(target)) { "无法解析已拉回画廊的元数据：${entry.name}" }
-                    downloaded++
-                } else {
-                    val dirname = entry.name.substringBeforeLast('.', entry.name)
-                    val targetDir = localRoot / dirname
-                    targetDir.mkdirs()
-                    WebDavClient.download(entry.url, targetDir / entry.name)
-                    check(restoreDownload(targetDir)) { "无法解析已拉回压缩包的元数据：${entry.name}" }
-                    downloaded++
+        if (allowUpload) {
+            downloads.forEach { info ->
+                val dirname = info.dirname ?: return@forEach
+                if (remoteByName.containsKey(dirname)) return@forEach
+                val dir = info.downloadDir ?: return@forEach
+                if (!dir.isDirectory) return@forEach
+                val title = runCatching { EhUtils.getSuitableTitle(info) }.getOrDefault(dirname)
+                updateProgress("正在上传", current, total, title)
+                try {
+                    uploadDirectory(dir, "$rootUrl/${WebDavClient.encodeSegment(dirname)}")
+                    uploaded++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    failed++
+                    logcat("WebDavSync", t)
                 }
-                localNames += entry.name
-            }.onFailure {
-                failed++
-                logcat("WebDavSync", it)
+                current++
+                updateProgress("正在上传", current, total)
+                currentCoroutineContext().ensureActive()
             }
-            current++
-            mutableSyncState.value = WebDavSyncState(true, "正在下载...", current, total)
+
+            // 2. 上传下载目录顶层的 .cbz / .zip 画廊文件
+            topArchives.forEach { file ->
+                if (remoteByName.containsKey(file.name)) return@forEach
+                updateProgress("正在上传", current, total, file.name)
+                try {
+                    WebDavClient.upload(file, "$rootUrl/${WebDavClient.encodeSegment(file.name)}")
+                    uploaded++
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    failed++
+                    logcat("WebDavSync", t)
+                }
+                current++
+                updateProgress("正在上传", current, total)
+                currentCoroutineContext().ensureActive()
+            }
+        }
+
+        // 3. 拉回本地缺失的远端画廊：先完整下载并校验，再入库；任一环节失败立即清理残缺目录
+        if (allowDownload) {
+            remoteEntries.forEach { entry ->
+                if (entry.name in localNames) return@forEach
+                if (!entry.isDirectory && !entry.name.isArchive()) return@forEach
+
+                val isArchive = !entry.isDirectory
+                val dirname = if (isArchive) entry.name.substringBeforeLast('.', entry.name) else entry.name
+                val targetDir = localRoot / dirname
+                updateProgress("正在下载", current, total, entry.name)
+                try {
+                    check(dirname.isNotBlank()) { "非法远端条目名称：${entry.name}" }
+                    if (targetDir.exists()) targetDir.delete()
+                    targetDir.mkdirs()
+                    if (isArchive) {
+                        WebDavClient.download(entry.url, targetDir / entry.name)
+                    } else {
+                        downloadDirectory(entry.url, targetDir)
+                    }
+                    verifyPulledDirectory(targetDir)
+                    check(restoreDownload(targetDir)) { "无法解析已拉回画廊的元数据：${entry.name}" }
+                    downloaded++
+                    localNames += entry.name
+                } catch (e: CancellationException) {
+                    runCatching { targetDir.delete() }
+                    logcat("WebDavSync") { "同步被取消，已清理半成品目录：$targetDir" }
+                    throw e
+                } catch (t: Throwable) {
+                    failed++
+                    logcat("WebDavSync", t)
+                    runCatching { targetDir.delete() }.onFailure { logcat("WebDavSync", it) }
+                }
+                current++
+                updateProgress("正在下载", current, total)
+                currentCoroutineContext().ensureActive()
+            }
         }
 
         Settings.webdavLastSyncAt = System.currentTimeMillis()
+        Settings.webdavLastSyncCount = uploaded + downloaded
         return WebDavSyncResult(uploaded = uploaded, downloaded = downloaded, failed = failed)
+    }
+
+    /** 目录内所有文件都必须存在且大小大于 0，才算完整拉回。 */
+    private fun verifyPulledDirectory(target: Path) {
+        val files = mutableListOf<Path>()
+        fun collect(dir: Path) {
+            dir.list().forEach { child ->
+                when {
+                    child.isDirectory -> collect(child)
+                    // 点开头的标记文件（如 .ehviewer / .nomedia）允许为空
+                    child.isFile && !child.name.startsWith(".") -> files += child
+                }
+            }
+        }
+        collect(target)
+        check(files.isNotEmpty()) { "拉回目录中没有任何文件：${target.name}" }
+        files.forEach { file ->
+            val size = file.metadataOrNull()?.size ?: 0L
+            check(size > 0L) { "拉回文件大小异常：${file.name}（$size 字节）" }
+        }
     }
 
     private fun uploadDirectory(local: Path, remoteUrl: String) {

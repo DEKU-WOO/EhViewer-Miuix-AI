@@ -1,5 +1,8 @@
 package com.hippo.ehviewer.ui.settings
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -20,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,6 +67,7 @@ import com.hippo.ehviewer.sync.SettingsBackup
 import com.hippo.ehviewer.sync.VpsClient
 import com.hippo.ehviewer.sync.WebDavClient
 import com.hippo.ehviewer.sync.WebDavGallerySync
+import com.hippo.ehviewer.sync.WebDavSyncService
 import com.hippo.ehviewer.sync.updateWebDavAutoSync
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.main.NavigationIcon
@@ -83,7 +86,6 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
@@ -94,10 +96,20 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
 private const val SETTINGS_MIME = "application/json"
+
+/** 当前活跃网络是否为计费网络（移动数据）。 */
+private fun isMeteredNetwork(context: Context): Boolean {
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+    val network = manager.activeNetwork ?: return false
+    val capabilities = manager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+}
 
 @Destination<RootGraph>
 @Composable
@@ -128,14 +140,14 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
     val favoriteDone = stringResource(R.string.backup_favorites_success)
     val webdavTestDone = stringResource(R.string.backup_webdav_test_success)
     val webdavTestFailed = stringResource(R.string.backup_webdav_test_failed)
-    val webdavSyncFailed = stringResource(R.string.backup_webdav_sync_failed)
-    val webdavSyncDone = stringResource(R.string.backup_webdav_sync_done)
 
     val serverUrl = Settings.vpsServerUrl.asMutableState()
     val accessToken = Settings.vpsToken.asMutableState()
     val webdavAutoSync = Settings.webdavAutoSync.asMutableState()
+    val webdavSyncMode = Settings.webdavSyncMode.asMutableState()
     val webdavSyncState by WebDavGallerySync.syncState.collectAsState()
     val hasSignedIn by Settings.hasSignedIn.collectAsState()
+    var showMeteredConfirm by remember { mutableStateOf(false) }
 
     // 周期任务随开关实时生效
     LaunchedEffect(webdavAutoSync.value) {
@@ -486,34 +498,94 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                             },
                         )
                         val syncTitle = stringResource(R.string.backup_webdav_sync)
-                        val syncProgress = if (webdavSyncState.total > 0) {
-                            "同步中 ${webdavSyncState.current}/${webdavSyncState.total}..."
+                        val syncModeItems = remember {
+                            listOf("双向增量同步", "仅上传本地新增", "仅从远端拉取")
+                        }
+                        OverlayDropdownPreference(
+                            title = "同步模式",
+                            summary = when (webdavSyncMode.value) {
+                                WebDavGallerySync.MODE_UPLOAD_ONLY -> "只上传本地新增画廊，不从云端拉取"
+                                WebDavGallerySync.MODE_DOWNLOAD_ONLY -> "只拉取云端新增画廊，不上传本地文件"
+                                else -> "本地新增上传、云端新增拉取并自动入库"
+                            },
+                            items = syncModeItems,
+                            selectedIndex = webdavSyncMode.value.coerceIn(0, syncModeItems.lastIndex),
+                            showValue = true,
+                            onSelectedIndexChange = { webdavSyncMode.value = it },
+                        )
+                        val idleSummary = if (Settings.webdavLastSyncAt > 0) {
+                            val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                                .format(Date(Settings.webdavLastSyncAt))
+                            "上次同步：$time · 已同步 ${Settings.webdavLastSyncCount} 个画廊"
                         } else {
-                            "同步中..."
+                            "手动检查并增量同步本地与云端画廊"
+                        }
+                        val syncSummary = if (webdavSyncState.isSyncing) {
+                            if (webdavSyncState.total > 0) {
+                                "正在同步画廊 (${webdavSyncState.current}/${webdavSyncState.total})..."
+                            } else {
+                                "正在同步画廊..."
+                            }
+                        } else {
+                            idleSummary
                         }
                         BasicComponent(
-                            title = if (webdavSyncState.isSyncing) "$syncTitle（$syncProgress）" else syncTitle,
-                            summary = webdavSyncState.stage.takeIf { webdavSyncState.isSyncing && it.isNotBlank() },
-                            enabled = !webdavSyncState.isSyncing,
+                            title = syncTitle,
+                            summary = syncSummary,
                             onClick = {
-                                WebDavGallerySync.syncAsync { result ->
-                                    result.fold(
-                                        onSuccess = { toast(webdavSyncDone) },
-                                        onFailure = { toast(webdavSyncFailed.format(it.message.orEmpty())) },
-                                    )
+                                if (webdavSyncState.isSyncing) return@BasicComponent
+                                if (isMeteredNetwork(context)) {
+                                    showMeteredConfirm = true
+                                } else {
+                                    WebDavSyncService.start(context)
                                 }
                             },
                             endActions = {
                                 if (webdavSyncState.isSyncing) {
-                                    InfiniteProgressIndicator(modifier = Modifier.size(16.dp))
+                                    TextButton(
+                                        text = "停止",
+                                        onClick = { WebDavSyncService.stop(context) },
+                                    )
                                 }
                             },
                         )
                         SwitchPreference(
                             title = stringResource(R.string.backup_webdav_auto),
-                            summary = stringResource(R.string.backup_webdav_auto_summary),
+                            summary = "仅在连接 Wi-Fi 且电量充足时，每 12 小时在后台自动增量同步一次（无新增画廊时自动休眠）",
                             state = webdavAutoSync,
                         )
+                        if (showMeteredConfirm) {
+                            WindowDialog(
+                                show = true,
+                                title = "移动数据网络",
+                                onDismissRequest = { showMeteredConfirm = false },
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "当前正处于移动数据网络，同步已下载画廊可能消耗较多流量，是否继续？",
+                                        modifier = Modifier.padding(bottom = 16.dp),
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        TextButton(
+                                            text = "取消",
+                                            onClick = { showMeteredConfirm = false },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        TextButton(
+                                            text = "继续同步",
+                                            onClick = {
+                                                showMeteredConfirm = false
+                                                WebDavSyncService.start(context)
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))

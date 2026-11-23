@@ -171,7 +171,11 @@ object Settings : DataStorePreferences(null) {
     val webdavPassword = stringPref("webdav_password", "")
     val webdavDir = stringPref("webdav_remote_dir", "EhViewer")
     val webdavAutoSync = boolPref("webdav_auto_sync", false)
+
+    /** 同步方向：0 双向增量，1 仅上传本地新增，2 仅从远端拉取。 */
+    val webdavSyncMode = intPref("webdav_sync_mode", 0)
     var webdavLastSyncAt by longPref("webdav_last_sync_at", 0)
+    var webdavLastSyncCount by intPref("webdav_last_sync_count", 0)
 
     // Misc
     val languageFilter = intPref("language_filter", -1)

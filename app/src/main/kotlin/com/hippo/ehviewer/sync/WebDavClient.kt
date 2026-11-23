@@ -47,6 +47,14 @@ object WebDavClient {
         .followRedirects(true)
         .build()
 
+    /** 当前正在执行的请求，用于「停止同步」时立即关闭网络流。 */
+    @Volatile
+    private var activeCall: okhttp3.Call? = null
+
+    fun cancelActive() {
+        runCatching { activeCall?.cancel() }
+    }
+
     fun isConfigured(): Boolean = Settings.webdavUrl.value.isNotBlank()
 
     fun encodeSegment(value: String): String =
@@ -75,7 +83,13 @@ object WebDavClient {
     }
 
     private fun execute(request: Request, method: String, vararg acceptedCodes: Int): Response {
-        val response = client.newCall(request).execute()
+        val call = client.newCall(request)
+        activeCall = call
+        val response = try {
+            call.execute()
+        } finally {
+            if (activeCall === call) activeCall = null
+        }
         // 207 Multi-Status 与其他 2xx 一样均为成功；部分服务器的已存在目录返回 405。
         if (!response.isSuccessful && response.code !in acceptedCodes) {
             val detail = runCatching { response.body.string().take(512) }.getOrNull()
@@ -140,15 +154,33 @@ object WebDavClient {
         execute(newRequest("PUT", remoteUrl, body = body), "PUT").close()
     }
 
-    fun download(remoteUrl: String, target: Path) {
-        execute(newRequest("GET", remoteUrl), "GET").use { response ->
-            target.parent?.mkdirs()
-            response.body.byteStream().use { input ->
-                ParcelFileDescriptor.AutoCloseOutputStream(target.openFileDescriptor("wt")).use { output ->
-                    input.copyTo(output)
-                    output.flush()
+    /**
+     * 下载到 target，并校验实际写入字节数与服务端 Content-Length 一致。
+     * 大小不一致直接抛异常，交由调用方清理半成品文件。
+     */
+    fun download(remoteUrl: String, target: Path): Long {
+        val call = client.newCall(newRequest("GET", remoteUrl))
+        activeCall = call
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    val detail = runCatching { response.body.string().take(512) }.getOrNull()
+                    throw WebDavException("GET HTTP ${response.code}" + detail?.let { ": $it" }.orEmpty())
                 }
+                target.parent?.mkdirs()
+                val expected = response.body.contentLength()
+                val written = response.body.byteStream().use { input ->
+                    ParcelFileDescriptor.AutoCloseOutputStream(target.openFileDescriptor("wt")).use { output ->
+                        input.copyTo(output).also { output.flush() }
+                    }
+                }
+                if (expected >= 0 && written != expected) {
+                    throw WebDavException("下载不完整：$remoteUrl expected=$expected actual=$written")
+                }
+                return written
             }
+        } finally {
+            if (activeCall === call) activeCall = null
         }
     }
 }
