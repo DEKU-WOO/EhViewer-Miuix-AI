@@ -16,4 +16,12 @@
   ~ If not, see <https://www.gnu.org/licenses/>.
   -->
 <network-security-config>
+    <!-- 允许访问自建 VPS 的明文 HTTP 同步地址（如 http://ehviewer.52613484.xyz:8765），
+         同时保留系统证书与用户安装证书，不影响其他域名的 HTTPS 校验。 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>
