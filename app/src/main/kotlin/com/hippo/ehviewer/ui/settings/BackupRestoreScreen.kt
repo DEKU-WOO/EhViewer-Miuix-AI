@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +29,7 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,9 +79,11 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
@@ -125,12 +129,12 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
     val webdavTestDone = stringResource(R.string.backup_webdav_test_success)
     val webdavTestFailed = stringResource(R.string.backup_webdav_test_failed)
     val webdavSyncFailed = stringResource(R.string.backup_webdav_sync_failed)
-    val webdavSyncing = stringResource(R.string.backup_webdav_syncing)
     val webdavSyncDone = stringResource(R.string.backup_webdav_sync_done)
 
     val serverUrl = Settings.vpsServerUrl.asMutableState()
     val accessToken = Settings.vpsToken.asMutableState()
     val webdavAutoSync = Settings.webdavAutoSync.asMutableState()
+    val webdavSyncState by WebDavGallerySync.syncState.collectAsState()
     val hasSignedIn by Settings.hasSignedIn.collectAsState()
 
     // 周期任务随开关实时生效
@@ -481,17 +485,27 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                                 }
                             },
                         )
-                        Preference(
-                            title = stringResource(R.string.backup_webdav_sync),
+                        val syncTitle = stringResource(R.string.backup_webdav_sync)
+                        val syncProgress = if (webdavSyncState.total > 0) {
+                            "同步中 ${webdavSyncState.current}/${webdavSyncState.total}..."
+                        } else {
+                            "同步中..."
+                        }
+                        BasicComponent(
+                            title = if (webdavSyncState.isSyncing) "$syncTitle（$syncProgress）" else syncTitle,
+                            summary = webdavSyncState.stage.takeIf { webdavSyncState.isSyncing && it.isNotBlank() },
+                            enabled = !webdavSyncState.isSyncing,
                             onClick = {
-                                launch {
-                                    toast(webdavSyncing)
-                                    val error = withIOContext {
-                                        runCatching { WebDavGallerySync.sync() }
-                                            .onFailure { logcat("WebDav", it) }
-                                            .exceptionOrNull()
-                                    }
-                                    toast(if (error == null) webdavSyncDone else webdavSyncFailed.format(error.message.orEmpty()))
+                                WebDavGallerySync.syncAsync { result ->
+                                    result.fold(
+                                        onSuccess = { toast(webdavSyncDone) },
+                                        onFailure = { toast(webdavSyncFailed.format(it.message.orEmpty())) },
+                                    )
+                                }
+                            },
+                            endActions = {
+                                if (webdavSyncState.isSyncing) {
+                                    InfiniteProgressIndicator(modifier = Modifier.size(16.dp))
                                 }
                             },
                         )
