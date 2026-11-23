@@ -221,7 +221,7 @@ object WebDavGallerySync {
                     if (targetDir.exists()) targetDir.delete()
                     targetDir.mkdirs()
                     if (isArchive) {
-                        WebDavClient.download(entry.url, targetDir / entry.name)
+                        WebDavClient.download(entry.url, targetDir / entry.name, entry.contentLength)
                     } else {
                         downloadDirectory(entry.url, targetDir)
                     }
@@ -290,7 +290,9 @@ object WebDavGallerySync {
         collect(target)
         check(files.isNotEmpty()) { "拉回目录中没有任何文件：${target.name}" }
         files.forEach { file ->
-            val size = file.metadataOrNull()?.size ?: 0L
+            // 优先用 SAF 元数据；若缓存尚未刷新返回 null/0，则回退到底层文件描述符读取真实字节数
+            val size = file.metadataOrNull()?.size?.takeIf { it > 0L }
+                ?: runCatching { file.openFileDescriptor("r").use { it.statSize } }.getOrDefault(0L)
             check(size > 0L) { "拉回文件大小异常：${file.name}（$size 字节）" }
         }
     }
@@ -342,7 +344,7 @@ object WebDavGallerySync {
             if (entry.isDirectory) {
                 downloadDirectory(entry.url, child)
             } else {
-                WebDavClient.download(entry.url, child)
+                WebDavClient.download(entry.url, child, entry.contentLength)
             }
         }
     }

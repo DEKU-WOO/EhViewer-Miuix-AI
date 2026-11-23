@@ -2,6 +2,7 @@ package com.hippo.ehviewer.sync
 
 import android.os.ParcelFileDescriptor
 import com.ehviewer.core.files.SystemFileSystem
+import com.ehviewer.core.files.delete
 import com.ehviewer.core.files.mkdirs
 import com.ehviewer.core.files.openFileDescriptor
 import com.hippo.ehviewer.Settings
@@ -35,14 +36,17 @@ object WebDavClient {
         val name: String,
         val url: String,
         val isDirectory: Boolean,
+        val contentLength: Long?,
     )
 
     private val responseRegex = Regex("<[^>]*:response[\\s\\S]*?</[^>]*:response>", RegexOption.IGNORE_CASE)
     private val hrefRegex = Regex("<[^>]*:href[^>]*>([^<]+)</[^>]*:href>", RegexOption.IGNORE_CASE)
-    private val collectionRegex = Regex("<[^>]*:collection\\b", RegexOption.IGNORE_CASE)
+    // 兼容任意命名空间前缀：<collection / <d:collection / <D:collection / <ns0:collection / <lp1:collection
+    private val collectionRegex = Regex("<([A-Za-z0-9_]+:)?collection\\b", RegexOption.IGNORE_CASE)
+    private val contentLengthRegex = Regex("<[^>]*:getcontentlength[^>]*>(\\d+)</[^>]*:getcontentlength>", RegexOption.IGNORE_CASE)
     private val xmlMediaType = "application/xml; charset=utf-8".toMediaType()
     private val binaryMediaType = "application/octet-stream".toMediaType()
-    private val propfindBody = """<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>"""
+    private val propfindBody = """<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>"""
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -142,18 +146,42 @@ object WebDavClient {
         // 相对 href 必须基于「目录 URL + /」解析，否则会被当成同级文件替换掉最后一段
         val base = URL(if (url.endsWith('/')) url else "$url/")
         val origin = buildOrigin(base)
-        val selfPath = decodePath(base.path).trimEnd('/')
+        val basePath = decodePath(base.path).trimEnd('/')
+        val selfPath = basePath
         return responseRegex.findAll(text).mapNotNull { match ->
             val block = match.value
             val rawHref = hrefRegex.find(block)?.groupValues?.get(1)?.trim() ?: return@mapNotNull null
-            // href 可能是绝对 URL、绝对路径或相对路径；取出 path 后统一解码，再逐段重新编码
-            val rawPath = runCatching { URL(base, rawHref).path }.getOrNull() ?: return@mapNotNull null
+            // 不要把未编码的 rawHref 直接丢给 java.net.URL：文件名中的 # 会被当成
+            // Fragment、? 会被当成 Query 截断路径。先剥离 origin，保留其后完整字符串作为路径，
+            // 再统一解码、逐段重新编码。
+            val rawPath = extractHrefPath(rawHref, basePath)
             val path = decodePath(rawPath).trimEnd('/')
             if (path.isBlank() || path == selfPath) return@mapNotNull null
             val name = path.substringAfterLast('/').takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val isDirectory = rawHref.endsWith('/') || collectionRegex.containsMatchIn(block)
-            RemoteEntry(name = name, url = buildUrl(origin, path), isDirectory = isDirectory)
+            val contentLength = contentLengthRegex.find(block)?.groupValues?.get(1)?.toLongOrNull()
+            RemoteEntry(name = name, url = buildUrl(origin, path), isDirectory = isDirectory, contentLength = contentLength)
         }.toList()
+    }
+
+    /**
+     * 从 PROPFIND 的 <href> 中提取路径部分：
+     * - 绝对 URL 只剥离 scheme://host[:port]，保留其后全部字符（含可能出现在文件名里的 # / ?）；
+     * - 以 / 开头视为绝对路径；
+     * - 否则视为相对路径，拼接到目录 basePath 之后。
+     * 全程不经过 java.net.URL，避免 #/? 被当成 Fragment/Query 截断。
+     */
+    private fun extractHrefPath(rawHref: String, basePath: String): String {
+        val lower = rawHref.lowercase()
+        return when {
+            lower.startsWith("http://") || lower.startsWith("https://") -> {
+                val afterScheme = rawHref.substring(rawHref.indexOf("://") + 3)
+                val slashIdx = afterScheme.indexOf('/')
+                if (slashIdx < 0) "/" else afterScheme.substring(slashIdx)
+            }
+            rawHref.startsWith("/") -> rawHref
+            else -> (basePath + "/" + rawHref).ifBlank { "/" }
+        }
     }
 
     private fun buildOrigin(url: URL): String = buildString {
@@ -203,7 +231,7 @@ object WebDavClient {
      * （contentLength == -1 时直接循环读取到 EOF）。仅接受 200/206，
      * 出错信息包含状态码、Content-Type 与实际请求的末尾路径。
      */
-    fun download(remoteUrl: String, target: Path): Long {
+    fun download(remoteUrl: String, target: Path, remoteContentLength: Long? = null): Long {
         var requestUrl = remoteUrl
         var redirects = 0
         try {
@@ -258,8 +286,10 @@ object WebDavClient {
                     }
                 }
                 if (written <= 0L) {
+                    // 清理本地产生的 0 字节残余文件，避免后续校验被空文件干扰
+                    runCatching { target.delete() }
                     throw WebDavException(
-                        "GET HTTP ${resp.code}, type=$contentType, path=$path (0 字节)",
+                        "GET HTTP ${resp.code}, type=$contentType, contentLength=$expected, declared=$remoteContentLength, path=$path (0 字节)",
                     )
                 }
                 if (expected >= 0 && written != expected) {
