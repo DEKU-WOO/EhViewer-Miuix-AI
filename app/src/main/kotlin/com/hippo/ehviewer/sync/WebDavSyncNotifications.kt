@@ -73,17 +73,23 @@ internal object WebDavSyncNotifications {
     }
 
     fun notifyResult(context: Context, result: WebDavSyncResult) {
-        val title = if (result.failed == 0) {
-            "WebDAV 同步完成：已同步 ${result.success} 个画廊"
-        } else {
-            "WebDAV 同步结束：成功 ${result.success} 个，失败 ${result.failed} 个"
+        if (result.failed == 0) {
+            post(
+                context,
+                "WebDAV 同步完成：已同步 ${result.success} 个画廊",
+                "上传 ${result.uploaded} 个，拉取 ${result.downloaded} 个",
+                android.R.drawable.stat_sys_download_done,
+            )
+            return
         }
-        val text = if (result.failed == 0) {
-            "上传 ${result.uploaded} 个，拉取 ${result.downloaded} 个"
-        } else {
-            "部分画廊未完成，下次同步会继续增量补齐"
+        val reason = result.failureReason?.trim()?.take(160)?.takeIf { it.isNotEmpty() }
+        val text = buildString {
+            append("成功 ").append(result.success).append(" 个，失败 ").append(result.failed).append(" 个")
+            if (reason != null) {
+                append("（原因：").append(reason).append('）')
+            }
         }
-        post(context, title, text, android.R.drawable.stat_sys_download_done)
+        post(context, "WebDAV 同步结束", text, android.R.drawable.stat_sys_download_done)
     }
 
     fun notifyStopped(context: Context) {

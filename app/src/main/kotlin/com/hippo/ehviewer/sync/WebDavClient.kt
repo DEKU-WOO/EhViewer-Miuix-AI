@@ -7,7 +7,6 @@ import com.ehviewer.core.files.openFileDescriptor
 import com.hippo.ehviewer.Settings
 import java.net.URL
 import java.net.URLDecoder
-import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,6 +26,8 @@ import okio.Path
  */
 object WebDavClient {
     class WebDavException(message: String) : Exception(message)
+
+    private const val HEX_DIGITS = "0123456789ABCDEF"
 
     data class RemoteEntry(
         val name: String,
@@ -57,8 +58,30 @@ object WebDavClient {
 
     fun isConfigured(): Boolean = Settings.webdavUrl.value.isNotBlank()
 
-    fun encodeSegment(value: String): String =
-        URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    /**
+     * RFC 3986 路径段编码：仅保留 unreserved 字符，中文、日文、方括号、空格等
+     * 统一按 UTF-8 逐字节百分号编码，避免服务端收到非法字符返回 404/400。
+     */
+    fun encodeSegment(value: String): String = buildString {
+        value.encodeToByteArray().forEach { byte ->
+            val code = byte.toInt() and 0xFF
+            val char = code.toChar()
+            val unreserved = char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' ||
+                char == '-' || char == '.' || char == '_' || char == '~'
+            if (unreserved) {
+                append(char)
+            } else {
+                append('%').append(HEX_DIGITS[code shr 4]).append(HEX_DIGITS[code and 0x0F])
+            }
+        }
+    }
+
+    /**
+     * 解码 PROPFIND 返回 href 中的百分号编码。
+     * 路径里的 '+' 代表字面加号，不能按表单规则解码成空格。
+     */
+    private fun decodePath(value: String): String =
+        runCatching { URLDecoder.decode(value.replace("+", "%2B"), "UTF-8") }.getOrDefault(value)
 
     fun rootUrl(): String {
         val segments = Settings.webdavDir.value.trim().trim('/').split('/').filter { it.isNotEmpty() }
@@ -109,21 +132,32 @@ object WebDavClient {
         val text = execute(newRequest("PROPFIND", url, "1", propfindBody.toRequestBody(xmlMediaType)), "PROPFIND").use { response ->
             response.body.string()
         }
-        val base = URL(url)
-        val selfPath = runCatching { URLDecoder.decode(base.path, "UTF-8").trimEnd('/') }.getOrElse { "" }
+        // 相对 href 必须基于「目录 URL + /」解析，否则会被当成同级文件替换掉最后一段
+        val base = URL(if (url.endsWith('/')) url else "$url/")
+        val origin = buildOrigin(base)
+        val selfPath = decodePath(base.path).trimEnd('/')
         return responseRegex.findAll(text).mapNotNull { match ->
             val block = match.value
-            val href = hrefRegex.find(block)?.groupValues?.get(1)?.trim() ?: return@mapNotNull null
-            // 服务端返回的 href 可能是绝对 URL，也可能只是以 / 开头的路径，需解析为绝对地址再请求
-            val absolute = runCatching { URL(base, href).toString() }.getOrDefault(href)
-            val path = runCatching {
-                URLDecoder.decode(URL(absolute).path, "UTF-8").trimEnd('/')
-            }.getOrNull() ?: return@mapNotNull null
+            val rawHref = hrefRegex.find(block)?.groupValues?.get(1)?.trim() ?: return@mapNotNull null
+            // href 可能是绝对 URL、绝对路径或相对路径；取出 path 后统一解码，再逐段重新编码
+            val rawPath = runCatching { URL(base, rawHref).path }.getOrNull() ?: return@mapNotNull null
+            val path = decodePath(rawPath).trimEnd('/')
             if (path.isBlank() || path == selfPath) return@mapNotNull null
             val name = path.substringAfterLast('/').takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val isDirectory = href.endsWith('/') || collectionRegex.containsMatchIn(block)
-            RemoteEntry(name = name, url = absolute, isDirectory = isDirectory)
+            val isDirectory = rawHref.endsWith('/') || collectionRegex.containsMatchIn(block)
+            RemoteEntry(name = name, url = buildUrl(origin, path), isDirectory = isDirectory)
         }.toList()
+    }
+
+    private fun buildOrigin(url: URL): String = buildString {
+        append(url.protocol).append("://").append(url.host)
+        if (url.port != -1) append(':').append(url.port)
+    }
+
+    /** 用解码后的真实名称逐段编码重建绝对 URL，避免服务端 href 原样携带 UTF-8 或双重编码。 */
+    private fun buildUrl(origin: String, path: String): String {
+        val normalized = if (path.startsWith('/')) path else "/$path"
+        return origin + normalized.split('/').joinToString("/") { encodeSegment(it) }
     }
 
     /** 从 WebDAV 根地址开始逐级创建目录；已存在（405）视为成功。 */

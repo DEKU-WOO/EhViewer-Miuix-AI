@@ -45,6 +45,8 @@ data class WebDavSyncResult(
     val uploaded: Int,
     val downloaded: Int,
     val failed: Int,
+    /** 本次同步中遇到的第一条具体失败原因，便于在系统通知中直接定位问题。 */
+    val failureReason: String? = null,
 ) {
     val success: Int get() = uploaded + downloaded
 }
@@ -151,6 +153,13 @@ object WebDavGallerySync {
         var uploaded = 0
         var downloaded = 0
         var failed = 0
+        var firstFailure: String? = null
+
+        fun recordFailure(cause: Throwable) {
+            if (firstFailure == null) {
+                firstFailure = cause.message?.takeIf { it.isNotBlank() } ?: cause.javaClass.simpleName
+            }
+        }
 
         // 1. 上传本地新增画廊文件夹
         if (allowUpload) {
@@ -168,6 +177,7 @@ object WebDavGallerySync {
                     throw e
                 } catch (t: Throwable) {
                     failed++
+                    recordFailure(t)
                     logcat("WebDavSync", t)
                 }
                 current++
@@ -186,6 +196,7 @@ object WebDavGallerySync {
                     throw e
                 } catch (t: Throwable) {
                     failed++
+                    recordFailure(t)
                     logcat("WebDavSync", t)
                 }
                 current++
@@ -194,7 +205,7 @@ object WebDavGallerySync {
             }
         }
 
-        // 3. 拉回本地缺失的远端画廊：先完整下载并校验，再入库；任一环节失败立即清理残缺目录
+        // 3. 拉回本地缺失的远端画廊：只有传输阶段失败/取消才回滚删除残缺目录
         if (allowDownload) {
             remoteEntries.forEach { entry ->
                 if (entry.name in localNames) return@forEach
@@ -204,6 +215,7 @@ object WebDavGallerySync {
                 val dirname = if (isArchive) entry.name.substringBeforeLast('.', entry.name) else entry.name
                 val targetDir = localRoot / dirname
                 updateProgress("正在下载", current, total, entry.name)
+                var transferDone = false
                 try {
                     check(dirname.isNotBlank()) { "非法远端条目名称：${entry.name}" }
                     if (targetDir.exists()) targetDir.delete()
@@ -214,17 +226,38 @@ object WebDavGallerySync {
                         downloadDirectory(entry.url, targetDir)
                     }
                     verifyPulledDirectory(targetDir)
-                    check(restoreDownload(targetDir)) { "无法解析已拉回画廊的元数据：${entry.name}" }
-                    downloaded++
-                    localNames += entry.name
+                    transferDone = true
                 } catch (e: CancellationException) {
                     runCatching { targetDir.delete() }
                     logcat("WebDavSync") { "同步被取消，已清理半成品目录：$targetDir" }
                     throw e
                 } catch (t: Throwable) {
                     failed++
+                    recordFailure(t)
                     logcat("WebDavSync", t)
                     runCatching { targetDir.delete() }.onFailure { logcat("WebDavSync", it) }
+                }
+
+                // 文件已完整落盘：后续元数据解析/入库异常只记录并降级入库，严禁回滚删除
+                if (transferDone) {
+                    val registered = runCatching { restoreDownload(targetDir) }
+                        .onFailure {
+                            logcat("WebDavSync", it)
+                            recordFailure(it)
+                        }
+                        .getOrDefault(false)
+                    val fallback = registered || runCatching { registerPulledDirectory(targetDir) }
+                        .onFailure {
+                            logcat("WebDavSync", it)
+                            recordFailure(it)
+                        }
+                        .getOrDefault(false)
+                    if (fallback) {
+                        downloaded++
+                        localNames += entry.name
+                    } else {
+                        failed++
+                    }
                 }
                 current++
                 updateProgress("正在下载", current, total)
@@ -234,7 +267,12 @@ object WebDavGallerySync {
 
         Settings.webdavLastSyncAt = System.currentTimeMillis()
         Settings.webdavLastSyncCount = uploaded + downloaded
-        return WebDavSyncResult(uploaded = uploaded, downloaded = downloaded, failed = failed)
+        return WebDavSyncResult(
+            uploaded = uploaded,
+            downloaded = downloaded,
+            failed = failed,
+            failureReason = firstFailure,
+        )
     }
 
     /** 目录内所有文件都必须存在且大小大于 0，才算完整拉回。 */
@@ -255,6 +293,34 @@ object WebDavGallerySync {
             val size = file.metadataOrNull()?.size ?: 0L
             check(size > 0L) { "拉回文件大小异常：${file.name}（$size 字节）" }
         }
+    }
+
+    /**
+     * 元数据解析失败时的兜底入库：直接用文件夹名作为标题，保证已完整下载的画廊
+     * 仍能出现在下载列表，而不是被当作失败回滚。
+     */
+    private suspend fun registerPulledDirectory(target: Path): Boolean {
+        val files = target.list()
+        val gid = target.name.parseGid()
+            ?: files.firstOrNull { it.isFile && it.name.isArchive() }?.name?.parseGid()
+            ?: return false
+        val cachedInfo = runCatching { EhDB.getGalleryInfo(gid) }.getOrNull()
+        val pages = cachedInfo?.pages?.takeIf { it > 0 }
+            ?: files.count { it.isFile && it.name.isImage() }
+        val galleryInfo = BaseGalleryInfo(
+            gid = gid,
+            token = cachedInfo?.token.orEmpty(),
+            title = cachedInfo?.title ?: target.name,
+            titleJpn = cachedInfo?.titleJpn,
+            thumbKey = cachedInfo?.thumbKey,
+            rating = cachedInfo?.rating ?: 0f,
+            simpleTags = cachedInfo?.simpleTags,
+            pages = pages,
+            simpleLanguage = cachedInfo?.simpleLanguage,
+        )
+        EhDB.putDownloadDirname(gid, target.name)
+        DownloadManager.restoreDownload(galleryInfo, target.name)
+        return true
     }
 
     private fun uploadDirectory(local: Path, remoteUrl: String) {
