@@ -150,15 +150,26 @@ object VpsClient {
         }
     }
 
-    /** 简单探测服务器是否可达（同时校验 Token）。 */
+    /** 先探测 /ping 可达性，再请求 /sync/history 校验 Token 鉴权是否通过。 */
     suspend fun testConnection() {
         ensureConfigured()
-        val response = EhApplication.ktorClient.get(url("/sync/history?since=0")) {
+        val pingUrl = url("/ping")
+        val ping = EhApplication.ktorClient.get(pingUrl) {
             timeout { requestTimeoutMillis = 15_000 }
             applyAuth(this)
         }
-        if (!response.status.isSuccess()) {
-            throw IOException("HTTP ${response.status.value}")
+        ping.bodyAsText()
+        if (!ping.status.isSuccess()) {
+            throw IOException("GET $pingUrl HTTP ${ping.status.value}")
+        }
+        val historyUrl = url("/sync/history?since=0")
+        val history = EhApplication.ktorClient.get(historyUrl) {
+            timeout { requestTimeoutMillis = 15_000 }
+            applyAuth(this)
+        }
+        history.bodyAsText()
+        if (!history.status.isSuccess()) {
+            throw IOException("GET $historyUrl HTTP ${history.status.value}")
         }
     }
 

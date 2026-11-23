@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,10 +26,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -43,10 +46,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.blurBackdropSource
@@ -111,6 +117,143 @@ private fun isMeteredNetwork(context: Context): Boolean {
         !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
 }
 
+private const val VPS_DEFAULT_SERVER_URL = "http://ehviewer.52613484.xyz:8765"
+private const val VPS_PROXY_DOMAIN_RULE = "domain:ehviewer.52613484.xyz"
+
+/** VPS 服务端一键部署脚本（Ubuntu / Debian，root 执行）。 */
+private val VPS_DEPLOY_SCRIPT = """
+#!/usr/bin/env bash
+# EhViewer 同步服务一键部署（Ubuntu / Debian，需 root 执行）
+set -euo pipefail
+
+# 1) 本地回环映射：App 通过代理隧道访问该域名
+grep -q 'ehviewer.52613484.xyz' /etc/hosts || \
+  echo '127.0.0.1 ehviewer.52613484.xyz' >> /etc/hosts
+
+# 2) 单文件同步服务（Python3 + SQLite，兼容 chunked 传输与多字段 JSON）
+mkdir -p /opt/ehviewer-sync
+cat > /opt/ehviewer-sync/server.py <<'PY'
+import json, os, sqlite3
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
+
+DB = "/opt/ehviewer-sync/sync.db"
+TOKEN = os.environ.get("EHVIEWER_TOKEN", "")
+
+def db():
+    conn = sqlite3.connect(DB)
+    conn.execute("CREATE TABLE IF NOT EXISTS history(gid INTEGER PRIMARY KEY, token TEXT, pages INTEGER, last_page INTEGER, updated_at INTEGER)")
+    conn.execute("CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1), data TEXT)")
+    return conn
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    def log_message(self, *args):
+        pass
+    def send_json(self, code, obj=None):
+        body = json.dumps(obj if obj is not None else {}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def auth(self):
+        return self.headers.get("Authorization", "") == "Bearer " + TOKEN
+    def read_json(self):
+        if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+            data = b""
+            while True:
+                size = int(self.rfile.readline().strip().split(b";")[0], 16)
+                if size == 0:
+                    self.rfile.readline()
+                    break
+                data += self.rfile.read(size)
+                self.rfile.readline()
+        else:
+            data = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+        return json.loads(data or b"{}")
+    def do_GET(self):
+        if self.path == "/ping":
+            return self.send_json(200, {"ok": True})
+        if not self.auth():
+            return self.send_json(401, {"error": "unauthorized"})
+        conn = db()
+        u = urlparse(self.path)
+        if u.path == "/sync/history":
+            since = int(parse_qs(u.query).get("since", ["0"])[0])
+            rows = conn.execute("SELECT gid,token,pages,last_page,updated_at FROM history WHERE updated_at > ? ORDER BY updated_at", (since,)).fetchall()
+            conn.close()
+            return self.send_json(200, [{"gid": r[0], "token": r[1], "pages": r[2], "last_page": r[3], "updated_at": r[4]} for r in rows])
+        if u.path == "/sync/settings":
+            row = conn.execute("SELECT data FROM settings WHERE id=1").fetchone()
+            conn.close()
+            return self.send_json(200, [json.loads(row[0])] if row else [])
+        conn.close()
+        self.send_json(404)
+    def do_POST(self):
+        if not self.auth():
+            return self.send_json(401, {"error": "unauthorized"})
+        u = urlparse(self.path)
+        data = self.read_json()
+        conn = db()
+        if u.path == "/sync/history":
+            conn.execute("INSERT INTO history(gid,token,pages,last_page,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(gid) DO UPDATE SET token=excluded.token,pages=excluded.pages,last_page=excluded.last_page,updated_at=excluded.updated_at", (data.get("gid"), data.get("token", ""), data.get("pages", 0), data.get("last_page", 0), data.get("updated_at", 0)))
+        elif u.path == "/sync/settings":
+            conn.execute("INSERT INTO settings(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data", (json.dumps(data),))
+        else:
+            conn.close()
+            return self.send_json(404)
+        conn.commit()
+        conn.close()
+        self.send_json(200, {"ok": True})
+
+ThreadingHTTPServer(("0.0.0.0", 8765), Handler).serve_forever()
+PY
+
+# 3) systemd 开机自启，并生成 32 位访问密钥
+TOKEN=${'$'}(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+cat > /etc/systemd/system/ehviewer-sync.service <<UNIT
+[Unit]
+Description=EhViewer Sync API
+After=network.target
+
+[Service]
+Environment=EHVIEWER_TOKEN=${'$'}TOKEN
+ExecStart=/usr/bin/python3 /opt/ehviewer-sync/server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now ehviewer-sync
+echo "部署完成，访问密钥 Token: ${'$'}TOKEN"
+""".trimIndent()
+
+@Composable
+private fun DeployStepCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = title)
+            content()
+        }
+    }
+}
+
+@Composable
+private fun DeployCodeBlock(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.fillMaxWidth(),
+        fontSize = 11.sp,
+    )
+}
+
 @Destination<RootGraph>
 @Composable
 fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator) = Screen(navigator) {
@@ -148,6 +291,8 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
     val webdavSyncState by WebDavGallerySync.syncState.collectAsState()
     val hasSignedIn by Settings.hasSignedIn.collectAsState()
     var showMeteredConfirm by remember { mutableStateOf(false) }
+    var showDeployGuide by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
 
     // 周期任务随开关实时生效
     LaunchedEffect(webdavAutoSync.value) {
@@ -174,6 +319,25 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
             }.onFailure { logcat("BackupRestore", it) }.exceptionOrNull()
         }
         toast(if (error == null) uploadDone else uploadFailed.format(error.message.orEmpty()))
+    }
+
+    fun testVpsConnection() = launch {
+        if (!VpsClient.configured()) {
+            toast(noServer)
+            return@launch
+        }
+        val error = withIOContext {
+            runCatching { VpsClient.testConnection() }
+                .onFailure { logcat("BackupRestore", it) }
+                .exceptionOrNull()
+        }
+        toast(
+            if (error == null) {
+                "VPS 连接与鉴权测试成功"
+            } else {
+                "VPS 连接失败：${error.message.orEmpty()}"
+            },
+        )
     }
 
     fun restoreFromCloud() = launch {
@@ -428,10 +592,27 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                             onValueChange = { accessToken.value = it },
                             password = true,
                         )
+                        val vpsLastHistorySyncAt = Settings.vpsLastHistorySyncAt.asMutableState()
+                        val historySyncSummary = if (vpsLastHistorySyncAt.value > 0) {
+                            "上次同步：" + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                                .format(Date(vpsLastHistorySyncAt.value))
+                        } else {
+                            stringResource(R.string.backup_cloud_history_switch_summary)
+                        }
                         SwitchPreference(
                             title = stringResource(R.string.backup_cloud_history_switch),
-                            summary = stringResource(R.string.backup_cloud_history_switch_summary),
+                            summary = historySyncSummary,
                             state = Settings.vpsHistorySyncEnabled.asMutableState(),
+                        )
+                        Preference(
+                            title = "测试连接",
+                            summary = "校验 VPS 服务器可达性与访问密钥 Token 鉴权",
+                            onClick = { testVpsConnection() },
+                        )
+                        Preference(
+                            title = "VPS 部署与配置指南",
+                            summary = "查看服务端一键部署命令、v2rayNG 分流规则与填写说明",
+                            onClick = { showDeployGuide = true },
                         )
                         Preference(
                             title = stringResource(R.string.backup_cloud_upload),
@@ -442,6 +623,81 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                             title = stringResource(R.string.backup_cloud_restore),
                             summary = stringResource(R.string.backup_cloud_restore_summary),
                             onClick = { restoreFromCloud() },
+                        )
+                    }
+                }
+
+                if (showDeployGuide) {
+                    WindowDialog(
+                        show = true,
+                        title = "VPS 同步服务部署步骤",
+                        onDismissRequest = { showDeployGuide = false },
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 460.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            DeployStepCard(title = "步骤 1：VPS 服务端一键部署（Ubuntu / Debian）") {
+                                Text(
+                                    text = "在 VPS 上以 root 执行以下脚本：写入 hosts 映射、创建 Python + SQLite 同步服务、配置开机自启并输出 32 位访问密钥。",
+                                    fontSize = 13.sp,
+                                )
+                                DeployCodeBlock(VPS_DEPLOY_SCRIPT)
+                                TextButton(
+                                    text = "复制部署命令",
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(VPS_DEPLOY_SCRIPT))
+                                        toast("已复制 VPS 部署命令")
+                                    },
+                                )
+                            }
+                            DeployStepCard(title = "步骤 2：v2rayNG 代理分流规则配置") {
+                                Text(
+                                    text = "1) 在「路由设置」右上角新建规则并置顶，域名填写 $VPS_PROXY_DOMAIN_RULE，出站标签选择 proxy。",
+                                    fontSize = 13.sp,
+                                )
+                                TextButton(
+                                    text = "复制域名规则",
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(VPS_PROXY_DOMAIN_RULE))
+                                        toast("已复制域名规则")
+                                    },
+                                )
+                                Text(
+                                    text = "2) 将路由设置顶部的「域名策略」设为 AsIs，跳过本地 DNS 直接走代理隧道。",
+                                    fontSize = 13.sp,
+                                )
+                                Text(
+                                    text = "3) 若开启分应用代理，请勾选本应用（以及测试用浏览器），并关闭系统「私人 DNS」，避免内网域名解析被拦截。",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                            DeployStepCard(title = "步骤 3：App 端连接参数填写") {
+                                Text(
+                                    text = "默认服务器地址：$VPS_DEFAULT_SERVER_URL",
+                                    fontSize = 13.sp,
+                                )
+                                TextButton(
+                                    text = "一键填入地址",
+                                    onClick = {
+                                        serverUrl.value = VPS_DEFAULT_SERVER_URL
+                                        toast("已填入服务器地址")
+                                    },
+                                )
+                                Text(
+                                    text = "将步骤 1 终端最后输出的 32 位 Token 粘贴到「访问密钥 Token」，再开启「启用历史与进度同步」即可。",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            text = "关闭",
+                            onClick = { showDeployGuide = false },
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }

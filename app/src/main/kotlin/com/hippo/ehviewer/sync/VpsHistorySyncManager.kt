@@ -95,6 +95,8 @@ object VpsHistorySyncManager {
             }
             // 空结果也推进时间戳，避免每次进入历史页都重复拉取同一区间
             Settings.vpsLastSyncAt = if (entries.isEmpty()) System.currentTimeMillis() else maxUpdatedAt
+            // 记录本机实际完成同步的时间，用于设置页展示「上次同步」摘要
+            Settings.vpsLastHistorySyncAt = System.currentTimeMillis()
         }
     }
 }

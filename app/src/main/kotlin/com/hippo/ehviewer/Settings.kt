@@ -165,6 +165,9 @@ object Settings : DataStorePreferences(null) {
     /** 上次从云端增量拉取历史的时间戳（epoch millis）。 */
     var vpsLastSyncAt by longPref("vps_last_history_sync_at", 0)
 
+    /** 上次成功增量同步历史的本机时间戳（epoch millis），用于设置页同步摘要展示。 */
+    var vpsLastHistorySyncAt by longPref("vps_last_sync_wall_at", 0)
+
     // WebDAV 已下载画廊同步
     val webdavUrl = stringPref("webdav_url", "")
     val webdavUser = stringPref("webdav_user", "")

@@ -48,6 +48,11 @@ object WebDavClient {
         .followRedirects(true)
         .build()
 
+    /** 单文件下载单独放宽读取超时，兼容 fnOS 大文件分块传输（chunked）。 */
+    private val downloadClient = client.newBuilder()
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
+
     /** 当前正在执行的请求，用于「停止同步」时立即关闭网络流。 */
     @Volatile
     private var activeCall: okhttp3.Call? = null
@@ -190,23 +195,30 @@ object WebDavClient {
 
     /**
      * 下载到 target，并校验实际写入字节数与服务端 Content-Length 一致。
-     * 大小不一致直接抛异常，交由调用方清理半成品文件。
+     *
+     * 只接受 200/206：重定向由 OkHttp 自动跟随，其余状态码（401/403/404 等）
+     * 直接抛出带状态码与 URL 的异常，禁止把空响应体当成 0 字节文件落盘。
      */
     fun download(remoteUrl: String, target: Path): Long {
-        val call = client.newCall(newRequest("GET", remoteUrl))
+        val call = downloadClient.newCall(newRequest("GET", remoteUrl))
         activeCall = call
         try {
             call.execute().use { response ->
-                if (!response.isSuccessful) {
-                    val detail = runCatching { response.body.string().take(512) }.getOrNull()
-                    throw WebDavException("GET HTTP ${response.code}" + detail?.let { ": $it" }.orEmpty())
+                if (response.code != 200 && response.code != 206) {
+                    val detail = runCatching { response.body.string().take(256) }.getOrNull()
+                    throw WebDavException(
+                        "GET HTTP ${response.code}: $remoteUrl" + detail?.let { " - $it" }.orEmpty(),
+                    )
                 }
                 target.parent?.mkdirs()
                 val expected = response.body.contentLength()
                 val written = response.body.byteStream().use { input ->
                     ParcelFileDescriptor.AutoCloseOutputStream(target.openFileDescriptor("wt")).use { output ->
-                        input.copyTo(output).also { output.flush() }
+                        input.copyTo(output, bufferSize = 32 * 1024).also { output.flush() }
                     }
+                }
+                if (written <= 0L) {
+                    throw WebDavException("下载内容为空（HTTP ${response.code}）：$remoteUrl")
                 }
                 if (expected >= 0 && written != expected) {
                     throw WebDavException("下载不完整：$remoteUrl expected=$expected actual=$written")
