@@ -9,10 +9,10 @@ import androidx.compose.runtime.setValue
  * 主界面据此刻暂停左右滑动切页，退出多选后自动恢复。
  */
 object SelectionModeController {
-    var active by mutableStateOf(false)
+    var isActive by mutableStateOf(false)
         private set
 
     fun setActive(value: Boolean) {
-        active = value
+        isActive = value
     }
 }
