@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -268,32 +269,36 @@ fun SearchBarScreen(
                         // 只对状态栏条带做渐进模糊：搜索胶囊自身已是玻璃材质，若整条顶栏再模糊一次，
                         // 胶囊与其周边会出现双层模糊和模糊强度断层。
                         if (!expanded) {
-                            if (activeBackdrop != null && isRuntimeShaderSupported()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        // 统一放宽：从状态栏上缘平滑渐变到首张卡片上边缘附近的参考线
-                                        .height(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
-                                        .progressiveTextureBlur(
-                                            backdrop = activeBackdrop,
-                                            shape = RectangleShape,
-                                            gradient = ProgressiveBlur.Top,
-                                            blurRadius = 20f,
-                                            colors = BlurDefaults.blurColors(
-                                                blendColors = listOf(
-                                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                            // matchParentSize 让渐变只做绘制、不参与顶栏高度测量；
+                            // requiredHeight 允许渐变层向下溢出绘制，避免把列表内容整体顶下去。
+                            Box(modifier = Modifier.matchParentSize()) {
+                                if (activeBackdrop != null && isRuntimeShaderSupported()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            // 统一放宽：从状态栏上缘平滑渐变到首张卡片上边缘附近的参考线
+                                            .requiredHeight(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
+                                            .progressiveTextureBlur(
+                                                backdrop = activeBackdrop,
+                                                shape = RectangleShape,
+                                                gradient = ProgressiveBlur.Top,
+                                                blurRadius = 20f,
+                                                colors = BlurDefaults.blurColors(
+                                                    blendColors = listOf(
+                                                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                                                    ),
                                                 ),
                                             ),
-                                        ),
-                                )
-                            } else {
-                                val scrim = MiuixTheme.colorScheme.background.scrim()
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
-                                        .background(scrim),
-                                )
+                                    )
+                                } else {
+                                    val scrim = MiuixTheme.colorScheme.background.scrim()
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .requiredHeight(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
+                                            .background(scrim),
+                                    )
+                                }
                             }
                         }
                         Column {

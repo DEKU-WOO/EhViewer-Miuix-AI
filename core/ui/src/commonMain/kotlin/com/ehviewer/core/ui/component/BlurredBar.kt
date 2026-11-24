@@ -2,7 +2,7 @@ package com.ehviewer.core.ui.component
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -71,41 +71,41 @@ fun BlurredBar(
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier) {
+        val density = LocalDensity.current
+        var barHeightPx by remember { mutableIntStateOf(0) }
         if (backdrop != null && blurEnabled) {
-            val density = LocalDensity.current
-            var barHeightPx by remember { mutableIntStateOf(0) }
             val alphaProvider: Density.() -> Float = {
                 scrollBehavior?.state
                     // 停靠时保留基础磨砂层，避免顶部大面积纯透明导致内容生硬透出
                     ?.let { 0.55f + 0.45f * (-it.contentOffset / 48.dp.toPx()).coerceIn(0f, 1f) }
                     ?: 1f
             }
-            // 单一连贯磨砂层：覆盖顶栏并向下延伸缓冲带，让渐变随高度线性衰减至完全透明，
-            // 不再额外绘制第二层/分段式遮罩，避免顶栏下沿出现生硬截断。
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(with(density) { barHeightPx.toDp() } + scrimExtraHeight)
-                    .graphicsLayer { alpha = alphaProvider() }
-                    .progressiveTextureBlur(
-                        backdrop = backdrop,
-                        shape = RectangleShape,
-                        // 使用 Miuix 官方默认曲线：模糊权重沿 Y 轴线性衰减，避免高 curve 造成底部权重骤降的硬边
-                        gradient = ProgressiveBlur.Top,
-                        // 与 Miuix 默认半径 20f 对齐，过小会导致模糊不足、文字轮廓穿透
-                        blurRadius = 20f,
-                        colors = BlurDefaults.blurColors(
-                            blendColors = listOf(
-                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.55f)),
+            // matchParentSize 让磨砂层只做绘制、不参与父容器高度测量；
+            // requiredHeight 允许其向下溢出绘制缓冲带，因此不会把顶栏下方内容整体顶下去。
+            Box(modifier = Modifier.matchParentSize()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .requiredHeight(with(density) { barHeightPx.toDp() } + scrimExtraHeight)
+                        .graphicsLayer { alpha = alphaProvider() }
+                        .progressiveTextureBlur(
+                            backdrop = backdrop,
+                            shape = RectangleShape,
+                            // 使用 Miuix 官方默认曲线：模糊权重沿 Y 轴线性衰减，避免高 curve 造成底部权重骤降的硬边
+                            gradient = ProgressiveBlur.Top,
+                            // 与 Miuix 默认半径 20f 对齐，过小会导致模糊不足、文字轮廓穿透
+                            blurRadius = 20f,
+                            colors = BlurDefaults.blurColors(
+                                blendColors = listOf(
+                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                                ),
                             ),
                         ),
-                    ),
-            )
-            Box(modifier = Modifier.onSizeChanged { barHeightPx = it.height }) {
-                content()
+                )
             }
-        } else {
+        }
+        Box(modifier = Modifier.onSizeChanged { barHeightPx = it.height }) {
             content()
         }
     }
