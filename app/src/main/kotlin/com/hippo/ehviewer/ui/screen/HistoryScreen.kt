@@ -130,9 +130,9 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
     val loadedItems = historyData.itemSnapshotList.items
     val allSelected = loadedItems.isNotEmpty() && loadedItems.all { it.gid in checkedInfoMap }
     // 进入/退出多选时同步全局状态，主界面据此暂停左右切页
-    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
+    LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
     DisposableEffect(Unit) {
-        onDispose { SelectionModeController.setActive(false) }
+        onDispose { SelectionModeController.active = false }
     }
     // 系统侧滑返回优先退出多选
     BackHandler(enabled = selectMode) { checkedInfoMap.clear() }

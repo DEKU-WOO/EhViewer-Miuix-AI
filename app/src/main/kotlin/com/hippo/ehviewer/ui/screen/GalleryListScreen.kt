@@ -180,9 +180,9 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
     // 选择态期间暂停主界面左右滑动切页
-    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
+    LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
     DisposableEffect(Unit) {
-        onDispose { SelectionModeController.setActive(false) }
+        onDispose { SelectionModeController.active = false }
     }
     // 系统返回（含侧滑返回）直接退出选择态
     BackHandler(enabled = selectMode) { checkedInfoMap.clear() }

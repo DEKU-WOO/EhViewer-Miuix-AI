@@ -569,7 +569,7 @@ class MainActivity : AppCompatActivity() {
                                 // 多选模式下关闭滑动避免误切页面；首屏右滑 / 尾屏左滑不做拦截，
                                 // 且起点靠近屏幕左右边缘时直接放行，保证系统返回手势可用。
                                 .horizontalTabSwipe(
-                                    enabled = isPrimaryDestination && !showNavigationRail && !SelectionModeController.isActive,
+                                    enabled = isPrimaryDestination && !showNavigationRail && !SelectionModeController.active,
                                     onSwipeLeft = {
                                         val next = primaryIndex + 1
                                         if (next < primaryNavItems.size) {
@@ -611,7 +611,7 @@ class MainActivity : AppCompatActivity() {
                                     // 进入多选时底部导航胶囊向自身中心微缩并渐隐，退出时对称恢复
                                     visible = showBottomBar &&
                                         (!BottomBarScrollState.hidden || inSettingsTree) &&
-                                        !SelectionModeController.isActive,
+                                        !SelectionModeController.active,
                                     enter = slideInVertically { it } + fadeIn(),
                                     exit = scaleOut(targetScale = 0.85f, transformOrigin = TransformOrigin.Center) + fadeOut(),
                                     modifier = Modifier.align(Alignment.BottomCenter),

@@ -151,8 +151,8 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     val selectMode = checkedInfoMap.isNotEmpty()
     DrawerHandle(!selectMode && !searchBarExpanded)
     // 选中态同步给主界面（暂停左右滑动切页），退出页面时兜底复位
-    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
-    DisposableEffect(Unit) { onDispose { SelectionModeController.setActive(false) } }
+    LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
+    DisposableEffect(Unit) { onDispose { SelectionModeController.active = false } }
     // 侧滑/返回键退出多选；系统返回优先由本页消费
     BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
 
