@@ -92,7 +92,6 @@ import splitties.init.appCtx
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -158,7 +157,7 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_download_download_location))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_download_storage), first = true)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -223,7 +222,7 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_download_concurrency))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_download_performance))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -262,7 +261,7 @@ fun AnimatedVisibilityScope.DownloadScreen(navigator: DestinationsNavigator) = S
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_download_download_origin_image))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_download_content))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

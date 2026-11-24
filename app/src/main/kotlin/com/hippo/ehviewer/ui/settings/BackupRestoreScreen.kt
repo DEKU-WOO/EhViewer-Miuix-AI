@@ -94,7 +94,6 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -434,10 +433,8 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
-                // 悬浮顶栏下方留出安全间距，避免首个分组标题被返回箭头遮挡
-                Spacer(modifier = Modifier.height(12.dp))
-                // 分组一：本地备份
-                SmallTitle(text = stringResource(id = R.string.backup_local_title))
+                // 分组一：本地备份（首个分组，间距由 SettingsSmallTitle 统一控制）
+                SettingsSmallTitle(text = stringResource(id = R.string.backup_local_title), first = true)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -485,7 +482,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 }
 
                 // 分组二：多端云同步（VPS）
-                SmallTitle(text = stringResource(id = R.string.backup_cloud_title))
+                SettingsSmallTitle(text = stringResource(id = R.string.backup_cloud_title))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -619,7 +616,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 }
 
                 // 分组三：已下载画廊同步（WebDAV）
-                SmallTitle(text = stringResource(id = R.string.backup_webdav_title))
+                SettingsSmallTitle(text = stringResource(id = R.string.backup_webdav_title))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

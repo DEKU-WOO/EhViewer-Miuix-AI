@@ -7,6 +7,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -106,6 +107,7 @@ import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
@@ -265,7 +267,8 @@ fun SearchBarScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(statusBarPadding)
+                                        // 统一放宽：从状态栏上缘平滑渐变到首张卡片上边缘附近的参考线
+                                        .height(statusBarPadding + TopScrimExtraHeight)
                                         .progressiveTextureBlur(
                                             backdrop = backdrop,
                                             shape = RectangleShape,
@@ -283,7 +286,7 @@ fun SearchBarScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(statusBarPadding)
+                                        .height(statusBarPadding + TopScrimExtraHeight)
                                         .background(scrim),
                                 )
                             }
@@ -562,10 +565,13 @@ fun SearchBarScreen(
                                 scaleX = 0.85f + 0.15f * collapseProgress
                                 scaleY = 0.85f + 0.15f * collapseProgress
                             },
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (collapseProgress > 0.2f) {
-                            IconButton(
+                            // 收缩态不再让图标裸渲染在文字上，统一包装为独立正圆毛玻璃按钮
+                            CollapsedCircleAction(
+                                backdrop = backdrop,
                                 onClick = { onExpandedChange(true) },
                             ) {
                                 Icon(
@@ -574,7 +580,8 @@ fun SearchBarScreen(
                                 )
                             }
                             if (filter != null) {
-                                IconButton(
+                                CollapsedCircleAction(
+                                    backdrop = backdrop,
                                     onClick = { showFilterSheet = true },
                                 ) {
                                     Icon(
@@ -636,3 +643,30 @@ private val WhitespaceRegex = Regex("\\s+")
 private val SearchBarHorizontalPadding = 16.dp
 private val SearchBarMaxWidth = 720.dp
 private val FilterDialogCornerRadius = 32.dp
+
+// 顶部磨砂从状态栏上缘继续向下延伸的额外高度，使各页面渐变终点落在首张卡片上缘参考线附近
+private val TopScrimExtraHeight = 40.dp
+
+/** 收缩态右侧的独立正圆毛玻璃高光按钮，材质与底部导航栏一致。 */
+@Composable
+private fun CollapsedCircleAction(
+    backdrop: Backdrop?,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    LiquidGlassSurface(
+        shape = CircleShape,
+        elevation = 4.dp,
+        refractionHeight = 16.dp,
+        refractionAmount = 16.dp,
+        containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.size(40.dp),
+        backdrop = backdrop,
+    ) {
+        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+                content()
+            }
+        }
+    }
+}

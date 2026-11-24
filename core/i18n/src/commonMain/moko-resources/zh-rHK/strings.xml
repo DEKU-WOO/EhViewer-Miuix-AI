@@ -329,6 +329,16 @@
     <string name="settings_download_clean_redundancy_done">完成宂餘清理，共清理 %d 項</string>
 
     <string name="settings_advanced">高級</string>
+    <string name="settings_group_list_display">列表顯示</string>
+    <string name="settings_group_gallery_detail">畫廊詳情</string>
+    <string name="settings_group_filter_tags">過濾與標籤</string>
+    <string name="settings_group_interface_theme">介面與主題</string>
+    <string name="settings_group_logs_diagnostics">日誌與診斷</string>
+    <string name="settings_group_network_ads">網絡與廣告</string>
+    <string name="settings_group_system_storage">系統與儲存</string>
+    <string name="settings_group_download_storage">下載儲存</string>
+    <string name="settings_group_download_performance">下載效能</string>
+    <string name="settings_group_download_content">下載內容</string>
     <string name="settings_advanced_save_parse_error_body">解析失敗時保存頁面內容</string>
     <string name="settings_advanced_save_parse_error_body_summary">頁面內容可能含有隱私敏感信息</string>
     <string name="settings_advanced_save_crash_log">應用崩潰時保存錯誤日誌</string>

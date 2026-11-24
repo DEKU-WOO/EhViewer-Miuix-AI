@@ -59,7 +59,6 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -103,7 +102,7 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
             ) {
                 if (hasSignedIn) {
                     val displayName by Settings.displayName.collectAsState()
-                    SmallTitle(text = stringResource(id = R.string.account_name))
+                    SettingsSmallTitle(text = stringResource(id = R.string.account_name), first = true)
                     Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                         Preference(
                             title = stringResource(id = R.string.account_name),
@@ -161,7 +160,11 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_eh_list_mode))
+                // 未登录时本分组是页面首个分组，间距需按首个分组处理
+                SettingsSmallTitle(
+                    text = stringResource(id = R.string.settings_group_list_display),
+                    first = !hasSignedIn,
+                )
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     var defaultFavSlot by Settings.defaultFavSlot.asMutableState()
                     val disabled = stringResource(id = R.string.disabled_nav)
@@ -256,7 +259,7 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.dark_theme))
+                SettingsSmallTitle(text = stringResource(id = R.string.dark_theme))
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     SimpleMenuPreferenceInt(
                         title = stringResource(id = R.string.dark_theme),
@@ -270,7 +273,7 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_eh_show_gallery_comments))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_gallery_detail))
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     val showComments = Settings.showComments.asMutableState()
                     SwitchPreference(
@@ -315,7 +318,7 @@ fun AnimatedVisibilityScope.EhScreen(navigator: DestinationsNavigator) = Screen(
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_eh_filter))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_filter_tags))
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     if (EhTagDatabase.translatable) {
                         SwitchPreference(

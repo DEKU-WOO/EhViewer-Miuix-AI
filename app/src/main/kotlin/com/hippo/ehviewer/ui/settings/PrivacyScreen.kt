@@ -37,7 +37,6 @@ import moe.tarsin.snackbar
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -73,7 +72,7 @@ fun AnimatedVisibilityScope.PrivacyScreen(navigator: DestinationsNavigator) = Sc
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
-                SmallTitle(text = stringResource(id = R.string.settings_privacy))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_privacy), first = true)
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     val security = Settings.security.asMutableState()
                     SwitchPreference(
@@ -103,7 +102,7 @@ fun AnimatedVisibilityScope.PrivacyScreen(navigator: DestinationsNavigator) = Sc
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.clear_search_history))
+                SettingsSmallTitle(text = stringResource(id = R.string.clear_search_history))
                 Card(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                     val searchHistoryCleared = stringResource(id = R.string.search_history_cleared)
                     Preference(

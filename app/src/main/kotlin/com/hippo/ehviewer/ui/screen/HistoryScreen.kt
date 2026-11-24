@@ -1,7 +1,15 @@
 package com.hippo.ehviewer.ui.screen
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,12 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.fork.SwipeToDismissBox
-import androidx.compose.material3.fork.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -38,15 +46,20 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
 import androidx.paging.map
+import com.ehviewer.core.database.model.GalleryEntity
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.ui.component.DismissDeleteBackground
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
-import com.ehviewer.core.ui.component.dismissDeleteAction
+import com.ehviewer.core.ui.component.SelectionAction
+import com.ehviewer.core.ui.component.SelectionActionBar
+import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.History
+import com.ehviewer.core.ui.icons.filled.MenuBook
 import com.ehviewer.core.ui.util.Await
+import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.readableWidth
 import com.ehviewer.core.ui.util.rememberInVM
+import com.ehviewer.core.ui.util.takeAndClear
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
 import com.hippo.ehviewer.EhDB
@@ -56,8 +69,11 @@ import com.hippo.ehviewer.sync.VpsHistorySyncManager
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
-import com.hippo.ehviewer.ui.doGalleryInfoAction
+import com.hippo.ehviewer.ui.SelectionModeController
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
+import com.hippo.ehviewer.ui.main.SelectableGalleryItem
+import com.hippo.ehviewer.ui.modifyFavorites
+import com.hippo.ehviewer.ui.startDownload
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.util.FavouriteStatusRouter
 import com.ramcosta.composedestinations.annotation.Destination
@@ -66,6 +82,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
+import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -74,6 +91,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Favorites
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
@@ -86,8 +105,6 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
     var searchBarOffsetY by remember { mutableIntStateOf(0) }
     var keyword by rememberSaveable { mutableStateOf("") }
-
-    DrawerHandle(!searchBarExpanded)
 
     val density = LocalDensity.current
     val historyData = rememberInVM {
@@ -107,14 +124,31 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
     FavouriteStatusRouter.Observe(historyData)
     // 进入历史页时做一次增量拉取（未启用云同步时内部直接返回）
     LaunchedEffect(Unit) { VpsHistorySyncManager.refreshFromServer() }
+    val checkedInfoMap = remember { mutableStateMapOf<Long, GalleryEntity>() }
+    val selectMode = checkedInfoMap.isNotEmpty()
+    // 已加载项全部勾选时顶栏全选按钮显示激活态
+    val loadedItems = historyData.itemSnapshotList.items
+    val allSelected = loadedItems.isNotEmpty() && loadedItems.all { it.gid in checkedInfoMap }
+    // 进入/退出多选时同步全局状态，主界面据此暂停左右切页
+    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
+    DisposableEffect(Unit) {
+        onDispose { SelectionModeController.setActive(false) }
+    }
+    // 系统侧滑返回优先退出多选
+    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
+    DrawerHandle(!selectMode && !searchBarExpanded)
     var isRefreshing by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
     SearchBarScreen(
         onApplySearch = {
             keyword = it
             historyData.refresh()
         },
         expanded = searchBarExpanded,
-        onExpandedChange = { searchBarExpanded = it },
+        onExpandedChange = {
+            searchBarExpanded = it
+            if (it) checkedInfoMap.clear()
+        },
         title = title,
         searchFieldHint = hint,
         searchBarOffsetY = { searchBarOffsetY },
@@ -177,7 +211,7 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
         ) {
         FastScrollLazyColumn(
             // 滚动容器保持全宽：平板左右两侧空白区域也能触摸上下滑动；
-            // 卡片的居中最大宽度约束在每个 item 上单独施加（见下方 SwipeToDismissBox 的 readableWidth）。
+            // 卡片的居中最大宽度约束在每个 item 上单独施加（见下方 SelectableGalleryItem 的 readableWidth）。
             modifier = Modifier.nestedScroll(searchBarConnection).fillMaxSize(),
             contentPadding = paddingValues,
             verticalArrangement = Arrangement.spacedBy(dimensionResource(com.hippo.ehviewer.R.dimen.gallery_list_interval)),
@@ -190,35 +224,33 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
             ) { index ->
                 val info = historyData[index]
                 if (info != null) {
-                    val dismissState = rememberSwipeToDismissBoxState()
-                    val deleteHistory = {
-                        launch {
-                            EhDB.deleteHistoryInfo(info)
-                        }
-                    }
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        backgroundContent = {
-                            DismissDeleteBackground(endPadding = marginH + 16.dp)
-                        },
+                    val checked = info.gid in checkedInfoMap
+                    SelectableGalleryItem(
+                        checked = checked,
                         modifier = Modifier
                             .readableWidth()
                             .fillMaxWidth()
-                            .dismissDeleteAction(
-                                label = stringResource(id = R.string.delete),
-                                onDelete = { deleteHistory() },
-                            )
+                            .padding(horizontal = marginH)
                             .thenIf(animateItems) { animateItem() },
-                        enableDismissFromStartToEnd = false,
-                        onDismiss = { EhDB.deleteHistoryInfo(info) },
-                    ) {
+                    ) { interactionSource ->
                         GalleryInfoListItem(
-                            onClick = { navigate(info.asDst()) },
-                            onLongClick = { launch { doGalleryInfoAction(info) } },
+                            onClick = {
+                                if (selectMode) {
+                                    if (checked) {
+                                        checkedInfoMap.remove(info.gid)
+                                    } else {
+                                        checkedInfoMap[info.gid] = info
+                                    }
+                                } else {
+                                    navigate(info.asDst())
+                                }
+                            },
+                            onLongClick = { checkedInfoMap[info.gid] = info },
                             info = info,
                             showPages = showPages,
                             showProgress = showProgress,
-                            modifier = Modifier.height(cardHeight).padding(horizontal = marginH),
+                            modifier = Modifier.height(cardHeight),
+                            interactionSource = interactionSource,
                         )
                     }
                 } else {
@@ -250,6 +282,85 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                         style = MiuixTheme.textStyles.title2,
                     )
                 }
+            }
+        }
+    }
+        // 选择态顶栏覆盖在搜索栏之上，下方用页面背景遮住原搜索胶囊
+        if (selectMode) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(MiuixTheme.colorScheme.background),
+            ) {
+                SelectionTopBar(
+                    selectedCount = checkedInfoMap.size,
+                    allSelected = allSelected,
+                    onExit = { checkedInfoMap.clear() },
+                    onToggleSelectAll = {
+                        if (allSelected) {
+                            checkedInfoMap.clear()
+                        } else {
+                            checkedInfoMap.putAll(loadedItems.associateBy { it.gid })
+                        }
+                    },
+                    countText = "已选择 ${checkedInfoMap.size} 项",
+                )
+                // 补足搜索胶囊底部留白，避免选择态仍露出旧搜索栏边缘
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = LocalBottomBarContentPadding.current),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            AnimatedVisibility(
+                visible = selectMode,
+                enter = slideInVertically { it / 2 } + fadeIn(),
+                exit = slideOutVertically { it / 2 } + fadeOut(),
+            ) {
+                SelectionActionBar(
+                    actions = listOf(
+                        SelectionAction(
+                            icon = EhIcons.Default.MenuBook,
+                            label = stringResource(R.string.read),
+                            enabled = checkedInfoMap.size == 1,
+                        ) {
+                            val info = checkedInfoMap.values.firstOrNull()
+                            if (info != null) {
+                                checkedInfoMap.clear()
+                                navigate(info.asDst())
+                            }
+                        },
+                        SelectionAction(icon = MiuixIcons.Download, label = stringResource(R.string.download)) {
+                            val info = checkedInfoMap.takeAndClear()
+                            if (info.isNotEmpty()) {
+                                launch { runSwallowingWithUI { startDownload(false, *info.toTypedArray()) } }
+                            }
+                        },
+                        SelectionAction(icon = MiuixIcons.Favorites, label = stringResource(R.string.favourite)) {
+                            val info = checkedInfoMap.takeAndClear()
+                            if (info.isNotEmpty()) {
+                                // 复用现有收藏逻辑逐个加入；未设置默认收藏夹时会逐项弹窗选择
+                                launch { info.forEach { item -> runSwallowingWithUI { modifyFavorites(item) } } }
+                            }
+                        },
+                        SelectionAction(icon = MiuixIcons.Delete, label = stringResource(R.string.delete)) {
+                            val info = checkedInfoMap.takeAndClear()
+                            if (info.isNotEmpty()) {
+                                launch {
+                                    info.forEach { EhDB.deleteHistoryInfo(it) }
+                                    historyData.refresh()
+                                }
+                            }
+                        },
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
         }
     }

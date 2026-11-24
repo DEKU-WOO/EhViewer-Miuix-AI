@@ -4,9 +4,11 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,14 +36,13 @@ import com.hippo.ehviewer.ui.destinations.BottomNavItemsScreenDestination
 import com.hippo.ehviewer.ui.destinations.DownloadScreenDestination
 import com.hippo.ehviewer.ui.destinations.EhScreenDestination
 import com.hippo.ehviewer.ui.destinations.PrivacyScreenDestination
-import com.hippo.ehviewer.ui.main.NavigationIcon
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowUpDown
 import top.yukonga.miuix.kmp.icon.extended.Download
@@ -50,6 +51,10 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Translate
 import top.yukonga.miuix.kmp.icon.extended.Tune
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+// 设置页标题在顶栏内的额外下移量：SmallTopAppBar 的布局已让标题中心位于状态栏下方约 25.dp，
+// 再补 4.dp 后落在「状态栏 + 24~32.dp」参考线区间，与收藏页首张卡片上边缘视觉对齐。
+private val SettingsTitleExtraTopGap = 4.dp
 
 @Destination<RootGraph>
 @Composable
@@ -65,11 +70,13 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                 backdrop = backdrop,
                 scrollBehavior = scrollBehavior,
             ) {
-                TopAppBar(
+                // 使用小号顶栏标题（title4），不传 navigationIcon 以隐藏左上角返回按钮，保留系统边缘返回手势
+                SmallTopAppBar(
                     title = stringResource(id = R.string.settings),
-                    navigationIcon = { NavigationIcon() },
                     scrollBehavior = scrollBehavior,
                     color = if (backdrop != null) Color.Transparent else colorScheme.surface,
+                    // 额外下移，使标题视觉位置落在「状态栏 + 24~32.dp」参考线附近，与收藏页首张卡片上边缘对齐
+                    modifier = Modifier.padding(top = SettingsTitleExtraTopGap),
                 )
             }
         },
@@ -85,6 +92,8 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
+                // 与二级页面首个分组标题保持一致的大标题 → 首张卡片间距
+                Spacer(Modifier.height(SettingsContentTopGap))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

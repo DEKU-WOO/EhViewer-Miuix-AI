@@ -34,11 +34,13 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -82,8 +84,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -175,6 +181,7 @@ import com.ramcosta.composedestinations.utils.currentDestinationAsState
 import com.ramcosta.composedestinations.utils.rememberDestinationsNavigator
 import eu.kanade.tachiyomi.util.view.setSecureScreen
 import java.io.File
+import kotlin.math.abs
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -556,7 +563,26 @@ class MainActivity : AppCompatActivity() {
                     fun MainContent() {
                         val hapticFeedback = LocalHapticFeedback.current
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                // 主 Tab 横向滑动切换：页序严格跟随「设置 -> 导航项」的可见顺序；
+                                // 多选模式下关闭滑动避免误切页面；首屏右滑 / 尾屏左滑不做拦截，
+                                // 且起点靠近屏幕左右边缘时直接放行，保证系统返回手势可用。
+                                .horizontalTabSwipe(
+                                    enabled = isPrimaryDestination && !showNavigationRail && !SelectionModeController.active,
+                                    onSwipeLeft = {
+                                        val next = primaryIndex + 1
+                                        if (next < primaryNavItems.size) {
+                                            navigateToTab(primaryNavItems[next].first)
+                                        }
+                                    },
+                                    onSwipeRight = {
+                                        val prev = primaryIndex - 1
+                                        if (prev >= 0) {
+                                            navigateToTab(primaryNavItems[prev].first)
+                                        }
+                                    },
+                                ),
                         ) {
                             Box(
                                 modifier = Modifier
@@ -582,9 +608,12 @@ class MainActivity : AppCompatActivity() {
 
                             if (!showNavigationRail) {
                                 AnimatedVisibility(
-                                    visible = showBottomBar && (!BottomBarScrollState.hidden || inSettingsTree),
+                                    // 进入多选时底部导航胶囊向自身中心微缩并渐隐，退出时对称恢复
+                                    visible = showBottomBar &&
+                                        (!BottomBarScrollState.hidden || inSettingsTree) &&
+                                        !SelectionModeController.active,
                                     enter = slideInVertically { it } + fadeIn(),
-                                    exit = slideOutVertically { it } + fadeOut(),
+                                    exit = scaleOut(targetScale = 0.85f, transformOrigin = TransformOrigin.Center) + fadeOut(),
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 ) {
                                     IosLiquidGlassNavigationBar(
@@ -780,6 +809,59 @@ class MainActivity : AppCompatActivity() {
 val LocalDrawerHandle = compositionLocalOf<SnapshotStateList<Long>> { error("CompositionLocal LocalDrawerHandle not present!") }
 val LocalSnackBarHostState = compositionLocalOf<SnackbarHostState> { error("CompositionLocal LocalSnackBarHostState not present!") }
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope> { error("CompositionLocal LocalSharedTransitionScope not present!") }
+
+/**
+ * 主界面横向滑动切页手势。
+ *
+ * - 只在水平位移超过阈值且明显大于垂直位移时才吞掉事件，避免影响列表纵向滚动；
+ * - 起手点靠近屏幕左右边缘（系统返回手势热区）时直接放行；
+ * - 首屏右滑 / 尾屏左滑由回调侧做边界判断，不在此处阻断手势。
+ */
+private fun Modifier.horizontalTabSwipe(
+    enabled: Boolean,
+    onSwipeLeft: () -> Unit,
+    onSwipeRight: () -> Unit,
+): Modifier = if (!enabled) {
+    this
+} else {
+    this.pointerInput(enabled) {
+        val edgeWidth = 24.dp.toPx()
+        val triggerDistance = 64.dp.toPx()
+        val slop = viewConfiguration.touchSlop
+        awaitPointerEventScope {
+            while (true) {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                if (down.position.x < edgeWidth || down.position.x > size.width - edgeWidth) {
+                    continue
+                }
+                var totalX = 0f
+                var totalY = 0f
+                var claimed = false
+                var released = false
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (change.changedToUpIgnoreConsumed()) {
+                        released = true
+                        break
+                    }
+                    totalX += change.positionChange().x
+                    totalY += change.positionChange().y
+                    if (!claimed && abs(totalX) > slop && abs(totalX) > abs(totalY) * 1.5f) {
+                        claimed = true
+                    }
+                    if (claimed) {
+                        change.consume()
+                    }
+                }
+                if (claimed && released) {
+                    if (totalX <= -triggerDistance) onSwipeLeft()
+                    if (totalX >= triggerDistance) onSwipeRight()
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun DrawerHandle(enabled: Boolean) {

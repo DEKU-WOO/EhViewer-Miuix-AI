@@ -75,7 +75,6 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -311,7 +310,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
-                SmallTitle(text = stringResource(id = R.string.settings_ai_translation))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_ai_translation), first = true)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -341,7 +340,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_ai_translation_profiles_title))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_ai_translation_profiles_title))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -388,7 +387,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_ai_translation_interface_title))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_ai_translation_interface_title))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -457,7 +456,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_ai_translation_cache_title))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_ai_translation_cache_title))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

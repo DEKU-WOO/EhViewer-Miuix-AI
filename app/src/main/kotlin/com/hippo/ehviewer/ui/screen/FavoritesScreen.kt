@@ -2,11 +2,20 @@ package com.hippo.ehviewer.ui.screen
 
 import android.content.Context
 import android.view.ViewConfiguration
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
@@ -15,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.currentRecomposeScope
@@ -43,10 +53,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
-import com.ehviewer.core.ui.component.FabLayout
 import com.ehviewer.core.ui.component.LocalSideSheetState
 import com.ehviewer.core.ui.component.ProvideSideSheetContent
+import com.ehviewer.core.ui.component.SelectionAction
+import com.ehviewer.core.ui.component.SelectionActionBar
+import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.icons.EhIcons
+import com.ehviewer.core.ui.icons.filled.MenuBook
+import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.takeAndClear
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
@@ -59,10 +74,11 @@ import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
-import com.hippo.ehviewer.ui.main.AvatarIcon
+import com.hippo.ehviewer.ui.SelectionModeController
 import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
 import com.hippo.ehviewer.ui.main.GalleryList
+import com.hippo.ehviewer.ui.main.SelectableGalleryItem
 import com.hippo.ehviewer.ui.startDownload
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitSelectItem
@@ -83,7 +99,6 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
-import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -127,8 +142,19 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
 
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
+    // 已加载项全部勾选时顶栏全选按钮显示激活态
+    val loadedItems = data.itemSnapshotList.items
+    val allSelected = loadedItems.isNotEmpty() && loadedItems.all { it.gid in checkedInfoMap }
+    // 进入/退出多选时同步全局状态，主界面据此暂停左右切页
+    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
+    DisposableEffect(Unit) {
+        onDispose { SelectionModeController.setActive(false) }
+    }
+    // 系统侧滑返回优先退出多选
+    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
     DrawerHandle(!selectMode && !searchBarExpanded)
 
+    Box(Modifier.fillMaxSize()) {
     SearchBarScreen(
         onApplySearch = { refresh(FavListUrlBuilder(urlBuilder.favCat, it)) },
         expanded = searchBarExpanded,
@@ -193,7 +219,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             ) {
                 Icon(imageVector = MiuixIcons.Folder, contentDescription = null)
             }
-            AvatarIcon()
         },
     ) { contentPadding ->
         val listMode by Settings.listMode.collectAsState()
@@ -226,7 +251,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             listMode = listMode,
             detailItemContent = { info ->
                 val checked = info.gid in checkedInfoMap
-                CheckableItem(
+                SelectableGalleryItem(
                     checked = checked,
                     modifier = Modifier.thenIf(animateItems) { animateItem() },
                 ) { interactionSource ->
@@ -256,7 +281,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             },
             thumbItemContent = { info ->
                 val checked = info.gid in checkedInfoMap
-                CheckableItem(
+                SelectableGalleryItem(
                     checked = checked,
                     modifier = Modifier.thenIf(animateItems) { animateItem() },
                 ) { interactionSource ->
@@ -293,72 +318,120 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         )
     }
 
-    // 日常浏览不再显示右下角悬浮按钮，仅长按卡片进入多选后显示批量操作栏
-    if (selectMode) {
-        FabLayout(
-            hidden = false,
-            expanded = true,
-            onExpandChanged = { if (!it) checkedInfoMap.clear() },
-            autoCancel = false,
-        ) {
-            onClick(MiuixIcons.SelectAll, autoClose = false) {
-                val info = data.itemSnapshotList.items.associateBy { it.gid }
-                checkedInfoMap.putAll(info)
-            }
-            onClick(MiuixIcons.Download) {
-                val info = checkedInfoMap.takeAndClear()
-                runSwallowingWithUI {
-                    startDownload(false, *info.toTypedArray())
-                }
-            }
-            onClick(MiuixIcons.Delete) {
-                val info = checkedInfoMap.takeAndClear()
-                awaitConfirmationOrCancel(title = R.string.delete_favorites_dialog_title) {
-                    Text(text = stringResource(R.string.delete_favorites_dialog_message, info.size))
-                }
-                val srcCat = urlBuilder.favCat
-                runSwallowingWithUI {
-                    if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) { // Delete local fav
-                        EhDB.removeLocalFavorites(info)
-                    } else {
-                        val delList = info.mapToLongArray(BaseGalleryInfo::gid)
-                        EhEngine.modifyFavorites(delList, srcCat, -1)
-                    }
-                }
-                // We refresh anyway as cloud data maybe partially modified
-                data.refresh()
-            }
-            onClick(MiuixIcons.MoveFile) {
-                // First is local favorite, the other 10 is cloud favorite
-                val items = buildList {
-                    add(localFavName)
-                    if (hasSignedIn) {
-                        addAll(Settings.favCat)
-                    }
-                }
-                val index = awaitSelectItem(items, R.string.move_favorites_dialog_title)
-                val srcCat = urlBuilder.favCat
-                val dstCat = if (index == 0) FavListUrlBuilder.FAV_CAT_LOCAL else index - 1
-                val info = checkedInfoMap.takeAndClear()
-                if (srcCat != dstCat) {
-                    runSwallowingWithUI {
-                        if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
-                            // Move from local to cloud
-                            val galleryList = info.map { it.gid to it.token }
-                            EhEngine.addFavorites(galleryList, dstCat)
-                            EhDB.removeLocalFavorites(info)
-                        } else if (dstCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
-                            // Move from cloud to local
-                            EhDB.putLocalFavorites(info)
+        // 选择态顶栏覆盖在搜索栏之上，下方用页面背景遮住原搜索胶囊
+        if (selectMode) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(MiuixTheme.colorScheme.background),
+            ) {
+                SelectionTopBar(
+                    selectedCount = checkedInfoMap.size,
+                    allSelected = allSelected,
+                    onExit = { checkedInfoMap.clear() },
+                    onToggleSelectAll = {
+                        if (allSelected) {
+                            checkedInfoMap.clear()
                         } else {
-                            // Move from cloud to cloud
-                            val gidArray = info.mapToLongArray(BaseGalleryInfo::gid)
-                            EhEngine.modifyFavorites(gidArray, srcCat, dstCat)
+                            checkedInfoMap.putAll(loadedItems.associateBy { it.gid })
                         }
-                    }
-                    // We refresh anyway as cloud data maybe partially modified
-                    data.refresh()
-                }
+                    },
+                    countText = "已选择 ${checkedInfoMap.size} 项",
+                )
+                // 补足搜索胶囊底部留白，避免选择态仍露出旧搜索栏边缘
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+        // 多选操作栏：替换原右下角展开式悬浮按钮组
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = LocalBottomBarContentPadding.current),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            AnimatedVisibility(
+                visible = selectMode,
+                enter = slideInVertically { it / 2 } + fadeIn(),
+                exit = slideOutVertically { it / 2 } + fadeOut(),
+            ) {
+                SelectionActionBar(
+                    actions = listOf(
+                        SelectionAction(
+                            icon = EhIcons.Default.MenuBook,
+                            label = stringResource(R.string.read),
+                            enabled = checkedInfoMap.size == 1,
+                        ) {
+                            val info = checkedInfoMap.values.firstOrNull()
+                            if (info != null) {
+                                checkedInfoMap.clear()
+                                navigate(info.asDst())
+                            }
+                        },
+                        SelectionAction(icon = MiuixIcons.Download, label = stringResource(R.string.download)) {
+                            val info = checkedInfoMap.takeAndClear()
+                            if (info.isNotEmpty()) {
+                                launch { runSwallowingWithUI { startDownload(false, *info.toTypedArray()) } }
+                            }
+                        },
+                        SelectionAction(icon = MiuixIcons.MoveFile, label = stringResource(R.string.download_move_dialog_title)) {
+                            launch {
+                                // First is local favorite, the other 10 is cloud favorite
+                                val items = buildList {
+                                    add(localFavName)
+                                    if (hasSignedIn) {
+                                        addAll(Settings.favCat)
+                                    }
+                                }
+                                val index = awaitSelectItem(items, R.string.move_favorites_dialog_title)
+                                val srcCat = urlBuilder.favCat
+                                val dstCat = if (index == 0) FavListUrlBuilder.FAV_CAT_LOCAL else index - 1
+                                val info = checkedInfoMap.takeAndClear()
+                                if (srcCat != dstCat) {
+                                    runSwallowingWithUI {
+                                        if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
+                                            // Move from local to cloud
+                                            val galleryList = info.map { it.gid to it.token }
+                                            EhEngine.addFavorites(galleryList, dstCat)
+                                            EhDB.removeLocalFavorites(info)
+                                        } else if (dstCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
+                                            // Move from cloud to local
+                                            EhDB.putLocalFavorites(info)
+                                        } else {
+                                            // Move from cloud to cloud
+                                            val gidArray = info.mapToLongArray(BaseGalleryInfo::gid)
+                                            EhEngine.modifyFavorites(gidArray, srcCat, dstCat)
+                                        }
+                                    }
+                                    // We refresh anyway as cloud data maybe partially modified
+                                    data.refresh()
+                                }
+                            }
+                        },
+                        SelectionAction(icon = MiuixIcons.Delete, label = stringResource(R.string.delete)) {
+                            launch {
+                                val info = checkedInfoMap.takeAndClear()
+                                awaitConfirmationOrCancel(title = R.string.delete_favorites_dialog_title) {
+                                    Text(text = stringResource(R.string.delete_favorites_dialog_message, info.size))
+                                }
+                                val srcCat = urlBuilder.favCat
+                                runSwallowingWithUI {
+                                    if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) { // Delete local fav
+                                        EhDB.removeLocalFavorites(info)
+                                    } else {
+                                        val delList = info.mapToLongArray(BaseGalleryInfo::gid)
+                                        EhEngine.modifyFavorites(delList, srcCat, -1)
+                                    }
+                                }
+                                // We refresh anyway as cloud data maybe partially modified
+                                data.refresh()
+                            }
+                        },
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
             }
         }
     }

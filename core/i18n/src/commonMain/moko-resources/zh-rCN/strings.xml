@@ -368,6 +368,16 @@
     <string name="settings_download_clean_redundancy_no_redundancy">未发现冗余</string>
     <string name="settings_download_clean_redundancy_done">完成冗余清理，共清理 %d 项</string>
     <string name="settings_advanced">高级</string>
+    <string name="settings_group_list_display">列表显示</string>
+    <string name="settings_group_gallery_detail">画廊详情</string>
+    <string name="settings_group_filter_tags">过滤与标签</string>
+    <string name="settings_group_interface_theme">界面与主题</string>
+    <string name="settings_group_logs_diagnostics">日志与诊断</string>
+    <string name="settings_group_network_ads">网络与广告</string>
+    <string name="settings_group_system_storage">系统与存储</string>
+    <string name="settings_group_download_storage">下载存储</string>
+    <string name="settings_group_download_performance">下载性能</string>
+    <string name="settings_group_download_content">下载内容</string>
     <string name="settings_advanced_save_parse_error_body">解析失败时保存页面内容</string>
     <string name="settings_advanced_save_parse_error_body_summary">页面内容可能含有隐私敏感信息</string>
     <string name="settings_advanced_save_crash_log">应用崩溃时保存错误日志</string>

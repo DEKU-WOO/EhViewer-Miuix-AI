@@ -387,6 +387,16 @@
     <string name="settings_download_clean_redundancy_no_redundancy">No redundancy</string>
     <string name="settings_download_clean_redundancy_done">Redundancy cleaning completed, clean-up %d items totally</string>
     <string name="settings_advanced">Advanced</string>
+    <string name="settings_group_list_display">List display</string>
+    <string name="settings_group_gallery_detail">Gallery details</string>
+    <string name="settings_group_filter_tags">Filters &amp; tags</string>
+    <string name="settings_group_interface_theme">Interface &amp; theme</string>
+    <string name="settings_group_logs_diagnostics">Logs &amp; diagnostics</string>
+    <string name="settings_group_network_ads">Network &amp; ads</string>
+    <string name="settings_group_system_storage">System &amp; storage</string>
+    <string name="settings_group_download_storage">Download storage</string>
+    <string name="settings_group_download_performance">Download performance</string>
+    <string name="settings_group_download_content">Download content</string>
     <string name="settings_advanced_save_parse_error_body">Save HTML content when parsing error</string>
     <string name="settings_advanced_save_parse_error_body_summary">Html content may be privacy-sensitive</string>
     <string name="settings_advanced_save_crash_log">Save crash log when app crashes</string>

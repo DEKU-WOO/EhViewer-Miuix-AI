@@ -1,6 +1,7 @@
 package com.ehviewer.core.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -49,18 +50,19 @@ fun CheckIndicator(
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
-            // 实心圆底（主题色）+ 白色粗对勾，让选中卡片右上角的对勾醒目可辨
+            // 实心圆底（主题色）+ 白色粗对勾 + 外侧一圈 1.75.dp 纯白描边，让选中卡片右上角的对勾醒目可辨
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .background(MiuixTheme.colorScheme.primary),
+                    .background(MiuixTheme.colorScheme.primary)
+                    .border(1.75.dp, Color.White, CircleShape),
             )
             Icon(
                 imageVector = MiuixIcons.Ok,
                 contentDescription = contentDescription,
                 tint = Color.White,
-                modifier = Modifier.fillMaxSize().padding(3.dp),
+                modifier = Modifier.fillMaxSize().padding(4.dp),
             )
         }
     }

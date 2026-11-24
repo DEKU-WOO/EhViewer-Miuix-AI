@@ -1,10 +1,16 @@
 package com.ehviewer.core.ui.component
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -56,19 +62,20 @@ fun BlurredBar(
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = true,
     scrollBehavior: ScrollBehavior? = null,
+    scrimExtraHeight: Dp = 40.dp,
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier) {
         if (backdrop != null && blurEnabled) {
+            val alphaProvider: Density.() -> Float = {
+                scrollBehavior?.state
+                    ?.let { (-it.contentOffset / 48.dp.toPx()).coerceIn(0f, 1f) }
+                    ?: 1f
+            }
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .graphicsLayer {
-                        // 停靠顶部时透明度为 0；在 48dp 滑动区间内平滑淡入
-                        alpha = scrollBehavior?.state
-                            ?.let { (-it.contentOffset / 48.dp.toPx()).coerceIn(0f, 1f) }
-                            ?: 1f
-                    }
+                    .graphicsLayer { alpha = alphaProvider() }
                     .progressiveTextureBlur(
                         backdrop = backdrop,
                         shape = RectangleShape,
@@ -83,6 +90,29 @@ fun BlurredBar(
                         ),
                     ),
             )
+            // 向下延伸的统一渐变带：让磨砂终点与首张卡片上缘参考线对齐，
+            // 与列表页 SearchBarScreen 的顶部遮罩使用同一套加宽规格。
+            if (scrimExtraHeight > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(y = scrimExtraHeight)
+                        .fillMaxWidth()
+                        .height(scrimExtraHeight)
+                        .graphicsLayer { alpha = alphaProvider() }
+                        .progressiveTextureBlur(
+                            backdrop = backdrop,
+                            shape = RectangleShape,
+                            gradient = ProgressiveBlur.Top,
+                            blurRadius = 16f,
+                            colors = BlurDefaults.blurColors(
+                                blendColors = listOf(
+                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.2f)),
+                                ),
+                            ),
+                        ),
+                )
+            }
         }
         content()
     }

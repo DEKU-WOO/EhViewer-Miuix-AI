@@ -57,11 +57,49 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+/** 卡片自身的外边距（与各页 Card 的 padding(horizontal = 12.dp, vertical = 4.dp) 保持一致）。 */
+private val CardVerticalPadding = 4.dp
+
+/** Miuix SmallTitle 默认的纵向内边距（SmallTitleDefaults.InsideMargin 的 vertical 值）。 */
+private val SmallTitleDefaultVerticalPadding = 8.dp
+
+/** 非首个分组标题距上一张白底卡片的目标间距。 */
+internal val SmallTitleTopGap = 20.dp
+
+/** 分组标题距其所属白底卡片上边缘的目标间距。 */
+internal val SmallTitleBottomGap = 8.dp
+
+/** 大标题（顶栏）与下方第一个白底卡片之间的目标间距。 */
+internal val SettingsContentTopGap = 8.dp
+
+/**
+ * 设置页统一的分组小标题。
+ *
+ * 通过调整 Miuix SmallTitle 的 insideMargin 与外部 padding，统一「上一卡片 → 小标题 → 所属卡片」的
+ * 视觉间距，避免各页使用不一致的魔数：
+ * - 非首个分组：距上一张卡片 [SmallTitleTopGap]（20.dp）；
+ * - 首个分组：紧接大标题下方 [SmallTitleDefaultVerticalPadding]（8.dp）；
+ * - 距所属卡片上边缘统一为 [SmallTitleBottomGap]（8.dp，已抵扣卡片自身 4.dp 外边距）。
+ *
+ * @param first 是否为页面第一个分组（直接位于大标题下方）
+ */
+@Composable
+internal fun SettingsSmallTitle(text: String, first: Boolean = false, modifier: Modifier = Modifier) {
+    // 非首个分组额外上移量：目标间距 - 默认上内边距 - 上一卡片的外边距
+    // 下间距沿用 MIUIX 默认 8.dp（已在 6~8.dp 规范内），因此无需覆盖 insideMargin
+    val extraTopPadding = if (first) 0.dp else SmallTitleTopGap - SmallTitleDefaultVerticalPadding - CardVerticalPadding
+    SmallTitle(
+        text = text,
+        modifier = modifier.padding(top = extraTopPadding),
+    )
+}
 
 @Composable
 fun PreferenceHeader(

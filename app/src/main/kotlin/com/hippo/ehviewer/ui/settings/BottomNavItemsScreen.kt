@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -129,6 +130,8 @@ fun AnimatedVisibilityScope.BottomNavItemsScreen(navigator: DestinationsNavigato
             contentPadding = paddingValues,
             modifier = Modifier.blurBackdropSource(backdrop),
         ) {
+            // 与二级页面首个分组标题保持一致的大标题 → 首张卡片间距
+            Spacer(Modifier.height(SettingsContentTopGap))
             Card(
                 modifier = Modifier
                     .fillMaxWidth()

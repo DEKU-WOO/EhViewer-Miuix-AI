@@ -40,7 +40,6 @@ import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -106,7 +105,7 @@ fun AnimatedVisibilityScope.AboutScreen(navigator: DestinationsNavigator) = Scre
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
-                SmallTitle(text = stringResource(id = R.string.settings_about))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_about), first = true)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -139,7 +138,7 @@ fun AnimatedVisibilityScope.AboutScreen(navigator: DestinationsNavigator) = Scre
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_about_check_for_updates))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_about_check_for_updates))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

@@ -1,6 +1,7 @@
 package com.ehviewer.core.ui.component
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.scrollbar.ScrollbarAdapter
 import androidx.compose.foundation.scrollbar.ScrollbarStyle
 import androidx.compose.foundation.scrollbar.VerticalScrollbar
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +47,8 @@ fun VerticalScrollbar(
             }
         }
     }
+    // 正常滚动 0.85 透明度，手指按住拖动时恢复完全不透明
+    val thumbAlpha = if (isDragged) 1f else ScrollbarIdleAlpha
     val scrollbarModifier = if (scrollbarAlpha.value > 0f && !isDragged && !isScrollInProgress) {
         modifier.excludeSystemGesture()
     } else {
@@ -57,7 +61,7 @@ fun VerticalScrollbar(
                 top = contentPadding.calculateTopPadding(),
                 bottom = contentPadding.calculateBottomPadding(),
             )
-            .graphicsLayer { alpha = scrollbarAlpha.value },
+            .graphicsLayer { alpha = scrollbarAlpha.value * thumbAlpha },
         reverseLayout = reverseLayout,
         interactionSource = interactionSource,
     )
@@ -68,21 +72,25 @@ fun scrollbarStyle(thumbColor: Color, hoverThumbColor: Color) = ScrollbarStyle(
     minimalHeight = ThumbLength,
     thickness = ThumbThickness,
     padding = ThumbPadding,
-    shape = ThumbShape,
+    shape = CircleShape,
     hoverDurationMillis = 300,
     unhoverColor = thumbColor,
     hoverColor = hoverThumbColor,
 )
 
-private val ThumbPadding = 8.dp
+// 滑块绘制宽度 4.dp，距屏幕右边缘 3.dp 安全边距（padding 同时用于拓宽抓握热区）
+private val ThumbThickness = 4.dp
+private val ThumbPadding = 3.dp
 private val ThumbLength = 48.dp
-private val ThumbThickness = 8.dp
-private val ThumbShape = SquircleShape(ThumbThickness / 2)
-private val FadeOutAnimationSpec = tween<Float>(
-    durationMillis = SCROLL_BAR_FADE_DURATION,
-    delayMillis = 2000,
-)
+private const val ScrollbarIdleAlpha = 0.85f
+
+// 开始滚动 200ms 平滑淡入；停止滚动后保持 900ms，再用 480ms 柔和缓出渐隐
 private val FadeInAnimationSpec = tween<Float>(
-    durationMillis = SCROLL_BAR_FADE_DURATION,
+    durationMillis = 200,
+    easing = FastOutSlowInEasing,
 )
-private const val SCROLL_BAR_FADE_DURATION = 250
+private val FadeOutAnimationSpec = tween<Float>(
+    durationMillis = 480,
+    delayMillis = 900,
+    easing = FastOutSlowInEasing,
+)

@@ -2,6 +2,7 @@ package com.hippo.ehviewer.ui.screen
 
 import android.content.Context
 import android.view.ViewConfiguration
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
@@ -9,7 +10,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,28 +18,25 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.material3.SwipeToDismissBoxDefaults
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.fork.SwipeToDismissBox
-import androidx.compose.material3.fork.SwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -58,36 +55,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import arrow.core.partially1
 import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
-import com.ehviewer.core.ui.component.DismissDeleteBackground
-import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalGrid
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalStaggeredGrid
-import com.ehviewer.core.ui.component.LocalSideSheetState
-import com.ehviewer.core.ui.component.ProvideSideSheetContent
+import com.ehviewer.core.ui.component.SelectionAction
+import com.ehviewer.core.ui.component.SelectionActionBar
+import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.component.SquircleShape
-import com.ehviewer.core.ui.component.dismissDeleteAction
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.Download
-import com.ehviewer.core.ui.util.HapticFeedbackType
 import com.ehviewer.core.ui.util.WindowLayout
-import com.ehviewer.core.ui.util.ifTrueThen
-import com.ehviewer.core.ui.util.rememberHapticFeedback
 import com.ehviewer.core.ui.util.rememberInVM
 import com.ehviewer.core.ui.util.snackBarPadding
-import com.ehviewer.core.ui.util.takeAndClear
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
@@ -105,9 +93,9 @@ import com.hippo.ehviewer.download.SortMode
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
+import com.hippo.ehviewer.ui.SelectionModeController
 import com.hippo.ehviewer.ui.collectConfiguredThumbColumns
 import com.hippo.ehviewer.ui.confirmRemoveDownloadRange
-import com.hippo.ehviewer.ui.destinations.HistoryScreenDestination
 import com.hippo.ehviewer.ui.main.DownloadCard
 import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.navToReader
@@ -116,36 +104,33 @@ import com.hippo.ehviewer.ui.tools.DialogState
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitInputText
 import com.hippo.ehviewer.ui.tools.awaitSelectAction
+import com.hippo.ehviewer.ui.tools.showNoButton
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import moe.tarsin.navigate
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.icon.extended.More
-import top.yukonga.miuix.kmp.icon.extended.MoveFile
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pause
 import top.yukonga.miuix.kmp.icon.extended.Play
-import top.yukonga.miuix.kmp.icon.extended.SelectAll
-import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.icon.extended.Sort
+import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -163,8 +148,13 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     val animateItems by Settings.animateItems.collectAsState()
 
     val checkedInfoMap = remember { mutableStateMapOf<Long, DownloadInfo>() }
-    val selectMode by rememberUpdatedState(checkedInfoMap.isNotEmpty())
+    val selectMode = checkedInfoMap.isNotEmpty()
     DrawerHandle(!selectMode && !searchBarExpanded)
+    // 选中态同步给主界面（暂停左右滑动切页），退出页面时兜底复位
+    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
+    DisposableEffect(Unit) { onDispose { SelectionModeController.setActive(false) } }
+    // 侧滑/返回键退出多选；系统返回优先由本页消费
+    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
 
     val density = LocalDensity.current
     val canTranslate = Settings.showTagTranslations.value && EhTagDatabase.translatable && EhTagDatabase.initialized
@@ -172,7 +162,6 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     fun getTranslation(tag: String) = ehTags?.run {
         getTranslation(TagNamespace.Artist.prefix, tag) ?: getTranslation(TagNamespace.Cosplayer.prefix, tag)
     } ?: tag
-    val positionalThreshold = SwipeToDismissBoxDefaults.positionalThreshold
     val allName = stringResource(R.string.download_all)
     val defaultName = stringResource(R.string.default_download_label_name)
     val unknownName = stringResource(R.string.unknown_artists)
@@ -231,7 +220,16 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         DownloadsFilterMode.CUSTOM -> labelList
         DownloadsFilterMode.ARTIST -> artistList
     }
-    val totalCount = remember(downloadsCountGroupByLabel) { downloadsCountGroupByLabel.values.sum() }
+    // 面板里展示「名称 [数量]」，名称按分组模式决定是否翻译
+    fun groupName(label: String) = if (filterMode == DownloadsFilterMode.ARTIST) getTranslation(label) else label
+    val groupEntries = groupList.map { (_, label) ->
+        DownloadLabelEntry(
+            displayName = groupName(label),
+            label = label,
+            count = downloadsCount.getOrDefault(label, 0),
+        )
+    }
+    val totalCount = downloadsCount.values.sum()
 
     fun switchLabel(label: String?) {
         Settings.recentDownloadLabel.value = label
@@ -248,290 +246,6 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
             Settings.downloadSortMode.value = SortMode.Default.flag
             DownloadManager.sortDownloads(SortMode.Default)
             invalidateKey = !invalidateKey
-        }
-    }
-
-    ProvideSideSheetContent { drawerState ->
-        fun closeSheet() = launch { drawerState.close() }
-        SmallTopAppBar(
-            title = labelsStr,
-            color = Color.Transparent,
-            defaultWindowInsetsPadding = false,
-            actions = {
-                if (DownloadsFilterMode.CUSTOM == filterMode) {
-                    IconButton(
-                        onClick = {
-                            launch {
-                                val text = awaitInputText(title = newLabel, hint = labelsStr) { text ->
-                                    when {
-                                        text.isBlank() -> raise(labelEmpty)
-                                        text == defaultName -> raise(defaultInvalid)
-                                        DownloadManager.containLabel(text) -> raise(labelExists)
-                                    }
-                                }
-                                DownloadManager.addLabel(text)
-                            }
-                        },
-                    ) {
-                        Icon(imageVector = MiuixIcons.Add, contentDescription = stringResource(R.string.new_label_title))
-                    }
-                    val letMeSelect = stringResource(R.string.let_me_select)
-                    IconButton(
-                        onClick = {
-                            launch {
-                                val selected = if (!Settings.hasDefaultDownloadLabel) {
-                                    0
-                                } else {
-                                    DownloadManager.labelList.indexOfFirst { it.label == Settings.defaultDownloadLabel } + 2
-                                }
-                                awaitSelectAction(R.string.default_download_label, selected) {
-                                    onSelect(letMeSelect) {
-                                        Settings.hasDefaultDownloadLabel = false
-                                    }
-                                    onSelect(defaultName) {
-                                        Settings.hasDefaultDownloadLabel = true
-                                        Settings.defaultDownloadLabel = null
-                                    }
-                                    DownloadManager.labelList.forEach { (label) ->
-                                        onSelect(label) {
-                                            Settings.hasDefaultDownloadLabel = true
-                                            Settings.defaultDownloadLabel = label
-                                        }
-                                    }
-                                }()
-                            }
-                        },
-                    ) {
-                        Icon(imageVector = MiuixIcons.Download, contentDescription = stringResource(R.string.default_download_label))
-                    }
-                }
-                val custom = stringResource(R.string.select_grouping_mode_custom)
-                val artist = stringResource(R.string.select_grouping_mode_artist)
-                IconButton(
-                    onClick = {
-                        launch {
-                            awaitSelectAction(R.string.select_grouping_mode) {
-                                val select = { mode: DownloadsFilterMode ->
-                                    filterState = filterState.copy(mode = mode, label = "")
-                                    Settings.downloadFilterMode.value = mode.flag
-                                    Settings.recentDownloadLabel.value = ""
-                                }
-                                onSelect(custom) { select(DownloadsFilterMode.CUSTOM) }
-                                onSelect(artist) { select(DownloadsFilterMode.ARTIST) }
-                            }()
-                        }
-                    },
-                ) {
-                    Icon(imageVector = MiuixIcons.Settings, contentDescription = stringResource(R.string.select_grouping_mode))
-                }
-            },
-        )
-
-        val dialogState by rememberUpdatedState(contextOf<DialogState>())
-        val labelsListState = rememberLazyListState()
-        val editEnable = DownloadsFilterMode.CUSTOM == filterMode
-        val hapticFeedback = rememberHapticFeedback()
-        val reorderableLabelState = rememberReorderableLazyListState(labelsListState) { from, to ->
-            val fromPosition = from.index - 2
-            val toPosition = to.index - 2
-            val list = DownloadManager.labelList
-            if (fromPosition in list.indices && toPosition in list.indices) {
-                list.apply { add(toPosition, removeAt(fromPosition)) }
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.MOVE)
-            }
-        }
-        var fromIndex by remember { mutableIntStateOf(-1) }
-        // 有意的设计差异：下载标签是可拖拽排序的单选列表，不是设置项分组，因此不套 Card，
-        // 选中态由行底色表达；与设置页的 Card 分组是两套语义，不要按"缺 Card"处理。
-        FastScrollLazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-            state = labelsListState,
-            // 侧栏容器已消费 systemBars 底部 inset，此处不再重复消费
-        ) {
-            item {
-                val selected = filterState.label == ""
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(SquircleShape(8.dp))
-                        .background(
-                            if (selected) {
-                                MiuixTheme.colorScheme.primaryContainer
-                            } else {
-                                Color.Transparent
-                            },
-                        )
-                        .selectable(
-                            selected = selected,
-                            role = Role.RadioButton,
-                            onClick = {
-                                switchLabel("")
-                                closeSheet()
-                            },
-                        )
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "$allName [$totalCount]",
-                        color = if (selected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface,
-                        style = MiuixTheme.textStyles.body1,
-                    )
-                }
-            }
-            item {
-                val selected = filterState.label == null
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(SquircleShape(8.dp))
-                        .background(
-                            if (selected) {
-                                MiuixTheme.colorScheme.primaryContainer
-                            } else {
-                                Color.Transparent
-                            },
-                        )
-                        .selectable(
-                            selected = selected,
-                            role = Role.RadioButton,
-                            onClick = {
-                                switchLabel(null)
-                                closeSheet()
-                            },
-                        )
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "$emptyLabelName [${downloadsCount.getOrDefault(null, 0)}]",
-                        color = if (selected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface,
-                        style = MiuixTheme.textStyles.body1,
-                    )
-                }
-            }
-
-            itemsIndexed(groupList, key = { _, (id) -> id }) { itemIndex, (id, label) ->
-                val index by rememberUpdatedState(itemIndex)
-                val item by rememberUpdatedState(label)
-                ReorderableItem(
-                    reorderableLabelState,
-                    id,
-                    enabled = editEnable,
-                    animateItemModifier = Modifier.thenIf(animateItems) { animateItem() },
-                ) { isDragging ->
-                    // Not using rememberSwipeToDismissBoxState to prevent LazyColumn from reusing it
-                    // SQLite may reuse ROWIDs from previously deleted rows so they'll have the same key
-                    val dismissState = remember { SwipeToDismissBoxState(SwipeToDismissBoxValue.Settled, positionalThreshold) }
-                    val deleteAction: suspend () -> Unit = {
-                        dialogState.runCatching {
-                            awaitConfirmationOrCancel(confirmText = R.string.delete) {
-                                Text(text = stringResource(R.string.delete_label, item))
-                            }
-                        }.onSuccess {
-                            DownloadManager.deleteLabel(item)
-                            when (filterState.label) {
-                                item -> switchLabel("")
-                                null -> invalidateKey = !invalidateKey
-                            }
-                        }.onFailure {
-                            dismissState.reset()
-                        }
-                    }
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        backgroundContent = { DismissDeleteBackground() },
-                        modifier = Modifier.dismissDeleteAction(
-                            label = stringResource(id = R.string.delete),
-                            onDelete = { launch { deleteAction() } },
-                        ),
-                        enableDismissFromStartToEnd = false,
-                        gesturesEnabled = editEnable,
-                        onDismiss = { deleteAction() },
-                    ) {
-                        val selected = filterState.label == item
-                        val name = if (filterMode == DownloadsFilterMode.ARTIST) getTranslation(label) else label
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                                .clip(SquircleShape(8.dp))
-                                .background(
-                                    if (selected) {
-                                        MiuixTheme.colorScheme.primaryContainer
-                                    } else if (isDragging) {
-                                        MiuixTheme.colorScheme.surfaceContainer
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                )
-                                .selectable(
-                                    selected = selected,
-                                    role = Role.RadioButton,
-                                    onClick = {
-                                        switchLabel(item)
-                                        closeSheet()
-                                    },
-                                )
-                                .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "$name [${downloadsCount.getOrDefault(item, 0)}]",
-                                color = if (selected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface,
-                                style = MiuixTheme.textStyles.body1,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (editEnable) {
-                                IconButton(
-                                    onClick = {
-                                        launch {
-                                            val new = awaitInputText(initial = item, title = renameLabel, hint = labelsStr) { text ->
-                                                when {
-                                                    text.isBlank() -> raise(labelEmpty)
-                                                    text == defaultName -> raise(defaultInvalid)
-                                                    text != item && DownloadManager.containLabel(text) -> raise(labelExists)
-                                                }
-                                            }
-                                            DownloadManager.renameLabel(item, new)
-                                            if (filterState.label == item) {
-                                                switchLabel(new)
-                                            }
-                                        }
-                                    },
-                                ) {
-                                    Icon(imageVector = MiuixIcons.Edit, contentDescription = renameLabel)
-                                }
-                                IconButton(
-                                    onClick = {},
-                                    modifier = Modifier.draggableHandle(
-                                        onDragStarted = {
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.START)
-                                            fromIndex = index
-                                        },
-                                        onDragStopped = {
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.END)
-                                            if (fromIndex != -1) {
-                                                if (fromIndex != index) {
-                                                    val range = if (fromIndex < index) fromIndex..index else index..fromIndex
-                                                    val toUpdate = DownloadManager.labelList.slice(range)
-                                                    toUpdate.zip(range).forEach { it.first.position = it.second }
-                                                    launchIO { EhDB.updateDownloadLabel(toUpdate) }
-                                                }
-                                                fromIndex = -1
-                                            }
-                                        },
-                                    ),
-                                ) {
-                                    Icon(imageVector = MiuixIcons.Sort, contentDescription = stringResource(id = R.string.sort_by))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -564,66 +278,175 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         },
         searchBarOffsetY = { searchBarOffsetY },
         trailingIcon = {
-            val sideSheetState = LocalSideSheetState.current
             IconButton(onClick = { gridView = !gridView }) {
                 val icon = if (gridView) MiuixIcons.ListView else MiuixIcons.GridView
                 val desc = stringResource(if (gridView) R.string.settings_eh_list_mode else R.string.settings_eh_list_mode_thumb)
                 Icon(imageVector = icon, contentDescription = desc)
             }
-            val labelsStr = stringResource(id = R.string.download_labels)
             val startAllStr = stringResource(id = R.string.download_start_all)
             val stopAllStr = stringResource(id = R.string.download_stop_all)
             val resetProgressStr = stringResource(id = R.string.download_reset_reading_progress)
             val resetProgressMsg = stringResource(id = R.string.reset_reading_progress_message)
             val startAllReversedStr = stringResource(id = R.string.download_start_all_reversed)
-            val historyStr = stringResource(id = R.string.history)
+            val moveLabelStr = stringResource(id = R.string.download_move_dialog_title)
+            val groupingCustomStr = stringResource(R.string.select_grouping_mode_custom)
+            val groupingArtistStr = stringResource(R.string.select_grouping_mode_artist)
+            val letMeSelectStr = stringResource(R.string.let_me_select)
 
-            val menuEntry = remember(sideSheetState, list) {
-                DropdownEntry(
-                    items = listOf(
-                        DropdownItem(
-                            text = labelsStr,
-                            onClick = { launch { sideSheetState.open() } },
-                        ),
-                        DropdownItem(
-                            text = startAllStr,
-                            onClick = { DownloadService.startService(DownloadService.ACTION_START_ALL) },
-                        ),
-                        DropdownItem(
-                            text = stopAllStr,
-                            onClick = { launchIO { DownloadManager.stopAllDownload() } },
-                        ),
-                        DropdownItem(
-                            text = resetProgressStr,
-                            onClick = {
-                                launchIO {
-                                    awaitConfirmationOrCancel(
-                                        confirmText = android.R.string.ok,
-                                        dismissText = android.R.string.cancel,
+            val menuEntry = DropdownEntry(
+                items = listOf(
+                    DropdownItem(
+                        text = labelsStr,
+                        onClick = {
+                            launch {
+                                // 「下载标签」改为就地弹出的卡片面板，替代原来的全高侧边抽屉
+                                var keepPanel = true
+                                while (keepPanel) {
+                                    when (
+                                        val result = awaitDownloadLabelPanel(
+                                            title = labelsStr,
+                                            allName = allName,
+                                            allCount = totalCount,
+                                            defaultName = emptyLabelName,
+                                            defaultCount = downloadsCount.getOrDefault(null, 0),
+                                            entries = groupEntries,
+                                            selectedLabel = filterState.label,
+                                            labelMode = filterMode == DownloadsFilterMode.CUSTOM,
+                                        )
                                     ) {
-                                        Text(text = resetProgressMsg)
-                                    }
-                                    withNonCancellableContext {
-                                        DownloadManager.resetAllReadingProgress()
+                                        is DownloadLabelPanelResult.Select -> {
+                                            switchLabel(result.label)
+                                            keepPanel = false
+                                        }
+                                        DownloadLabelPanelResult.Create -> {
+                                            val text = awaitInputText(title = newLabel, hint = labelsStr) { text ->
+                                                when {
+                                                    text.isBlank() -> raise(labelEmpty)
+                                                    text == defaultName -> raise(defaultInvalid)
+                                                    DownloadManager.containLabel(text) -> raise(labelExists)
+                                                }
+                                            }
+                                            DownloadManager.addLabel(text)
+                                            keepPanel = false
+                                        }
+                                        DownloadLabelPanelResult.Manage -> {
+                                            while (true) {
+                                                val current = DownloadManager.labelList.map { it.label }
+                                                when (val action = awaitManageDownloadLabels(renameLabel, current)) {
+                                                    is DownloadLabelManageResult.Rename -> {
+                                                        val old = action.label
+                                                        val text = awaitInputText(initial = old, title = renameLabel, hint = labelsStr) { text ->
+                                                            when {
+                                                                text.isBlank() -> raise(labelEmpty)
+                                                                text == defaultName -> raise(defaultInvalid)
+                                                                text != old && DownloadManager.containLabel(text) -> raise(labelExists)
+                                                            }
+                                                        }
+                                                        DownloadManager.renameLabel(old, text)
+                                                        if (filterState.label == old) switchLabel(text)
+                                                    }
+                                                    is DownloadLabelManageResult.Delete -> {
+                                                        awaitConfirmationOrCancel(confirmText = R.string.delete) {
+                                                            Text(text = stringResource(R.string.delete_label, action.label))
+                                                        }
+                                                        DownloadManager.deleteLabel(action.label)
+                                                        if (filterState.label == action.label) switchLabel("")
+                                                    }
+                                                    DownloadLabelManageResult.Dismiss -> break
+                                                }
+                                            }
+                                            keepPanel = false
+                                        }
+                                        DownloadLabelPanelResult.GroupingMode -> {
+                                            awaitSelectAction(R.string.select_grouping_mode) {
+                                                val select = { mode: DownloadsFilterMode ->
+                                                    filterState = filterState.copy(mode = mode, label = "")
+                                                    Settings.downloadFilterMode.value = mode.flag
+                                                    Settings.recentDownloadLabel.value = ""
+                                                }
+                                                onSelect(groupingCustomStr) { select(DownloadsFilterMode.CUSTOM) }
+                                                onSelect(groupingArtistStr) { select(DownloadsFilterMode.ARTIST) }
+                                            }()
+                                            keepPanel = false
+                                        }
+                                        DownloadLabelPanelResult.DefaultLabel -> {
+                                            val selected = if (!Settings.hasDefaultDownloadLabel) {
+                                                0
+                                            } else {
+                                                DownloadManager.labelList.indexOfFirst { it.label == Settings.defaultDownloadLabel } + 2
+                                            }
+                                            awaitSelectAction(R.string.default_download_label, selected) {
+                                                onSelect(letMeSelectStr) {
+                                                    Settings.hasDefaultDownloadLabel = false
+                                                }
+                                                onSelect(defaultName) {
+                                                    Settings.hasDefaultDownloadLabel = true
+                                                    Settings.defaultDownloadLabel = null
+                                                }
+                                                DownloadManager.labelList.forEach { (label) ->
+                                                    onSelect(label) {
+                                                        Settings.hasDefaultDownloadLabel = true
+                                                        Settings.defaultDownloadLabel = label
+                                                    }
+                                                }
+                                            }()
+                                            keepPanel = false
+                                        }
+                                        DownloadLabelPanelResult.Dismiss -> keepPanel = false
                                     }
                                 }
-                            },
-                        ),
-                        DropdownItem(
-                            text = startAllReversedStr,
-                            onClick = {
-                                val gidList = list.filter { it.state != DownloadInfo.STATE_FINISH }.asReversed().mapToLongArray(DownloadInfo::gid)
-                                DownloadService.startRangeDownload(gidList)
-                            },
-                        ),
-                        // 手机端底部栏只有 6 项，历史记录没有入口，这里补一个
-                        DropdownItem(
-                            text = historyStr,
-                            onClick = { navigator.navigate(HistoryScreenDestination) },
-                        ),
+                            }
+                        },
                     ),
-                )
-            }
+                    DropdownItem(
+                        text = startAllStr,
+                        onClick = { DownloadService.startService(DownloadService.ACTION_START_ALL) },
+                    ),
+                    DropdownItem(
+                        text = stopAllStr,
+                        onClick = { launchIO { DownloadManager.stopAllDownload() } },
+                    ),
+                    DropdownItem(
+                        text = resetProgressStr,
+                        onClick = {
+                            launchIO {
+                                awaitConfirmationOrCancel(
+                                    confirmText = android.R.string.ok,
+                                    dismissText = android.R.string.cancel,
+                                ) {
+                                    Text(text = resetProgressMsg)
+                                }
+                                withNonCancellableContext {
+                                    DownloadManager.resetAllReadingProgress()
+                                }
+                            }
+                        },
+                    ),
+                    DropdownItem(
+                        text = startAllReversedStr,
+                        onClick = {
+                            val gidList = list.filter { it.state != DownloadInfo.STATE_FINISH }.asReversed().mapToLongArray(DownloadInfo::gid)
+                            DownloadService.startRangeDownload(gidList)
+                        },
+                    ),
+                    // 原多选悬浮组里的「移动标签」入口，改为对当前列表整体移动
+                    DropdownItem(
+                        text = moveLabelStr,
+                        onClick = {
+                            val infoList = list.toList()
+                            val targetIds = infoList.map { it.gid }
+                            launch {
+                                val toLabel = showMoveDownloadLabelList(infoList)
+                                with(filterState) {
+                                    if (label != "" && label != toLabel) {
+                                        list.removeAll { it.gid in targetIds }
+                                    }
+                                }
+                            }
+                        },
+                    ),
+                ),
+            )
             WindowIconDropdownMenu(entry = menuEntry) {
                 Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
             }
@@ -788,81 +611,330 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         }
     }
 
-    // 多选操作栏不经过主 FAB，进入与退出选择模式时只执行一次淡入/上滑动画。
+    // 选择态顶栏覆盖原搜索栏与 ⋮ 菜单（附加底色把下方搜索胶囊完全盖住）
+    AnimatedVisibility(
+        visible = selectMode,
+        enter = fadeIn(),
+        exit = fadeOut(),
+    ) {
+        SelectionTopBar(
+            selectedCount = checkedInfoMap.size,
+            allSelected = list.isNotEmpty() && checkedInfoMap.size == list.size,
+            onExit = { checkedInfoMap.clear() },
+            onToggleSelectAll = {
+                if (list.isNotEmpty() && checkedInfoMap.size == list.size) {
+                    checkedInfoMap.clear()
+                } else {
+                    checkedInfoMap.putAll(list.associateBy { it.gid })
+                }
+            },
+            countText = "已选择 ${checkedInfoMap.size} 项",
+            modifier = Modifier
+                .fillMaxWidth()
+                // 整条搜索胶囊（不含状态栏）为 InputFieldMinHeight + 16dp，补足底色避免露出下层搜索栏
+                .background(MiuixTheme.colorScheme.surface)
+                .padding(bottom = (SearchBarDefaults.InputFieldMinHeight + 16.dp - 56.dp).coerceAtLeast(0.dp)),
+        )
+    }
+
+    // 多选底部操作胶囊：4 个均分按钮，进入/退出时整体升起/落下
     Box(
         modifier = Modifier.fillMaxSize().navigationBarsPadding().snackBarPadding(),
-        contentAlignment = Alignment.BottomEnd,
+        contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(
             visible = selectMode,
-            enter = fadeIn() + slideInVertically { it / 4 },
-            exit = fadeOut() + slideOutVertically { it / 4 },
+            enter = slideInVertically { it / 2 } + fadeIn(),
+            exit = slideOutVertically { it / 2 } + fadeOut(),
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.End,
-            ) {
-                DownloadSelectionAction(MiuixIcons.SelectAll) {
-                    checkedInfoMap.putAll(list.associateBy { it.gid })
-                }
-                DownloadSelectionAction(MiuixIcons.Play) {
-                    val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
-                    DownloadService.startRangeDownload(gidList)
-                }
-                DownloadSelectionAction(MiuixIcons.Pause) {
-                    val gidList = checkedInfoMap.takeAndClear().mapToLongArray(DownloadInfo::gid)
-                    launch { DownloadManager.stopRangeDownload(gidList) }
-                }
-                DownloadSelectionAction(
-                    icon = MiuixIcons.Delete,
-                    tint = Color.White,
-                    containerColor = Color(0xFFE53935),
-                ) {
-                    val targetIds = checkedInfoMap.keys.toList()
-                    val targets = targetIds.mapNotNull(checkedInfoMap::get)
-                    checkedInfoMap.clear()
-                    launch {
-                        confirmRemoveDownloadRange(targets)
-                        list.removeAll { it.gid in targetIds }
-                    }
-                }
-                DownloadSelectionAction(MiuixIcons.MoveFile) {
-                    val infoList = checkedInfoMap.takeAndClear()
-                    val targetIds = infoList.map { it.gid }
-                    launch {
-                        val toLabel = showMoveDownloadLabelList(infoList)
-                        with(filterState) {
-                            if (label != "" && label != toLabel) {
-                                list.removeAll { it.gid in targetIds }
-                            }
+            fun selectedGids() = checkedInfoMap.keys.toLongArray()
+            SelectionActionBar(
+                actions = listOf(
+                    SelectionAction(icon = MiuixIcons.Play, label = "开始") {
+                        val ids = selectedGids()
+                        checkedInfoMap.clear()
+                        DownloadService.startRangeDownload(ids)
+                    },
+                    SelectionAction(icon = MiuixIcons.Pause, label = "暂停") {
+                        val ids = selectedGids()
+                        checkedInfoMap.clear()
+                        launch { DownloadManager.stopRangeDownload(ids) }
+                    },
+                    SelectionAction(icon = MiuixIcons.Refresh, label = "重下") {
+                        val ids = selectedGids()
+                        checkedInfoMap.clear()
+                        // 先停掉在跑的任务，再重新入队；ensureDownload 会重置进度
+                        launch {
+                            DownloadManager.stopRangeDownload(ids)
+                            DownloadService.startRangeDownload(ids)
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DownloadSelectionAction(
-    icon: ImageVector,
-    tint: Color? = null,
-    containerColor: Color = MiuixTheme.colorScheme.surfaceContainerHigh,
-    onClick: () -> Unit,
-) {
-    FloatingActionButton(
-        onClick = onClick,
-        minWidth = 40.dp,
-        minHeight = 40.dp,
-        containerColor = containerColor,
-    ) {
-        if (tint == null) {
-            Icon(imageVector = icon, contentDescription = null)
-        } else {
-            Icon(imageVector = icon, contentDescription = null, tint = tint)
+                    },
+                    SelectionAction(icon = MiuixIcons.Delete, label = "删除") {
+                        val targets = checkedInfoMap.values.toList()
+                        val targetIds = targets.map { it.gid }
+                        checkedInfoMap.clear()
+                        launch {
+                            confirmRemoveDownloadRange(targets)
+                            list.removeAll { it.gid in targetIds }
+                        }
+                    },
+                ),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            )
         }
     }
 }
 
 private const val LABEL_PREFIX = "label:"
+
+/** 标签面板的一行：展示名（可能已翻译）、原始标签值与数量。 */
+private data class DownloadLabelEntry(
+    val displayName: String,
+    val label: String,
+    val count: Int,
+)
+
+/** 标签面板的返回结果：选中某个标签，或触发底部动作。 */
+private sealed interface DownloadLabelPanelResult {
+    data class Select(val label: String?) : DownloadLabelPanelResult
+    data object Create : DownloadLabelPanelResult
+    data object Manage : DownloadLabelPanelResult
+    data object GroupingMode : DownloadLabelPanelResult
+    data object DefaultLabel : DownloadLabelPanelResult
+    data object Dismiss : DownloadLabelPanelResult
+}
+
+/** 标签管理面板的返回结果。 */
+private sealed interface DownloadLabelManageResult {
+    data class Rename(val label: String) : DownloadLabelManageResult
+    data class Delete(val label: String) : DownloadLabelManageResult
+    data object Dismiss : DownloadLabelManageResult
+}
+
+context(_: DialogState)
+private suspend fun awaitDownloadLabelPanel(
+    title: String,
+    allName: String,
+    allCount: Int,
+    defaultName: String,
+    defaultCount: Int,
+    entries: List<DownloadLabelEntry>,
+    selectedLabel: String?,
+    labelMode: Boolean,
+): DownloadLabelPanelResult = showNoButton(respectDefaultWidth = false) {
+    DownloadLabelPanel(
+        title = title,
+        allName = allName,
+        allCount = allCount,
+        defaultName = defaultName,
+        defaultCount = defaultCount,
+        entries = entries,
+        selectedLabel = selectedLabel,
+        labelMode = labelMode,
+        onSelect = { resume(DownloadLabelPanelResult.Select(it)) },
+        onCreate = { resume(DownloadLabelPanelResult.Create) },
+        onManage = { resume(DownloadLabelPanelResult.Manage) },
+        onGroupingMode = { resume(DownloadLabelPanelResult.GroupingMode) },
+        onDefaultLabel = { resume(DownloadLabelPanelResult.DefaultLabel) },
+        onDismiss = { resume(DownloadLabelPanelResult.Dismiss) },
+    )
+}
+
+context(_: DialogState)
+private suspend fun awaitManageDownloadLabels(
+    title: String,
+    labels: List<String>,
+): DownloadLabelManageResult = showNoButton(respectDefaultWidth = false) {
+    DownloadLabelManagePanel(
+        title = title,
+        labels = labels,
+        onRename = { resume(DownloadLabelManageResult.Rename(it)) },
+        onDelete = { resume(DownloadLabelManageResult.Delete(it)) },
+        onDismiss = { resume(DownloadLabelManageResult.Dismiss) },
+    )
+}
+
+@Composable
+private fun DownloadLabelPanel(
+    title: String,
+    allName: String,
+    allCount: Int,
+    defaultName: String,
+    defaultCount: Int,
+    entries: List<DownloadLabelEntry>,
+    selectedLabel: String?,
+    labelMode: Boolean,
+    onSelect: (String?) -> Unit,
+    onCreate: () -> Unit,
+    onManage: () -> Unit,
+    onGroupingMode: () -> Unit,
+    onDefaultLabel: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            style = MiuixTheme.textStyles.title4,
+        )
+        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
+            item {
+                DownloadLabelPanelRow(
+                    name = allName,
+                    count = allCount,
+                    selected = selectedLabel == "",
+                    onClick = { onSelect("") },
+                )
+            }
+            item {
+                DownloadLabelPanelRow(
+                    name = defaultName,
+                    count = defaultCount,
+                    selected = selectedLabel == null,
+                    onClick = { onSelect(null) },
+                )
+            }
+            items(entries) { entry ->
+                DownloadLabelPanelRow(
+                    name = entry.displayName,
+                    count = entry.count,
+                    selected = selectedLabel == entry.label,
+                    onClick = { onSelect(entry.label) },
+                )
+            }
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+        if (labelMode) {
+            DownloadLabelPanelAction(text = "+ 新建标签", onClick = onCreate)
+            DownloadLabelPanelAction(text = "管理标签", onClick = onManage)
+            DownloadLabelPanelAction(text = "默认下载标签", onClick = onDefaultLabel)
+        }
+        DownloadLabelPanelAction(text = "分组方式", onClick = onGroupingMode)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(text = "关闭", onClick = onDismiss)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun DownloadLabelPanelRow(
+    name: String,
+    count: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(SquircleShape(10.dp))
+            .background(
+                if (selected) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "$name [$count]",
+            modifier = Modifier.weight(1f),
+            style = MiuixTheme.textStyles.body1,
+            color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface,
+        )
+        if (selected) {
+            Icon(
+                imageVector = MiuixIcons.Ok,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MiuixTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DownloadLabelPanelAction(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = text, style = MiuixTheme.textStyles.body1)
+    }
+}
+
+@Composable
+private fun DownloadLabelManagePanel(
+    title: String,
+    labels: List<String>,
+    onRename: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            style = MiuixTheme.textStyles.title4,
+        )
+        if (labels.isEmpty()) {
+            Text(
+                text = "暂无自定义标签",
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                style = MiuixTheme.textStyles.body1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp)) {
+                items(labels) { label ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                            .clip(SquircleShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = label,
+                            modifier = Modifier.weight(1f),
+                            style = MiuixTheme.textStyles.body1,
+                        )
+                        IconButton(onClick = { onRename(label) }) {
+                            Icon(
+                                imageVector = MiuixIcons.Edit,
+                                contentDescription = null,
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            )
+                        }
+                        IconButton(onClick = { onDelete(label) }) {
+                            Icon(
+                                imageVector = MiuixIcons.Delete,
+                                contentDescription = null,
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(text = "完成", onClick = onDismiss)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}

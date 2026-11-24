@@ -346,6 +346,16 @@
     <string name="settings_download_clean_redundancy_no_redundancy">未發現冗餘檔案</string>
     <string name="settings_download_clean_redundancy_done">完成冗餘檔案清理，共清理了 %d 個檔案</string>
     <string name="settings_advanced">進階</string>
+    <string name="settings_group_list_display">列表顯示</string>
+    <string name="settings_group_gallery_detail">畫廊詳情</string>
+    <string name="settings_group_filter_tags">過濾與標籤</string>
+    <string name="settings_group_interface_theme">介面與主題</string>
+    <string name="settings_group_logs_diagnostics">日誌與診斷</string>
+    <string name="settings_group_network_ads">網路與廣告</string>
+    <string name="settings_group_system_storage">系統與儲存</string>
+    <string name="settings_group_download_storage">下載儲存</string>
+    <string name="settings_group_download_performance">下載效能</string>
+    <string name="settings_group_download_content">下載內容</string>
     <string name="settings_advanced_save_parse_error_body">解析失敗時儲存網頁的內容</string>
     <string name="settings_advanced_save_parse_error_body_summary">網頁內容可能含有敏感的隱私資料</string>
     <string name="settings_advanced_save_crash_log">應用程式崩潰時儲存錯誤日誌</string>

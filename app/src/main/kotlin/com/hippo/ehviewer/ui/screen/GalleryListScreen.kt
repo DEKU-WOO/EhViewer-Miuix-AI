@@ -2,14 +2,17 @@ package com.hippo.ehviewer.ui.screen
 
 import android.content.Context
 import android.view.ViewConfiguration
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawnWhen
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
@@ -23,7 +26,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.SwipeToDismissBoxDefaults
@@ -31,11 +33,13 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.fork.SwipeToDismissBox
 import androidx.compose.material3.fork.SwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -43,18 +47,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.lifecycle.createSavedStateHandle
@@ -64,22 +63,19 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import arrow.core.raise.ensure
 import com.ehviewer.core.database.model.QuickSearch
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.ui.component.DismissDeleteBackground
-import com.ehviewer.core.ui.component.FAB_ANIMATE_TIME
+import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.ui.component.FabLayout
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
-import com.ehviewer.core.ui.component.LocalSideSheetState
-import com.ehviewer.core.ui.component.ProvideSideSheetContent
-import com.ehviewer.core.ui.component.SquircleShape
-import com.ehviewer.core.ui.component.dismissDeleteAction
+import com.ehviewer.core.ui.component.SelectionAction
+import com.ehviewer.core.ui.component.SelectionActionBar
+import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Bookmarks
-import com.ehviewer.core.ui.icons.filled.FormatListNumbered
-import com.ehviewer.core.ui.icons.filled.GoTo
-import com.ehviewer.core.ui.icons.filled.LastPage
+import com.ehviewer.core.ui.icons.filled.MenuBook
 import com.ehviewer.core.ui.icons.filled.Shuffle
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.HapticFeedbackType
+import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.asyncState
 import com.ehviewer.core.ui.util.rememberHapticFeedback
 import com.ehviewer.core.ui.util.thenIf
@@ -90,6 +86,7 @@ import com.ehviewer.core.util.withUIContext
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.asMutableState
+import com.hippo.ehviewer.client.EhEngine
 import com.hippo.ehviewer.client.EhTagDatabase
 import com.hippo.ehviewer.client.EhUtils
 import com.hippo.ehviewer.client.data.ListUrlBuilder
@@ -106,15 +103,16 @@ import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
 import com.hippo.ehviewer.ui.Screen
+import com.hippo.ehviewer.ui.SelectionModeController
 import com.hippo.ehviewer.ui.destinations.ProgressScreenDestination
-import com.hippo.ehviewer.ui.destinations.ToplistScreenDestination
-import com.hippo.ehviewer.ui.doGalleryInfoAction
 import com.hippo.ehviewer.ui.main.AdvancedSearchOption
-import com.hippo.ehviewer.ui.main.AvatarIcon
 import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
 import com.hippo.ehviewer.ui.main.GalleryList
 import com.hippo.ehviewer.ui.main.SearchFilter
+import com.hippo.ehviewer.ui.main.SelectableGalleryItem
+import com.hippo.ehviewer.ui.navToReader
+import com.hippo.ehviewer.ui.startDownload
 import com.hippo.ehviewer.ui.tools.DialogState
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitInputTextWithCheckBox
@@ -126,6 +124,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.spec.Direction
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
 import moe.tarsin.snackbar
 import moe.tarsin.string
@@ -134,12 +133,11 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Favorites
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
@@ -178,7 +176,18 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     var category by rememberMutableStateInDataStore("SearchCategory") { EhUtils.ALL_CATEGORY }
     var advancedSearchOption by rememberMutableStateInDataStore("AdvancedSearchOption") { AdvancedSearchOption() }
 
-    DrawerHandle(!searchBarExpanded)
+    // 长按多选：按 gid 去重记录选中项，非空即进入选择态
+    val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
+    val selectMode = checkedInfoMap.isNotEmpty()
+    // 选择态期间暂停主界面左右滑动切页
+    LaunchedEffect(selectMode) { SelectionModeController.setActive(selectMode) }
+    DisposableEffect(Unit) {
+        onDispose { SelectionModeController.setActive(false) }
+    }
+    // 系统返回（含侧滑返回）直接退出选择态
+    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
+
+    DrawerHandle(!selectMode && !searchBarExpanded)
 
     LaunchedEffect(urlBuilder) {
         if (urlBuilder.category != EhUtils.NONE) category = urlBuilder.category
@@ -218,50 +227,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         listState.firstVisibleItemIndex
     } else {
         gridState.firstVisibleItemIndex
-    }
-
-    if (isTopList) {
-        ProvideSideSheetContent { sheetState ->
-            SmallTopAppBar(
-                title = stringResource(id = R.string.toplist),
-                color = MiuixTheme.colorScheme.surface,
-                defaultWindowInsetsPadding = false,
-            )
-            // 有意的设计差异：榜单选择是单选列表，不是设置项分组，因此不套 Card，
-            // 选中态由行底色表达；与设置页的 Card 分组是两套语义，不要按"缺 Card"处理。
-            toplists.forEach { (name, keyword) ->
-                val isSelected = urlBuilder.keyword == keyword
-                val bgColor = if (isSelected) MiuixTheme.colorScheme.primaryContainer else Color.Transparent
-                val textColor = if (isSelected) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 2.dp)
-                        .clip(SquircleShape(12.dp))
-                        .background(bgColor)
-                        .selectable(
-                            selected = isSelected,
-                            role = Role.RadioButton,
-                            onClick = {
-                                Settings.recentToplist = keyword
-                                urlBuilder = ListUrlBuilder(MODE_TOPLIST, keyword = keyword)
-                                data.refresh()
-                                launch { sheetState.close() }
-                            },
-                        )
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = name,
-                        color = textColor,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
     }
 
     val openGalleryKeyword = stringResource(R.string.gallery_list_search_bar_open_gallery)
@@ -311,6 +276,8 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         expanded = searchBarExpanded,
         onExpandedChange = {
             searchBarExpanded = it
+            // 展开搜索时退出选择态，避免两套顶栏叠加
+            if (it) checkedInfoMap.clear()
         },
         title = suitableTitle,
         searchFieldHint = searchBarHint,
@@ -326,9 +293,24 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         searchBarOffsetY = { searchBarOffsetY },
         trailingIcon = {
             if (isTopList) {
-                // 榜单页仍使用侧边抽屉选择榜单
-                val sheetState = LocalSideSheetState.current
-                IconButton(onClick = { launch { sheetState.open() } }) {
+                // 榜单选择改为图标正下方的锚点下拉菜单，替代原本占半屏的全高右侧抽屉
+                val toplistEntry = DropdownEntry(
+                    items = toplists.map { (name, keyword) ->
+                        DropdownItem(
+                            text = name,
+                            selected = urlBuilder.keyword == keyword,
+                            onClick = {
+                                Settings.recentToplist = keyword
+                                urlBuilder = ListUrlBuilder(MODE_TOPLIST, keyword = keyword)
+                                data.refresh()
+                            },
+                        )
+                    },
+                )
+                WindowIconDropdownMenu(
+                    entry = toplistEntry,
+                    maxHeight = 480.dp,
+                ) {
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist))
                 }
             } else {
@@ -418,13 +400,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
                 }
             }
-            // 手机端底部栏只有 6 项，排行榜没有入口，在热门页补一个
-            if (urlBuilder.mode == MODE_WHATS_HOT) {
-                IconButton(onClick = { navigate(ToplistScreenDestination) }) {
-                    Icon(imageVector = EhIcons.Default.FormatListNumbered, contentDescription = stringResource(id = R.string.toplist))
-                }
-            }
-            AvatarIcon()
+            // 个人头像（图片配额/资金）不再放在搜索栏，避免右侧图标拥挤
         },
         filter = {
             SearchFilter(
@@ -466,24 +442,50 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             listMode = listMode,
             detailListState = listState,
             detailItemContent = { info ->
-                GalleryInfoListItem(
-                    onClick = { navigate(info.asDst()) },
-                    onLongClick = { launch { doGalleryInfoAction(info) } },
-                    info = info,
-                    showPages = showPages,
-                    showProgress = showProgress,
-                    modifier = Modifier.height(height),
-                )
+                val checked = info.gid in checkedInfoMap
+                SelectableGalleryItem(
+                    checked = checked,
+                    modifier = Modifier.thenIf(animateItems) { animateItem() },
+                ) { interactionSource ->
+                    GalleryInfoListItem(
+                        onClick = {
+                            if (selectMode) {
+                                if (checked) checkedInfoMap.remove(info.gid) else checkedInfoMap[info.gid] = info
+                            } else {
+                                navigate(info.asDst())
+                            }
+                        },
+                        onLongClick = { checkedInfoMap[info.gid] = info },
+                        info = info,
+                        showPages = showPages,
+                        showProgress = showProgress,
+                        modifier = Modifier.height(height),
+                        interactionSource = interactionSource,
+                    )
+                }
             },
             thumbListState = gridState,
             thumbItemContent = { info ->
-                GalleryInfoGridItem(
-                    onClick = { navigate(info.asDst()) },
-                    onLongClick = { launch { doGalleryInfoAction(info) } },
-                    info = info,
-                    showPages = showPages,
-                    showProgress = showProgress,
-                )
+                val checked = info.gid in checkedInfoMap
+                SelectableGalleryItem(
+                    checked = checked,
+                    modifier = Modifier.thenIf(animateItems) { animateItem() },
+                ) { interactionSource ->
+                    GalleryInfoGridItem(
+                        onClick = {
+                            if (selectMode) {
+                                if (checked) checkedInfoMap.remove(info.gid) else checkedInfoMap[info.gid] = info
+                            } else {
+                                navigate(info.asDst())
+                            }
+                        },
+                        onLongClick = { checkedInfoMap[info.gid] = info },
+                        info = info,
+                        showPages = showPages,
+                        showProgress = showProgress,
+                        interactionSource = interactionSource,
+                    )
+                }
             },
             searchBarOffsetY = { searchBarOffsetY },
             onRefresh = {
@@ -495,6 +497,91 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 BottomBarScrollState.hidden = false
             },
         )
+    }
+
+    // 选择态：顶部选择栏覆盖搜索栏，底部悬浮胶囊操作栏（仅覆盖绘制，不拦截列表滚动）
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (selectMode) {
+            val snapshotItems = data.itemSnapshotList.items
+            val allSelected = snapshotItems.isNotEmpty() && snapshotItems.all { it.gid in checkedInfoMap }
+            SelectionTopBar(
+                selectedCount = checkedInfoMap.size,
+                allSelected = allSelected,
+                onExit = { checkedInfoMap.clear() },
+                onToggleSelectAll = {
+                    if (allSelected) {
+                        checkedInfoMap.clear()
+                    } else {
+                        snapshotItems.forEach { checkedInfoMap[it.gid] = it }
+                    }
+                },
+                countText = "已选择 ${checkedInfoMap.size} 项",
+                // 多留 8.dp 下边距，把下方的搜索胶囊完整遮住
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MiuixTheme.colorScheme.surface)
+                    .padding(bottom = 8.dp),
+            )
+        }
+        AnimatedVisibility(
+            visible = selectMode,
+            enter = slideInVertically { it / 2 } + fadeIn(),
+            exit = slideOutVertically { it / 2 } + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                // 抬高到主界面底部导航栏之上
+                .padding(bottom = LocalBottomBarContentPadding.current + 8.dp),
+        ) {
+            SelectionActionBar(
+                actions = listOf(
+                    SelectionAction(
+                        icon = EhIcons.Default.MenuBook,
+                        label = stringResource(R.string.read),
+                        // 多选时无法确定要读哪一本，仅在单选时可用
+                        enabled = checkedInfoMap.size == 1,
+                        onClick = {
+                            checkedInfoMap.values.singleOrNull()?.let { info ->
+                                checkedInfoMap.clear()
+                                launch {
+                                    EhDB.putHistoryInfo(info)
+                                    navToReader(info)
+                                }
+                            }
+                        },
+                    ),
+                    SelectionAction(
+                        icon = MiuixIcons.Download,
+                        label = stringResource(R.string.download),
+                        onClick = {
+                            val infos = checkedInfoMap.values.toList()
+                            checkedInfoMap.clear()
+                            launch { runSwallowingWithUI { startDownload(false, *infos.toTypedArray()) } }
+                        },
+                    ),
+                    SelectionAction(
+                        icon = MiuixIcons.Favorites,
+                        label = stringResource(R.string.favourite),
+                        onClick = {
+                            val infos = checkedInfoMap.values.toList()
+                            checkedInfoMap.clear()
+                            launch {
+                                runSwallowingWithUI {
+                                    // 默认收藏夹：优先用户默认分类，未设置时落到第一分类；未登录写入本地收藏
+                                    if (Settings.hasSignedIn.value) {
+                                        val dstCat = Settings.defaultFavSlot.value.let { if (it in 0..9) it else 0 }
+                                        EhEngine.addFavorites(infos.map { it.gid to it.token }, dstCat)
+                                    } else {
+                                        EhDB.putLocalFavorites(infos)
+                                    }
+                                }
+                            }
+                        },
+                    ),
+                ),
+            )
+        }
     }
 }
 

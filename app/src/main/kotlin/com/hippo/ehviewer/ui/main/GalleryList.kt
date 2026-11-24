@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.ui.main
 
 import android.content.Context
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,6 +50,7 @@ import com.hippo.ehviewer.client.exception.NoHitsFoundException
 import com.hippo.ehviewer.coil.PrefetchAround
 import com.hippo.ehviewer.ktbuilder.imageRequest
 import com.hippo.ehviewer.ui.collectConfiguredThumbColumns
+import com.hippo.ehviewer.ui.screen.CheckableItem
 import com.hippo.ehviewer.ui.screen.collectDetailSizeAsState
 import com.hippo.ehviewer.util.displayString
 import kotlin.math.roundToInt
@@ -226,4 +228,17 @@ fun GalleryList(
             }
         }
     }
+}
+
+/**
+ * 长按多选用的画廊卡片容器：选中态由 [CheckableItem] 统一绘制半透明主题色遮罩，
+ * 右上角对勾带纯白外圈（见 CheckIndicator）；未选中不额外绘制，卡片保持原样。
+ */
+@Composable
+fun SelectableGalleryItem(
+    checked: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable (MutableInteractionSource) -> Unit,
+) {
+    CheckableItem(checked = checked, modifier = modifier) { content(it) }
 }

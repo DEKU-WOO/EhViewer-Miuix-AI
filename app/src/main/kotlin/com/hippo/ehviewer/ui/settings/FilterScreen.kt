@@ -71,7 +71,6 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -233,6 +232,8 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
                     contentPadding = paddingValues,
                 ) {
                     var showTip = true
+                    // 首个非空过滤分组直接位于大标题下方，需要按首个分组间距处理
+                    var isFirstGroup = true
                     filters.forEach { (filterMode, filterList) ->
                         val title = when (filterMode) {
                             FilterMode.TITLE -> R.string.filter_title
@@ -243,12 +244,15 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
                             FilterMode.COMMENT -> R.string.filter_comment
                         }
                         if (filterList.isNotEmpty()) {
+                            val isFirst = isFirstGroup
                             item(key = "title_$filterMode") {
-                                SmallTitle(
+                                SettingsSmallTitle(
                                     text = stringResource(id = title),
+                                    first = isFirst,
                                     modifier = Modifier.thenIf(animateItems) { animateItem() },
                                 )
                             }
+                            isFirstGroup = false
                             item(key = "card_$filterMode") {
                                 Card(
                                     modifier = Modifier

@@ -278,12 +278,17 @@ object WebDavGallerySync {
     /** 目录内所有文件都必须存在且大小大于 0，才算完整拉回。 */
     private fun verifyPulledDirectory(target: Path) {
         val files = mutableListOf<Path>()
+        // 记录所有文件名（含点开头标记文件），用于元数据存在性校验
+        val allNames = mutableSetOf<String>()
         fun collect(dir: Path) {
             dir.list().forEach { child ->
                 when {
                     child.isDirectory -> collect(child)
-                    // 点开头的标记文件（如 .ehviewer / .nomedia）允许为空
-                    child.isFile && !child.name.startsWith(".") -> files += child
+                    child.isFile -> {
+                        allNames += child.name
+                        // 点开头的标记文件（如 .ehviewer / .nomedia）允许为空，不参与大小校验
+                        if (!child.name.startsWith(".")) files += child
+                    }
                 }
             }
         }
@@ -295,6 +300,11 @@ object WebDavGallerySync {
                 ?: runCatching { file.openFileDescriptor("r").use { it.statSize } }.getOrDefault(0L)
             check(size > 0L) { "拉回文件大小异常：${file.name}（$size 字节）" }
         }
+        // 正文 + 元数据双条件防呆：防止远端残留的孤立残缺目录被误拉入库导致阅读器解析报错。
+        // 不强求 thumb.webp，缺少封面时仍由压缩包/首图自动提取生成。
+        val hasBody = files.any { it.name.isArchive() || it.name.isImage() }
+        val hasMetadata = COMIC_INFO_FILE in allNames || SPIDER_INFO_FILENAME in allNames
+        check(hasBody && hasMetadata) { "拉回目录缺少正文或元数据文件，已跳过：${target.name}" }
     }
 
     /**

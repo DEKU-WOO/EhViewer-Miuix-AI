@@ -82,7 +82,6 @@ import moe.tarsin.string
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
@@ -146,7 +145,10 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                 scrollBehavior = scrollBehavior,
                 contentPadding = paddingValues,
             ) {
-                SmallTitle(text = stringResource(id = R.string.settings_advanced_app_language_title))
+                SettingsSmallTitle(
+                    text = stringResource(id = R.string.settings_group_interface_theme),
+                    first = true,
+                )
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -188,7 +190,7 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_advanced_save_crash_log))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_logs_diagnostics))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -223,7 +225,7 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                     }
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_advanced))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_network_ads))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -287,7 +289,7 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                     )
                 }
 
-                SmallTitle(text = stringResource(id = R.string.settings_advanced))
+                SettingsSmallTitle(text = stringResource(id = R.string.settings_group_system_storage))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
