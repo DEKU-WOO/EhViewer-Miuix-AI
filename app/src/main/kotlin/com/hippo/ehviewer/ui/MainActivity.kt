@@ -34,7 +34,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
@@ -83,7 +82,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -573,26 +571,40 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
 
+                            // 进入二级页后路由不再对应一级 Tab，锁定退出瞬间的选中项，
+                            // 避免指示器回退到 primaryIndex 造成隐藏过程中向左偏移/跳动
+                            var lastVisibleTabIndex by remember {
+                                mutableStateOf(
+                                    (if (visibleTabIndex >= 0) visibleTabIndex else primaryIndex)
+                                        .coerceIn(0, (primaryNavItems.size - 1).coerceAtLeast(0)),
+                                )
+                            }
+                            LaunchedEffect(visibleTabIndex) {
+                                if (visibleTabIndex >= 0) lastVisibleTabIndex = visibleTabIndex
+                            }
+                            val navSelectedIndex = if (visibleTabIndex >= 0) visibleTabIndex else lastVisibleTabIndex
                             if (!showNavigationRail) {
                                 AnimatedVisibility(
-                                    // 进入多选时底部导航胶囊向自身中心微缩并渐隐，退出时对称恢复
+                                    // 显示/隐藏统一为垂直滑动 + 渐隐：进入子页面向下滑出淡出，返回时向上滑入淡入
                                     visible = showBottomBar &&
                                         (!BottomBarScrollState.hidden || inSettingsTree) &&
                                         !SelectionModeController.active,
                                     enter = slideInVertically { it } + fadeIn(),
-                                    exit = scaleOut(targetScale = 0.85f, transformOrigin = TransformOrigin.Center) + fadeOut(),
+                                    exit = slideOutVertically { it } + fadeOut(),
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 ) {
                                     IosLiquidGlassNavigationBar(
-                                            items = primaryNavItems.map { (_, stringId, icon) ->
-                                                NavigationItem(label = stringResource(id = stringId), icon = icon)
-                                            },
-                                            selectedIndex = (if (visibleTabIndex >= 0) visibleTabIndex else primaryIndex)
-                                                .coerceIn(0, (primaryNavItems.size - 1).coerceAtLeast(0)),
-                                            onItemClick = { index ->
-                                                primaryNavItems.getOrNull(index)?.let { navigateToTab(it.first) }
-                                            },
-                                            backdrop = contentBackdrop,
+                                        items = primaryNavItems.map { (_, stringId, icon) ->
+                                            NavigationItem(label = stringResource(id = stringId), icon = icon)
+                                        },
+                                        selectedIndex = navSelectedIndex.coerceIn(
+                                            0,
+                                            (primaryNavItems.size - 1).coerceAtLeast(0),
+                                        ),
+                                        onItemClick = { index ->
+                                            primaryNavItems.getOrNull(index)?.let { navigateToTab(it.first) }
+                                        },
+                                        backdrop = contentBackdrop,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
