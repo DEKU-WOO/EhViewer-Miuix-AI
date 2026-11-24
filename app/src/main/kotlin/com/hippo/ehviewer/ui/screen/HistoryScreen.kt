@@ -52,6 +52,7 @@ import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
+import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.History
 import com.ehviewer.core.ui.icons.filled.MenuBook
@@ -126,6 +127,7 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
     LaunchedEffect(Unit) { VpsHistorySyncManager.refreshFromServer() }
     val checkedInfoMap = remember { mutableStateMapOf<Long, GalleryEntity>() }
     val selectMode = checkedInfoMap.isNotEmpty()
+    val backdrop = rememberBlurBackdrop()
     // 已加载项全部勾选时顶栏全选按钮显示激活态
     val loadedItems = historyData.itemSnapshotList.items
     val allSelected = loadedItems.isNotEmpty() && loadedItems.all { it.gid in checkedInfoMap }
@@ -152,6 +154,8 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
         title = title,
         searchFieldHint = hint,
         searchBarOffsetY = { searchBarOffsetY },
+        backdrop = backdrop,
+        hideSearchBar = selectMode,
         trailingIcon = {
             IconButton(
                 onClick = {
@@ -285,35 +289,28 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
             }
         }
     }
-        // 选择态顶栏覆盖在搜索栏之上，下方用页面背景遮住原搜索胶囊
+        // 选择态顶栏直接切换搜索栏，不额外叠加背景遮罩
         if (selectMode) {
-            Column(
+            SelectionTopBar(
+                selectedCount = checkedInfoMap.size,
+                allSelected = allSelected,
+                onExit = { checkedInfoMap.clear() },
+                onToggleSelectAll = {
+                    if (allSelected) {
+                        checkedInfoMap.clear()
+                    } else {
+                        checkedInfoMap.putAll(loadedItems.associateBy { it.gid })
+                    }
+                },
+                countText = "已选择 ${checkedInfoMap.size} 项",
+                backdrop = backdrop,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .background(MiuixTheme.colorScheme.background),
-            ) {
-                SelectionTopBar(
-                    selectedCount = checkedInfoMap.size,
-                    allSelected = allSelected,
-                    onExit = { checkedInfoMap.clear() },
-                    onToggleSelectAll = {
-                        if (allSelected) {
-                            checkedInfoMap.clear()
-                        } else {
-                            checkedInfoMap.putAll(loadedItems.associateBy { it.gid })
-                        }
-                    },
-                    countText = "已选择 ${checkedInfoMap.size} 项",
-                )
-                // 补足搜索胶囊底部留白，避免选择态仍露出旧搜索栏边缘
-                Spacer(Modifier.height(8.dp))
-            }
+                    .fillMaxWidth(),
+            )
         }
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = LocalBottomBarContentPadding.current),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter,
         ) {
             AnimatedVisibility(
@@ -357,9 +354,8 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
                             }
                         },
                     ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    backdrop = backdrop,
                 )
             }
         }

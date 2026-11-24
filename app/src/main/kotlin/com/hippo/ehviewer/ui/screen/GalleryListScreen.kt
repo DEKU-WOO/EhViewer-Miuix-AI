@@ -69,6 +69,7 @@ import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
+import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Bookmarks
 import com.ehviewer.core.ui.icons.filled.MenuBook
@@ -179,6 +180,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     // 长按多选：按 gid 去重记录选中项，非空即进入选择态
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
+    val backdrop = rememberBlurBackdrop()
     // 选择态期间暂停主界面左右滑动切页
     LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
     DisposableEffect(Unit) {
@@ -291,6 +293,8 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         },
         localSearch = false,
         searchBarOffsetY = { searchBarOffsetY },
+        backdrop = backdrop,
+        hideSearchBar = selectMode,
         trailingIcon = {
             if (isTopList) {
                 // 榜单选择改为图标正下方的锚点下拉菜单，替代原本占半屏的全高右侧抽屉
@@ -516,11 +520,8 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                     }
                 },
                 countText = "已选择 ${checkedInfoMap.size} 项",
-                // 多留 8.dp 下边距，把下方的搜索胶囊完整遮住
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MiuixTheme.colorScheme.surface)
-                    .padding(bottom = 8.dp),
+                backdrop = backdrop,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         AnimatedVisibility(
@@ -529,10 +530,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             exit = slideOutVertically { it / 2 } + fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                // 抬高到主界面底部导航栏之上
-                .padding(bottom = LocalBottomBarContentPadding.current + 8.dp),
+                .fillMaxWidth(),
         ) {
             SelectionActionBar(
                 actions = listOf(
@@ -580,6 +578,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                         },
                     ),
                 ),
+                backdrop = backdrop,
             )
         }
     }

@@ -70,6 +70,7 @@ import com.ehviewer.core.ui.component.FastScrollLazyVerticalStaggeredGrid
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
+import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.Download
@@ -149,6 +150,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
 
     val checkedInfoMap = remember { mutableStateMapOf<Long, DownloadInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
+    val backdrop = rememberBlurBackdrop()
     DrawerHandle(!selectMode && !searchBarExpanded)
     // 选中态同步给主界面（暂停左右滑动切页），退出页面时兜底复位
     LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
@@ -277,6 +279,8 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
             }
         },
         searchBarOffsetY = { searchBarOffsetY },
+        backdrop = backdrop,
+        hideSearchBar = selectMode,
         trailingIcon = {
             IconButton(onClick = { gridView = !gridView }) {
                 val icon = if (gridView) MiuixIcons.ListView else MiuixIcons.GridView
@@ -611,7 +615,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         }
     }
 
-    // 选择态顶栏覆盖原搜索栏与 ⋮ 菜单（附加底色把下方搜索胶囊完全盖住）
+    // 选择态顶栏直接切换搜索栏，不额外叠加背景遮罩
     AnimatedVisibility(
         visible = selectMode,
         enter = fadeIn(),
@@ -629,17 +633,14 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 }
             },
             countText = "已选择 ${checkedInfoMap.size} 项",
-            modifier = Modifier
-                .fillMaxWidth()
-                // 整条搜索胶囊（不含状态栏）为 InputFieldMinHeight + 16dp，补足底色避免露出下层搜索栏
-                .background(MiuixTheme.colorScheme.surface)
-                .padding(bottom = (SearchBarDefaults.InputFieldMinHeight + 16.dp - 56.dp).coerceAtLeast(0.dp)),
+            backdrop = backdrop,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 
     // 多选底部操作胶囊：4 个均分按钮，进入/退出时整体升起/落下
     Box(
-        modifier = Modifier.fillMaxSize().navigationBarsPadding().snackBarPadding(),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(
@@ -679,7 +680,8 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                         }
                     },
                 ),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                backdrop = backdrop,
             )
         }
     }

@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -101,9 +105,10 @@ private fun SelectionCircleButton(
     LiquidGlassSurface(
         shape = CircleShape,
         elevation = 4.dp,
-        refractionHeight = 16.dp,
-        refractionAmount = 16.dp,
-        containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+        refractionHeight = 18.dp,
+        refractionAmount = 18.dp,
+        highlight = LiquidGlassNavHighlight,
+        containerColor = MiuixTheme.colorScheme.surface,
         modifier = modifier.size(40.dp),
         backdrop = backdrop,
     ) {
@@ -137,50 +142,66 @@ fun SelectionActionBar(
     modifier: Modifier = Modifier,
     backdrop: Backdrop? = null,
 ) {
-    LiquidGlassSurface(
-        shape = CircleShape,
-        elevation = 6.dp,
-        refractionHeight = 18.dp,
-        refractionAmount = 18.dp,
-        containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
-        modifier = modifier.height(64.dp),
-        backdrop = backdrop,
+    // 与底部悬浮导航栏完全一致的落位：左右 24dp 外边距 + 同一底部安全区偏移
+    val navBarBottomPadding = WindowInsets.navigationBars
+        .only(WindowInsetsSides.Bottom)
+        .asPaddingValues()
+        .calculateBottomPadding()
+    val bottomPaddingValue = if (navBarBottomPadding != 0.dp) 8.dp + navBarBottomPadding else 20.dp
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = bottomPaddingValue, start = 24.dp, end = 24.dp),
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        Row(
+        LiquidGlassSurface(
+            shape = CircleShape,
+            elevation = 6.dp,
+            refractionHeight = 24.dp,
+            refractionAmount = 24.dp,
+            highlight = LiquidGlassNavHighlight,
+            containerColor = MiuixTheme.colorScheme.surface,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
+                .height(64.dp),
+            backdrop = backdrop,
         ) {
-            actions.forEach { action ->
-                val alpha = if (action.enabled) 1f else 0.35f
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(
-                            enabled = action.enabled,
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = action.onClick,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                actions.forEach { action ->
+                    val alpha = if (action.enabled) 1f else 0.35f
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                enabled = action.enabled,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = action.onClick,
+                            )
+                            .padding(vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            imageVector = action.icon,
+                            contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurface.copy(alpha = alpha),
+                            modifier = Modifier.size(22.dp),
                         )
-                        .padding(vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        imageVector = action.icon,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = alpha),
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Text(
-                        text = action.label,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = alpha),
-                        maxLines = 1,
-                    )
+                        Text(
+                            text = action.label,
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = alpha),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

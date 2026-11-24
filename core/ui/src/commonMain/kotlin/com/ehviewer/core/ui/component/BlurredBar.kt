@@ -69,7 +69,8 @@ fun BlurredBar(
         if (backdrop != null && blurEnabled) {
             val alphaProvider: Density.() -> Float = {
                 scrollBehavior?.state
-                    ?.let { (-it.contentOffset / 48.dp.toPx()).coerceIn(0f, 1f) }
+                    // 停靠时保留基础磨砂层，避免顶部大面积纯透明导致内容生硬透出
+                    ?.let { 0.55f + 0.45f * (-it.contentOffset / 48.dp.toPx()).coerceIn(0f, 1f) }
                     ?: 1f
             }
             Box(
@@ -85,7 +86,7 @@ fun BlurredBar(
                         blurRadius = 20f,
                         colors = BlurDefaults.blurColors(
                             blendColors = listOf(
-                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.3f)),
+                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.5f)),
                             ),
                         ),
                     ),

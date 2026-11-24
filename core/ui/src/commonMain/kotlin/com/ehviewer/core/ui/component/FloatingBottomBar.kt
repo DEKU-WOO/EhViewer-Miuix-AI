@@ -133,25 +133,7 @@ enum class FloatingBottomBarMode {
     None,
 }
 
-private val iosIndicatorSpecular: Highlight = Highlight(
-    width = 1.dp,
-    alpha = 1f,
-    style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = Color.White,
-            intensity = 1f,
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = Color.White,
-            intensity = 0.4f,
-        ),
-        dualPeak = true,
-    ),
-)
+private val iosIndicatorSpecular: Highlight = LiquidGlassNavHighlight
 
 // Light reference point in normalized UV coordinate system
 private const val LIGHT_REF_X = 0.5f

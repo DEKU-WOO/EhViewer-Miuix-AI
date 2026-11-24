@@ -69,6 +69,7 @@ import com.ehviewer.core.database.dao.SearchDao
 import com.ehviewer.core.database.model.Search
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
+import com.ehviewer.core.ui.component.LiquidGlassNavHighlight
 import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
@@ -109,6 +110,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.progressiveTextureBlur
@@ -150,6 +152,9 @@ fun SearchBarScreen(
     trailingIcon: @Composable () -> Unit = {},
     subHeader: @Composable (() -> Unit)? = null,
     filter: @Composable (() -> Unit)? = null,
+    backdrop: LayerBackdrop? = null,
+    /** 多选模式接管顶栏时隐藏搜索栏内容，只保留统一磨砂渐变。 */
+    hideSearchBar: Boolean = false,
     floatingActionButton: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -244,9 +249,9 @@ fun SearchBarScreen(
     }
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
-    val backdrop = rememberBlurBackdrop()
+    val activeBackdrop = backdrop ?: rememberBlurBackdrop()
 
-    CompositionLocalProvider(LocalBackdrop provides backdrop) {
+    CompositionLocalProvider(LocalBackdrop provides activeBackdrop) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val density = LocalDensity.current
             val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -263,20 +268,20 @@ fun SearchBarScreen(
                         // 只对状态栏条带做渐进模糊：搜索胶囊自身已是玻璃材质，若整条顶栏再模糊一次，
                         // 胶囊与其周边会出现双层模糊和模糊强度断层。
                         if (!expanded) {
-                            if (backdrop != null && isRuntimeShaderSupported()) {
+                            if (activeBackdrop != null && isRuntimeShaderSupported()) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         // 统一放宽：从状态栏上缘平滑渐变到首张卡片上边缘附近的参考线
-                                        .height(statusBarPadding + TopScrimExtraHeight)
+                                        .height(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
                                         .progressiveTextureBlur(
-                                            backdrop = backdrop,
+                                            backdrop = activeBackdrop,
                                             shape = RectangleShape,
                                             gradient = ProgressiveBlur.Top,
                                             blurRadius = 20f,
                                             colors = BlurDefaults.blurColors(
                                                 blendColors = listOf(
-                                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.3f)),
+                                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.5f)),
                                                 ),
                                             ),
                                         ),
@@ -286,7 +291,7 @@ fun SearchBarScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(statusBarPadding + TopScrimExtraHeight)
+                                        .height(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
                                         .background(scrim),
                                 )
                             }
@@ -313,7 +318,7 @@ fun SearchBarScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .blurBackdropSource(backdrop),
+                            .blurBackdropSource(activeBackdrop),
                     ) {
                         content(effectivePaddingValues)
                     }
@@ -334,6 +339,7 @@ fun SearchBarScreen(
                         .background(searchBg),
                 )
             }
+            if (!hideSearchBar) {
             CompositionLocalProvider(LocalBackdrop provides null) {
                 SearchBar(
                     modifier = Modifier
@@ -370,12 +376,13 @@ fun SearchBarScreen(
                                 label = placeholder,
                                 color = if (expanded) MiuixTheme.colorScheme.surfaceContainer else Color.Transparent,
                                 leadingIcon = {
+                                    val iconModifier = Modifier.padding(start = SearchBarIconCenterInset)
                                     if (expanded) {
-                                        IconButton(onClick = { hideSearchView() }) {
+                                        IconButton(onClick = { hideSearchView() }, modifier = iconModifier) {
                                             Icon(MiuixIcons.Back, contentDescription = null)
                                         }
                                     } else {
-                                        IconButton(onClick = { onExpandedChange(true) }) {
+                                        IconButton(onClick = { onExpandedChange(true) }, modifier = iconModifier) {
                                             Icon(MiuixIcons.Search, contentDescription = null)
                                         }
                                     }
@@ -383,18 +390,22 @@ fun SearchBarScreen(
                                 trailingIcon = {
                                     if (expanded) {
                                         AnimatedContent(targetState = query.isNotEmpty()) { hasText ->
+                                            val iconModifier = Modifier.padding(end = SearchBarIconCenterInset)
                                             if (hasText) {
-                                                IconButton(onClick = { searchFieldState.clearText() }) {
+                                                IconButton(onClick = { searchFieldState.clearText() }, modifier = iconModifier) {
                                                     Icon(MiuixIcons.Close, contentDescription = null)
                                                 }
                                             } else {
-                                                IconButton(onClick = { navigate(ImageSearchScreenDestination) }) {
+                                                IconButton(onClick = { navigate(ImageSearchScreenDestination) }, modifier = iconModifier) {
                                                     Icon(MiuixIcons.Image, contentDescription = null)
                                                 }
                                             }
                                         }
                                     } else {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            modifier = Modifier.padding(end = SearchBarIconCenterInset),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
                                             if (filter != null) {
                                                 IconButton(onClick = { showFilterSheet = true }) {
                                                     Icon(MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
@@ -418,9 +429,10 @@ fun SearchBarScreen(
                                     elevation = 4.dp,
                                     refractionHeight = 16.dp,
                                     refractionAmount = 16.dp,
-                                    containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+                                    highlight = LiquidGlassNavHighlight,
+                                    containerColor = MiuixTheme.colorScheme.surfaceContainer,
                                     modifier = inputFieldModifier,
-                                    backdrop = backdrop,
+                                    backdrop = activeBackdrop,
                                 ) {
                                     inputContent()
                                 }
@@ -507,8 +519,9 @@ fun SearchBarScreen(
                     }
                 }
             }
+            }
 
-            if (!expanded && subHeader != null) {
+            if (!expanded && !hideSearchBar && subHeader != null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -532,7 +545,7 @@ fun SearchBarScreen(
                 }
             }
 
-            if (!expanded) {
+            if (!expanded && !hideSearchBar) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -571,7 +584,7 @@ fun SearchBarScreen(
                         if (collapseProgress > 0.2f) {
                             // 收缩态不再让图标裸渲染在文字上，统一包装为独立正圆毛玻璃按钮
                             CollapsedCircleAction(
-                                backdrop = backdrop,
+                                backdrop = activeBackdrop,
                                 onClick = { onExpandedChange(true) },
                             ) {
                                 Icon(
@@ -581,7 +594,7 @@ fun SearchBarScreen(
                             }
                             if (filter != null) {
                                 CollapsedCircleAction(
-                                    backdrop = backdrop,
+                                    backdrop = activeBackdrop,
                                     onClick = { showFilterSheet = true },
                                 ) {
                                     Icon(
@@ -644,8 +657,11 @@ private val SearchBarHorizontalPadding = 16.dp
 private val SearchBarMaxWidth = 720.dp
 private val FilterDialogCornerRadius = 32.dp
 
-// 顶部磨砂从状态栏上缘继续向下延伸的额外高度，使各页面渐变终点落在首张卡片上缘参考线附近
-private val TopScrimExtraHeight = 40.dp
+// 让左右图标几何中心落在胶囊左右半圆圆心（距边缘 H/2）所需的额外内边距（IconButton 宽 40.dp）
+private val SearchBarIconCenterInset = SearchBarDefaults.InputFieldMinHeight * 0.5f - 20.dp
+
+// 顶部磨砂在覆盖整条搜索栏后继续向下少量延伸，终点落在首张卡片上缘参考线附近
+private val TopScrimExtraHeight = 8.dp
 
 /** 收缩态右侧的独立正圆毛玻璃高光按钮，材质与底部导航栏一致。 */
 @Composable
@@ -659,7 +675,8 @@ private fun CollapsedCircleAction(
         elevation = 4.dp,
         refractionHeight = 16.dp,
         refractionAmount = 16.dp,
-        containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+        highlight = LiquidGlassNavHighlight,
+        containerColor = MiuixTheme.colorScheme.surfaceContainer,
         modifier = Modifier.size(40.dp),
         backdrop = backdrop,
     ) {

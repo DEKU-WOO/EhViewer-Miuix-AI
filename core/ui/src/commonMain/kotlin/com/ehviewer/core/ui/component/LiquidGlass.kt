@@ -88,6 +88,29 @@ val LiquidGlassHighlightDark = Highlight(
     ),
 )
 
+/**
+ * 底部悬浮导航胶囊使用的高光规范；搜索栏、多选圆钮等需要与导航栏保持同一轮廓与描边粗细。
+ */
+val LiquidGlassNavHighlight = Highlight(
+    width = 1.dp,
+    alpha = 1f,
+    style = BloomStroke(
+        color = Color.White.copy(alpha = 0.12f),
+        innerBlurRadius = 2.0.dp,
+        primaryLight = LightSource(
+            position = LightPosition(0.5f, -0.3f, -0.05f),
+            color = Color.White,
+            intensity = 1f,
+        ),
+        secondaryLight = LightSource(
+            position = LightPosition(0.5f, 0.8f, -0.5f),
+            color = Color.White,
+            intensity = 0.4f,
+        ),
+        dualPeak = true,
+    ),
+)
+
 val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
 fun Modifier.blurBackdropSource(backdrop: LayerBackdrop?): Modifier = if (backdrop != null) this.layerBackdrop(backdrop) else this
