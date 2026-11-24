@@ -3,12 +3,17 @@ package com.ehviewer.core.ui.component
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -62,20 +67,26 @@ fun BlurredBar(
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = true,
     scrollBehavior: ScrollBehavior? = null,
-    scrimExtraHeight: Dp = 40.dp,
+    scrimExtraHeight: Dp = 56.dp,
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier) {
         if (backdrop != null && blurEnabled) {
+            val density = LocalDensity.current
+            var barHeightPx by remember { mutableIntStateOf(0) }
             val alphaProvider: Density.() -> Float = {
                 scrollBehavior?.state
                     // 停靠时保留基础磨砂层，避免顶部大面积纯透明导致内容生硬透出
                     ?.let { 0.55f + 0.45f * (-it.contentOffset / 48.dp.toPx()).coerceIn(0f, 1f) }
                     ?: 1f
             }
+            // 单一连贯磨砂层：覆盖顶栏并向下延伸缓冲带，让渐变随高度线性衰减至完全透明，
+            // 不再额外绘制第二层/分段式遮罩，避免顶栏下沿出现生硬截断。
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(with(density) { barHeightPx.toDp() } + scrimExtraHeight)
                     .graphicsLayer { alpha = alphaProvider() }
                     .progressiveTextureBlur(
                         backdrop = backdrop,
@@ -86,35 +97,16 @@ fun BlurredBar(
                         blurRadius = 20f,
                         colors = BlurDefaults.blurColors(
                             blendColors = listOf(
-                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.55f)),
                             ),
                         ),
                     ),
             )
-            // 向下延伸的统一渐变带：让磨砂终点与首张卡片上缘参考线对齐，
-            // 与列表页 SearchBarScreen 的顶部遮罩使用同一套加宽规格。
-            if (scrimExtraHeight > 0.dp) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(y = scrimExtraHeight)
-                        .fillMaxWidth()
-                        .height(scrimExtraHeight)
-                        .graphicsLayer { alpha = alphaProvider() }
-                        .progressiveTextureBlur(
-                            backdrop = backdrop,
-                            shape = RectangleShape,
-                            gradient = ProgressiveBlur.Top,
-                            blurRadius = 16f,
-                            colors = BlurDefaults.blurColors(
-                                blendColors = listOf(
-                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.2f)),
-                                ),
-                            ),
-                        ),
-                )
+            Box(modifier = Modifier.onSizeChanged { barHeightPx = it.height }) {
+                content()
             }
+        } else {
+            content()
         }
-        content()
     }
 }

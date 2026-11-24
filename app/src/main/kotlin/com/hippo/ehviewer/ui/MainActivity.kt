@@ -31,10 +31,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleOut
@@ -43,7 +40,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -75,7 +71,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.currentCompositeKeyHashCode
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -89,18 +84,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -115,7 +103,6 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.IosLiquidGlassNavigationBar
 import com.ehviewer.core.ui.component.LabeledCheckbox
 import com.ehviewer.core.ui.component.LocalSideSheetState
-import com.ehviewer.core.ui.component.LocalTabGesturePosition
 import com.ehviewer.core.ui.component.MutableSideSheet
 import com.ehviewer.core.ui.component.SideSheetValue
 import com.ehviewer.core.ui.component.SquircleShape
@@ -188,8 +175,6 @@ import com.ramcosta.composedestinations.utils.currentDestinationAsState
 import com.ramcosta.composedestinations.utils.rememberDestinationsNavigator
 import eu.kanade.tachiyomi.util.view.setSecureScreen
 import java.io.File
-import kotlin.math.abs
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -565,115 +550,10 @@ class MainActivity : AppCompatActivity() {
                 ) { _ ->
                     @Composable
                     fun MainContent() {
-                        val hapticFeedback = LocalHapticFeedback.current
-                        val pagerScope = rememberCoroutineScope()
-                        var pagerOffsetPx by remember { mutableFloatStateOf(0f) }
-                        var pagerWidthPx by remember { mutableFloatStateOf(0f) }
-                        var pagerJob by remember { mutableStateOf<Job?>(null) }
-                        val tabGesturePosition = remember { mutableStateOf<Float?>(null) }
-                        // 仅当当前路由是可见导航项时才允许分页滑动，隐藏项 / 侧栏 / 多选状态均禁用
-                        val pagerEnabled = visibleTabIndex >= 0 && !showNavigationRail && !SelectionModeController.active
-
-                        LaunchedEffect(pagerEnabled) {
-                            if (!pagerEnabled) {
-                                pagerJob?.cancel()
-                                pagerOffsetPx = 0f
-                                tabGesturePosition.value = null
-                            }
-                        }
-
-                        fun springBackPager() {
-                            pagerJob?.cancel()
-                            pagerJob = pagerScope.launch {
-                                val anim = Animatable(pagerOffsetPx)
-                                anim.animateTo(0f, tween(220, easing = FastOutSlowInEasing)) { pagerOffsetPx = value }
-                                tabGesturePosition.value = null
-                            }
-                        }
-
-                        fun animateToTab(targetIndex: Int, haptic: Boolean = false) {
-                            val width = pagerWidthPx
-                            val target = primaryNavItems.getOrNull(targetIndex)
-                            if (target == null) {
-                                springBackPager()
-                                return
-                            }
-                            if (target.first.route == currentDestination?.route) {
-                                springBackPager()
-                                return
-                            }
-                            if (width <= 0f) {
-                                navigateToTab(target.first)
-                                return
-                            }
-                            val fromIndex = if (visibleTabIndex >= 0) visibleTabIndex else primaryIndex
-                            val direction = if (targetIndex >= fromIndex) 1 else -1
-                            pagerJob?.cancel()
-                            pagerJob = pagerScope.launch {
-                                if (haptic) {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                }
-                                // 当前页沿目标方向完全滑出
-                                val outgoing = Animatable(pagerOffsetPx)
-                                outgoing.animateTo(direction * width, tween(180, easing = FastOutSlowInEasing)) {
-                                    pagerOffsetPx = value
-                                }
-                                navigateToTab(target.first)
-                                // 新页从相反方向同距离进入，与滑出动画首尾相接
-                                pagerOffsetPx = -direction * width
-                                tabGesturePosition.value = targetIndex.toFloat()
-                                val incoming = Animatable(pagerOffsetPx)
-                                incoming.animateTo(0f, tween(220, easing = FastOutSlowInEasing)) {
-                                    pagerOffsetPx = value
-                                }
-                                tabGesturePosition.value = null
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                // 真跟手分页：页序严格跟随「设置 -> 导航项」的可见顺序，
-                                // 多选模式下关闭滑动；首/尾屏边缘只做阻尼不吞手势，边缘 24.dp 放行系统返回手势。
-                                .tabPagerGesture(
-                                    enabled = pagerEnabled,
-                                    currentIndex = visibleTabIndex,
-                                    pageCount = primaryNavItems.size,
-                                    onDragStart = { pagerJob?.cancel() },
-                                    onDrag = { rawPx ->
-                                        val atEdge = (visibleTabIndex == 0 && rawPx > 0f) ||
-                                            (visibleTabIndex == primaryNavItems.lastIndex && rawPx < 0f)
-                                        pagerOffsetPx = if (atEdge) rawPx * 0.3f else rawPx
-                                        tabGesturePosition.value = if (pagerWidthPx > 0f) {
-                                            visibleTabIndex + pagerOffsetPx / pagerWidthPx
-                                        } else {
-                                            null
-                                        }
-                                    },
-                                    onRelease = { rawPx, velocity ->
-                                        val width = pagerWidthPx
-                                        val fraction = if (width > 0f) rawPx / width else 0f
-                                        val direction = when {
-                                            rawPx < 0f -> 1
-                                            rawPx > 0f -> -1
-                                            velocity < 0f -> 1
-                                            else -> -1
-                                        }
-                                        val shouldCommit = abs(fraction) >= 0.2f || abs(velocity) >= 1200f
-                                        if (shouldCommit && visibleTabIndex + direction in primaryNavItems.indices) {
-                                            animateToTab(visibleTabIndex + direction, haptic = true)
-                                        } else {
-                                            springBackPager()
-                                        }
-                                    },
-                                    onCancel = { springBackPager() },
-                                ),
-                        ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .onSizeChanged { pagerWidthPx = it.width.toFloat() }
-                                    .graphicsLayer { translationX = pagerOffsetPx }
                                     .blurBackdropSource(contentBackdrop),
                             ) {
                                 SharedTransitionLayout {
@@ -703,20 +583,18 @@ class MainActivity : AppCompatActivity() {
                                     exit = scaleOut(targetScale = 0.85f, transformOrigin = TransformOrigin.Center) + fadeOut(),
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 ) {
-                                    CompositionLocalProvider(
-                                        LocalTabGesturePosition provides tabGesturePosition,
-                                    ) {
-                                        IosLiquidGlassNavigationBar(
+                                    IosLiquidGlassNavigationBar(
                                             items = primaryNavItems.map { (_, stringId, icon) ->
                                                 NavigationItem(label = stringResource(id = stringId), icon = icon)
                                             },
                                             selectedIndex = (if (visibleTabIndex >= 0) visibleTabIndex else primaryIndex)
                                                 .coerceIn(0, (primaryNavItems.size - 1).coerceAtLeast(0)),
-                                            onItemClick = { index -> animateToTab(index) },
+                                            onItemClick = { index ->
+                                                primaryNavItems.getOrNull(index)?.let { navigateToTab(it.first) }
+                                            },
                                             backdrop = contentBackdrop,
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                    }
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
                                 }
                             }
                         }
@@ -901,71 +779,6 @@ class MainActivity : AppCompatActivity() {
 val LocalDrawerHandle = compositionLocalOf<SnapshotStateList<Long>> { error("CompositionLocal LocalDrawerHandle not present!") }
 val LocalSnackBarHostState = compositionLocalOf<SnackbarHostState> { error("CompositionLocal LocalSnackBarHostState not present!") }
 val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope> { error("CompositionLocal LocalSharedTransitionScope not present!") }
-
-/**
- * 主界面真跟手横向分页手势。
- *
- * - 实时把累计横向位移回调给分页容器，页面与底部导航指示器同步跟手；
- * - 仅在水平位移超过 slop 且明显大于垂直位移时接管，避免影响列表纵向滚动；
- * - 起手点位于屏幕左右 24.dp 边缘热区时直接放行，保证系统侧滑返回可用；
- * - 首/尾屏边界不吞手势，由回调侧做阻尼与回弹。
- */
-private fun Modifier.tabPagerGesture(
-    enabled: Boolean,
-    currentIndex: Int,
-    pageCount: Int,
-    onDragStart: () -> Unit,
-    onDrag: (rawPx: Float) -> Unit,
-    onRelease: (rawPx: Float, velocityPxPerSec: Float) -> Unit,
-    onCancel: () -> Unit,
-): Modifier = if (!enabled) {
-    this
-} else {
-    this.pointerInput(enabled, currentIndex, pageCount) {
-        val edgeWidth = 24.dp.toPx()
-        val slop = viewConfiguration.touchSlop
-        awaitPointerEventScope {
-            while (true) {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                if (down.position.x < edgeWidth || down.position.x > size.width - edgeWidth) {
-                    continue
-                }
-                var totalX = 0f
-                var totalY = 0f
-                var velocity = 0f
-                var lastTime = down.uptimeMillis
-                var claimed = false
-                var released = false
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    if (change.changedToUpIgnoreConsumed()) {
-                        released = true
-                        break
-                    }
-                    val dx = change.positionChange().x
-                    val dy = change.positionChange().y
-                    val dt = (change.uptimeMillis - lastTime).coerceAtLeast(1L)
-                    lastTime = change.uptimeMillis
-                    velocity = velocity * 0.7f + (dx / dt * 1000f) * 0.3f
-                    totalX += dx
-                    totalY += dy
-                    if (!claimed && abs(totalX) > slop && abs(totalX) > abs(totalY) * 1.5f) {
-                        claimed = true
-                        onDragStart()
-                    }
-                    if (claimed) {
-                        change.consume()
-                        onDrag(totalX)
-                    }
-                }
-                if (claimed) {
-                    if (released) onRelease(totalX, velocity) else onCancel()
-                }
-            }
-        }
-    }
-}
 
 @Composable
 fun DrawerHandle(enabled: Boolean) {

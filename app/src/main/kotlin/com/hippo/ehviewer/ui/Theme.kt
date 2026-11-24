@@ -45,27 +45,13 @@ inline fun ComponentActivity.setMiuixContent(crossinline content: @Composable Di
 
 private typealias Ty = AnimatedContentTransitionScope<NavBackStackEntry>
 
-/** 主 Tab 之间的切换由跟手分页容器自行完成滑出/滑入，导航过渡必须置空避免二次动画。 */
-private fun Ty.isPrimaryTabSwitch(): Boolean {
-    val order = runCatching {
-        MainNavItems.visible(MainNavItems.decode(Settings.bottomNavItems.value)).map { it.direction.route }
-    }.getOrElse { return false }
-    val from = initialState.destination.route ?: return false
-    val to = targetState.destination.route ?: return false
-    return from != to && from in order && to in order
-}
-
 @Composable
 fun rememberEhNavAnim(): NavHostAnimatedDestinationStyle {
     val slideDistance = rememberSlideDistance()
     return remember(slideDistance) {
         object : NavHostAnimatedDestinationStyle() {
-            override val enterTransition: Ty.() -> EnterTransition = {
-                if (isPrimaryTabSwitch()) EnterTransition.None else materialSharedAxisXIn(true, slideDistance)
-            }
-            override val exitTransition: Ty.() -> ExitTransition = {
-                if (isPrimaryTabSwitch()) ExitTransition.None else materialSharedAxisXOut(true, slideDistance)
-            }
+            override val enterTransition: Ty.() -> EnterTransition = { materialSharedAxisXIn(true, slideDistance) }
+            override val exitTransition: Ty.() -> ExitTransition = { materialSharedAxisXOut(true, slideDistance) }
             override val popEnterTransition: Ty.() -> EnterTransition = { materialSharedAxisXIn(false, slideDistance) }
             override val popExitTransition: Ty.() -> ExitTransition = { materialSharedAxisXOut(false, slideDistance) }
         }
