@@ -67,7 +67,7 @@ fun BlurredBar(
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = true,
     scrollBehavior: ScrollBehavior? = null,
-    scrimExtraHeight: Dp = 56.dp,
+    scrimExtraHeight: Dp = 24.dp,
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier) {

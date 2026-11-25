@@ -666,7 +666,7 @@ private val FilterDialogCornerRadius = 32.dp
 private val SearchBarIconCenterInset = SearchBarDefaults.InputFieldMinHeight * 0.5f - 20.dp
 
 // 顶部磨砂在覆盖整条搜索栏后继续向下延伸缓冲带，渐变终点落在首张卡片上缘下方并完全归零
-private val TopScrimExtraHeight = 56.dp
+private val TopScrimExtraHeight = 24.dp
 
 /** 收缩态右侧的独立正圆毛玻璃高光按钮，材质与底部导航栏一致。 */
 @Composable
