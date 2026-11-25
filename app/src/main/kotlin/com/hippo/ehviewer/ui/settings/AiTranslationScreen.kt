@@ -3,7 +3,7 @@ package com.hippo.ehviewer.ui.settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,12 +86,23 @@ import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
-/** 添加模型弹窗里的免费模型快捷填充项。 */
-private val suggestedModels = listOf(
-    "gemini-3.5-flash-lite",
-    "gemini-3-flash-preview",
-    "Qwen/Qwen3-8B",
-)
+/** 添加模型弹窗中的历史记录上限。 */
+private const val ModelHistoryLimit = 10
+
+private fun parseModelHistory(raw: String): List<String> = raw
+    .split('\n')
+    .map { it.trim() }
+    .filter { it.isNotEmpty() }
+    .distinct()
+    .take(ModelHistoryLimit)
+
+/** 把新添加的模型插到历史最前，重复项前移，超出上限淘汰最旧的一条。 */
+private fun recordModelHistory(id: String) {
+    val updated = (listOf(id) + parseModelHistory(Settings.aiModelHistory.value))
+        .distinct()
+        .take(ModelHistoryLimit)
+    Settings.aiModelHistory.value = updated.joinToString("\n")
+}
 
 @Destination<RootGraph>
 @Composable
@@ -185,26 +196,38 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                         lineLimits = TextFieldLineLimits.SingleLine,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        suggestedModels.forEach { id ->
-                            MiuixText(
-                                text = id,
-                                style = MiuixTheme.textStyles.footnote1,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier
-                                    .clip(SquircleShape(8.dp))
-                                    .background(MiuixTheme.colorScheme.surfaceContainer)
-                                    .clickable {
-                                        fieldState.setTextAndPlaceCursorAtEnd(id)
-                                        error = null
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                            )
+                    // 仅展示用户手动添加过的模型历史；没有历史时不显示任何预设标签
+                    val historyRaw by Settings.aiModelHistory.collectAsState()
+                    val modelHistory = remember(historyRaw) { parseModelHistory(historyRaw) }
+                    if (modelHistory.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            modelHistory.forEach { id ->
+                                MiuixText(
+                                    text = id,
+                                    style = MiuixTheme.textStyles.footnote1,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier
+                                        .clip(SquircleShape(8.dp))
+                                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                                        .combinedClickable(
+                                            onClick = {
+                                                fieldState.setTextAndPlaceCursorAtEnd(id)
+                                                error = null
+                                            },
+                                            // 长按直接从历史记录中删除并实时刷新
+                                            onLongClick = {
+                                                Settings.aiModelHistory.value =
+                                                    (modelHistory - id).joinToString("\n")
+                                            },
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                )
+                            }
                         }
                     }
                     if (error != null) {
@@ -240,6 +263,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 }
             }
         }
+        recordModelHistory(model)
         AiProfileStore.updateProfile(current.id) { profile ->
             profile.copy(models = profile.models + model, selectedModel = model)
         }

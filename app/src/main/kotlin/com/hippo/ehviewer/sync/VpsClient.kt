@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /** 精简的跨端历史记录，只保留恢复阅读进度与补全元数据所需字段。 */
 @Serializable
@@ -39,14 +40,41 @@ data class CloudSettingsRecord(
     @SerialName("backup_date") val backupDate: String = "",
     @SerialName("profile_count") val profileCount: Int = 0,
     @SerialName("updated_at") val updatedAt: Long = 0L,
-    val settings: JsonElement = JsonObject(emptyMap()),
+    val settings: JsonElement? = null,
+    // 兼容不同服务端/历史版本使用的快照字段名
+    @SerialName("settings_json") val settingsJsonValue: JsonElement? = null,
+    @SerialName("config_json") val configJson: JsonElement? = null,
+    @SerialName("configJson") val configJsonCamel: JsonElement? = null,
+    val config: JsonElement? = null,
+    val data: JsonElement? = null,
 ) {
-    /** 兼容服务端把 settings 存成 JSON 字符串或嵌套对象两种形式。 */
+    /**
+     * 兼容服务端把设置存成 JSON 字符串、嵌套对象或 `config_json` 等外层字段的多种形式。
+     * 逐层解包字符串，直到得到可直接解析的设置对象文本。
+     */
     val settingsJson: String
-        get() = when (settings) {
-            is JsonPrimitive -> settings.content
-            else -> settings.toString()
+        get() {
+            val candidates = listOf(settings, settingsJsonValue, configJson, configJsonCamel, config, data)
+            candidates.forEach { element ->
+                unwrapSettings(element)?.let { return it }
+            }
+            return "{}"
         }
+
+    private fun unwrapSettings(element: JsonElement?): String? = when (element) {
+        null -> null
+        is JsonPrimitive -> element.contentOrNull?.takeIf { it.isNotBlank() }
+        is JsonArray -> element.takeIf { it.isNotEmpty() }?.toString()
+        is JsonObject -> {
+            val nested = element["settings"] ?: element["settings_json"] ?: element["config_json"]
+                ?: element["configJson"] ?: element["config"] ?: element["data"]
+            if (nested != null) {
+                unwrapSettings(nested)
+            } else {
+                element.takeIf { it.isNotEmpty() }?.toString()
+            }
+        }
+    }
 }
 
 /**
@@ -173,14 +201,21 @@ object VpsClient {
         }
     }
 
-    /** 兼容裸数组与 `{items:[...]}` / `{data:[...]}` / `{history:[...]}` 包装。 */
+    /** 兼容裸数组与 `{items:[...]}` / `{data:[...]}` / `{data:{settings:[...]}}` 等包装。 */
     private fun parseArray(text: String, key: String): JsonArray {
         if (text.isBlank()) return JsonArray(emptyList())
         val root = runCatching { json.parseToJsonElement(text) }.getOrNull() ?: return JsonArray(emptyList())
         return when (root) {
             is JsonArray -> root
-            is JsonObject -> (root[key] ?: root["items"] ?: root["data"] ?: root["snapshots"])
-                as? JsonArray ?: JsonArray(emptyList())
+            is JsonObject -> {
+                when (val direct = root[key] ?: root["items"] ?: root["data"] ?: root["snapshots"]) {
+                    is JsonArray -> direct
+                    is JsonObject -> (
+                        direct[key] ?: direct["items"] ?: direct["snapshots"] ?: direct["records"]
+                        ) as? JsonArray ?: JsonArray(emptyList())
+                    else -> JsonArray(emptyList())
+                }
+            }
             else -> JsonArray(emptyList())
         }
     }

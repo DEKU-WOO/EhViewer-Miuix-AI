@@ -343,7 +343,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                        .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
                 ) {
                     if (!isLocal) {
                         Text(
@@ -353,16 +353,21 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                     }
-                    TextButton(
-                        text = stringResource(R.string.backup_restore_full),
-                        onClick = { cont.resume(0) },
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                    )
-                    TextButton(
-                        text = stringResource(R.string.backup_restore_api_only),
-                        onClick = { cont.resume(1) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        TextButton(
+                            text = stringResource(R.string.backup_restore_full),
+                            onClick = { cont.resume(0) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        TextButton(
+                            text = stringResource(R.string.backup_restore_api_only),
+                            onClick = { cont.resume(1) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         } ?: return@launch
@@ -373,7 +378,8 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 if (option == 0) {
                     if (!SettingsBackup.restoreAll(raw)) throw IllegalStateException("invalid backup")
                 } else {
-                    SettingsBackup.restoreApiProfiles(raw)
+                    // 解析不到任何方案时按失败处理，避免误报“恢复完成”
+                    if (SettingsBackup.restoreApiProfiles(raw) <= 0) throw IllegalStateException("no api profile")
                 }
             }.onFailure { logcat("BackupRestore", it) }.exceptionOrNull()
         }

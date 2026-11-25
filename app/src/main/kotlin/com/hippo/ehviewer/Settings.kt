@@ -151,6 +151,9 @@ object Settings : DataStorePreferences(null) {
     val aiProfiles = stringPref("ai_profiles", "")
     val aiActiveProfileId = stringPref("ai_active_profile_id", "")
 
+    /** 用户手动添加过的模型 ID 历史，换行分隔，最多保留 10 条。 */
+    val aiModelHistory = stringPref("ai_model_history", "")
+
     // Backup & Sync
     /** 本机唯一标识，用于云端设置快照按设备归档。 */
     val syncDeviceId = stringPref("sync_device_id", "")

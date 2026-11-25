@@ -42,22 +42,34 @@ object SettingsBackup {
 
     /** 全量恢复：只覆盖备份中存在的键，并跳过本机专属的连接/授权字段。 */
     suspend fun restoreAll(raw: String): Boolean {
-        val root = runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull() ?: return false
+        val root = parseObject(raw) ?: return false
         val entries = LinkedHashMap<String, Any>()
         root.forEach { (key, element) ->
             if (key == DEVICE_ID_KEY) return@forEach
             if (fullRestoreSkipPrefixes.any { key.startsWith(it) }) return@forEach
             decodeValue(element)?.let { entries[key] = it }
         }
+        // 没解析出任何有效键说明快照结构不匹配，不能返回成功
+        if (entries.isEmpty()) return false
         Settings.importEntries(entries)
         return true
     }
 
     /** 仅恢复 API 设置：按方案名称合并/更新，保留本机 Cookie、布局与性能参数。 */
     suspend fun restoreApiProfiles(raw: String): Int {
-        val root = runCatching { json.parseToJsonElement(raw) as? JsonObject }.getOrNull() ?: return 0
-        val profilesJson = root["ai_profiles"]?.let(::decodeValue) as? String ?: return 0
-        val incoming = AiProfileStore.decode(profilesJson)
+        val root = parseObject(raw) ?: return 0
+        val profilesText = extractProfilesText(root) ?: return 0
+        var incoming = AiProfileStore.decode(profilesText)
+        if (incoming.isEmpty()) {
+            // 兼容 {profiles:[...]} 备份结构与裸数组
+            val fallback = runCatching {
+                when (val element = json.parseToJsonElement(profilesText)) {
+                    is JsonObject -> (element["profiles"] ?: element["data"]).toString()
+                    else -> element.toString()
+                }
+            }.getOrNull().orEmpty()
+            incoming = AiProfileStore.decode(fallback)
+        }
         if (incoming.isEmpty()) return 0
         val merged = AiProfileStore.profiles().toMutableList()
         incoming.forEach { profile ->
@@ -75,7 +87,31 @@ object SettingsBackup {
             }
         }
         Settings.aiProfiles.value = AiProfileStore.encode(merged)
+        // 若激活方案在合并后失效，立即切到第一套，保证 AI 翻译页无需重启即可读到新配置
+        if (merged.none { it.id == Settings.aiActiveProfileId.value }) {
+            merged.firstOrNull()?.let { Settings.aiActiveProfileId.value = it.id }
+        }
         return incoming.size
+    }
+
+    /** 兼容快照本身是 JSON 字符串（二次编码）的情况。 */
+    private fun parseObject(raw: String): JsonObject? {
+        val element = runCatching { json.parseToJsonElement(raw.trim()) }.getOrNull() ?: return null
+        return when (element) {
+            is JsonObject -> element
+            is JsonPrimitive -> runCatching { json.parseToJsonElement(element.content) as? JsonObject }.getOrNull()
+            else -> null
+        }
+    }
+
+    /** 兼容 ai_profiles 的带类型包装、JSON 字符串与裸数组三种形式。 */
+    private fun extractProfilesText(root: JsonObject): String? {
+        val value = root["ai_profiles"] ?: root["aiProfiles"] ?: root["profiles"] ?: return null
+        return when (value) {
+            is JsonPrimitive -> value.contentOrNull
+            is JsonArray -> value.toString()
+            is JsonObject -> (decodeValue(value) as? String) ?: value.toString()
+        }?.takeIf { it.isNotBlank() }
     }
 
     /**
