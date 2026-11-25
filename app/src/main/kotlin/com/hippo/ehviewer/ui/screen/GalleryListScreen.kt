@@ -12,7 +12,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
@@ -21,11 +26,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.SwipeToDismissBoxDefaults
@@ -37,6 +47,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -47,13 +58,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.lifecycle.createSavedStateHandle
@@ -131,18 +154,26 @@ import moe.tarsin.snackbar
 import moe.tarsin.string
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Favorites
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowListPopup
 
 @Destination<RootGraph>
 @Composable
@@ -366,42 +397,127 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                         }
                     }
                 }
-                val quickSearchEntry = DropdownEntry(
-                    items = buildList {
-                        quickSearchList.forEach { item ->
-                            add(
-                                DropdownItem(
-                                    text = item.name,
-                                    selected = urlBuilder.equalsQuickSearch(item),
-                                    onClick = {
-                                        if (urlBuilder.mode == MODE_WHATS_HOT) {
-                                            val builder = ListUrlBuilder(item).apply {
-                                                language = languageFilter
+                // 长按操作态与行内编辑态（同一时间只作用于一条标签）
+                var quickSearchActionsId by remember { mutableStateOf<Long?>(null) }
+                var quickSearchEditingId by remember { mutableStateOf<Long?>(null) }
+                var quickSearchEditingValue by remember { mutableStateOf(TextFieldValue("")) }
+                val quickSearchEditFocus = remember { FocusRequester() }
+                val quickSearchMenuExpanded = remember { mutableStateOf(false) }
+
+                fun commitQuickSearchRename() {
+                    val id = quickSearchEditingId ?: return
+                    quickSearchEditingId = null
+                    val index = quickSearchList.indexOfFirst { it.id == id }
+                    if (index < 0) return
+                    val newName = quickSearchEditingValue.text.trim()
+                    // 空名称或纯空格时回退保留原名
+                    if (newName.isEmpty() || newName == quickSearchList[index].name) return
+                    // 同步当前排序位置，避免删除后 position 出现空洞
+                    val updated = quickSearchList[index].copy(name = newName, position = index)
+                    quickSearchList[index] = updated
+                    launch { EhDB.updateQuickSearch(listOf(updated)) }
+                }
+
+                fun closeQuickSearchMenu() {
+                    commitQuickSearchRename()
+                    quickSearchActionsId = null
+                    quickSearchMenuExpanded.value = false
+                }
+
+                Box {
+                    IconButton(onClick = { quickSearchMenuExpanded.value = true }) {
+                        Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
+                    }
+                    WindowListPopup(
+                        show = quickSearchMenuExpanded.value,
+                        alignment = PopupPositionProvider.Align.End,
+                        onDismissRequest = { closeQuickSearchMenu() },
+                        maxHeight = 480.dp,
+                    ) {
+                        ListPopupColumn {
+                            quickSearchList.forEachIndexed { index, item ->
+                                key(item.id) {
+                                    QuickSearchMenuRow(
+                                        name = item.name,
+                                        selected = urlBuilder.equalsQuickSearch(item),
+                                        actionsVisible = quickSearchActionsId == item.id,
+                                        editing = quickSearchEditingId == item.id,
+                                        editValue = quickSearchEditingValue,
+                                        onEditValueChange = { quickSearchEditingValue = it },
+                                        focusRequester = quickSearchEditFocus,
+                                        isFirst = index == 0,
+                                        onClick = {
+                                            when {
+                                                // 正在编辑本行时点击行内区域不打断输入
+                                                quickSearchEditingId == item.id -> Unit
+                                                // 点击其他标签：先提交当前修改并退出编辑态
+                                                quickSearchEditingId != null -> commitQuickSearchRename()
+                                                // 操作态下点击本行只收起操作按钮，不触发选择
+                                                quickSearchActionsId == item.id -> quickSearchActionsId = null
+                                                else -> {
+                                                    closeQuickSearchMenu()
+                                                    if (urlBuilder.mode == MODE_WHATS_HOT) {
+                                                        val builder = ListUrlBuilder(item).apply {
+                                                            language = languageFilter
+                                                        }
+                                                        navigate(builder.asDst())
+                                                    } else {
+                                                        urlBuilder = ListUrlBuilder(item).apply {
+                                                            language = languageFilter
+                                                        }
+                                                        data.refresh()
+                                                    }
+                                                }
                                             }
-                                            navigate(builder.asDst())
-                                        } else {
-                                            urlBuilder = ListUrlBuilder(item).apply {
-                                                language = languageFilter
-                                            }
-                                            data.refresh()
-                                        }
-                                    },
-                                ),
-                            )
+                                        },
+                                        onLongClick = {
+                                            if (quickSearchEditingId != null) commitQuickSearchRename()
+                                            quickSearchActionsId = if (quickSearchActionsId == item.id) null else item.id
+                                        },
+                                        onEdit = {
+                                            quickSearchActionsId = null
+                                            quickSearchEditingId = item.id
+                                            quickSearchEditingValue = TextFieldValue(
+                                                text = item.name,
+                                                selection = TextRange(0, item.name.length),
+                                            )
+                                        },
+                                        onDelete = {
+                                            quickSearchActionsId = null
+                                            if (quickSearchEditingId == item.id) quickSearchEditingId = null
+                                            quickSearchList.removeAll { it.id == item.id }
+                                            launch { EhDB.deleteQuickSearch(item) }
+                                        },
+                                        onCommitEdit = { commitQuickSearchRename() },
+                                    )
+                                }
+                            }
+                            // 底部添加按钮：删光所有标签后仍保留
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (quickSearchEditingId != null) commitQuickSearchRename()
+                                        quickSearchActionsId = null
+                                        saveCurrentQuickSearch()
+                                    }
+                                    .padding(
+                                        start = 20.dp,
+                                        end = 20.dp,
+                                        top = if (quickSearchList.isEmpty()) 20.dp else 12.dp,
+                                        bottom = 20.dp,
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
+                                    fontSize = MiuixTheme.textStyles.body1.fontSize,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onSurfaceContainer,
+                                )
+                            }
                         }
-                        add(
-                            DropdownItem(
-                                text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
-                                onClick = { saveCurrentQuickSearch() },
-                            ),
-                        )
-                    },
-                )
-                WindowIconDropdownMenu(
-                    entry = quickSearchEntry,
-                    maxHeight = 480.dp,
-                ) {
-                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
+                    }
                 }
             }
             // 个人头像（图片配额/资金）不再放在搜索栏，避免右侧图标拥挤
@@ -625,5 +741,139 @@ private fun getSuitableTitleForUrlBuilder(urlBuilder: ListUrlBuilder, appName: B
         EhUtils.getCategory(category)
     } else {
         null
+    }
+}
+
+private val QuickSearchDeleteRed = Color(0xFFE53935)
+
+/**
+ * 快速搜索下拉菜单中的单行：短按选择、长按显示修改/删除、修改时原地切换为输入框。
+ */
+@Composable
+private fun QuickSearchMenuRow(
+    name: String,
+    selected: Boolean,
+    actionsVisible: Boolean,
+    editing: Boolean,
+    editValue: TextFieldValue,
+    onEditValueChange: (TextFieldValue) -> Unit,
+    focusRequester: FocusRequester,
+    isFirst: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onCommitEdit: () -> Unit,
+) {
+    val titleColor = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceContainer
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(
+                start = 20.dp,
+                end = 20.dp,
+                top = if (isFirst) 20.dp else 12.dp,
+                bottom = 12.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        if (editing) {
+            var hadFocus by remember { mutableStateOf(false) }
+            BasicTextField(
+                value = editValue,
+                onValueChange = onEditValueChange,
+                singleLine = true,
+                textStyle = MiuixTheme.textStyles.body1.merge(color = titleColor),
+                cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onCommitEdit() }),
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            hadFocus = true
+                        } else if (hadFocus) {
+                            // 点击其他区域导致失焦：自动提交并退出编辑态
+                            hadFocus = false
+                            onCommitEdit()
+                        }
+                    },
+            )
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+        } else {
+            Text(
+                text = name,
+                fontSize = MiuixTheme.textStyles.body1.fontSize,
+                fontWeight = FontWeight.Medium,
+                color = titleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        when {
+            editing -> QuickSearchIconAction(
+                icon = MiuixIcons.Basic.Check,
+                tint = MiuixTheme.colorScheme.primary,
+                contentDescription = null,
+                onClick = onCommitEdit,
+            )
+            actionsVisible -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                QuickSearchIconAction(
+                    icon = MiuixIcons.Edit,
+                    tint = MiuixTheme.colorScheme.onSurfaceContainer,
+                    contentDescription = null,
+                    onClick = onEdit,
+                )
+                QuickSearchIconAction(
+                    icon = MiuixIcons.Delete,
+                    tint = QuickSearchDeleteRed,
+                    contentDescription = null,
+                    onClick = onDelete,
+                )
+            }
+            selected -> Icon(
+                imageVector = MiuixIcons.Basic.Check,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .size(DropdownDefaults.CheckIconSize),
+            )
+        }
+    }
+}
+
+/** 下拉菜单行内的透明图标按钮：无实心底色，尺寸与图标完全一致。 */
+@Composable
+private fun QuickSearchIconAction(
+    icon: ImageVector,
+    tint: Color,
+    contentDescription: String?,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
