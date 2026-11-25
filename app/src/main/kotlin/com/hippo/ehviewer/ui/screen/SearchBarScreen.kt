@@ -272,16 +272,28 @@ fun SearchBarScreen(
                             // matchParentSize 让渐变只做绘制、不参与顶栏高度测量；
                             // requiredHeight 允许渐变层向下溢出绘制，避免把列表内容整体顶下去。
                             Box(modifier = Modifier.matchParentSize()) {
+                                // 磨砂满强度只覆盖状态栏 + 搜索栏本体，下方仅 8dp 缓冲带内衰减到 0
+                                val scrimBarDp = statusBarPadding + fullBarHeight
+                                val scrimTotalDp = scrimBarDp + TopScrimExtraHeight
+                                val scrimBarFraction = if (scrimTotalDp > 0.dp) {
+                                    scrimBarDp / scrimTotalDp
+                                } else {
+                                    0f
+                                }
                                 if (activeBackdrop != null && isRuntimeShaderSupported()) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             // 统一放宽：从状态栏上缘平滑渐变到首张卡片上边缘附近的参考线
-                                            .requiredHeight(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
+                                            .requiredHeight(scrimTotalDp)
                                             .progressiveTextureBlur(
                                                 backdrop = activeBackdrop,
                                                 shape = RectangleShape,
-                                                gradient = ProgressiveBlur.Top,
+                                                gradient = ProgressiveBlur(
+                                                    angle = 90f,
+                                                    startFraction = scrimBarFraction,
+                                                    endFraction = 1f,
+                                                ),
                                                 blurRadius = 20f,
                                                 colors = BlurDefaults.blurColors(
                                                     blendColors = listOf(
@@ -666,7 +678,7 @@ private val FilterDialogCornerRadius = 32.dp
 private val SearchBarIconCenterInset = SearchBarDefaults.InputFieldMinHeight * 0.5f - 20.dp
 
 // 顶部磨砂在覆盖整条搜索栏后继续向下延伸缓冲带，渐变终点落在首张卡片上缘下方并完全归零
-private val TopScrimExtraHeight = 24.dp
+private val TopScrimExtraHeight = 8.dp
 
 /** 收缩态右侧的独立正圆毛玻璃高光按钮，材质与底部导航栏一致。 */
 @Composable

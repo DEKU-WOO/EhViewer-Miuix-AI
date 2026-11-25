@@ -67,13 +67,17 @@ fun BlurredBar(
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = true,
     scrollBehavior: ScrollBehavior? = null,
-    scrimExtraHeight: Dp = 24.dp,
+    scrimExtraHeight: Dp = 8.dp,
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier) {
         val density = LocalDensity.current
         var barHeightPx by remember { mutableIntStateOf(0) }
         if (backdrop != null && blurEnabled) {
+            // 磨砂满强度只覆盖顶栏本体，下方仅保留 scrimExtraHeight 的缓冲带内快速衰减到 0
+            val barHeightDp = with(density) { barHeightPx.toDp() }
+            val totalDp = barHeightDp + scrimExtraHeight
+            val barFraction = if (totalDp > 0.dp) barHeightDp / totalDp else 0f
             val alphaProvider: Density.() -> Float = {
                 scrollBehavior?.state
                     // 停靠时保留基础磨砂层，避免顶部大面积纯透明导致内容生硬透出
@@ -92,8 +96,12 @@ fun BlurredBar(
                         .progressiveTextureBlur(
                             backdrop = backdrop,
                             shape = RectangleShape,
-                            // 使用 Miuix 官方默认曲线：模糊权重沿 Y 轴线性衰减，避免高 curve 造成底部权重骤降的硬边
-                            gradient = ProgressiveBlur.Top,
+                            // 顶栏范围内满强度，进入缓冲带后线性衰减到底部 0，避免压盖下方卡片
+                            gradient = ProgressiveBlur(
+                                angle = 90f,
+                                startFraction = barFraction,
+                                endFraction = 1f,
+                            ),
                             // 与 Miuix 默认半径 20f 对齐，过小会导致模糊不足、文字轮廓穿透
                             blurRadius = 20f,
                             colors = BlurDefaults.blurColors(
