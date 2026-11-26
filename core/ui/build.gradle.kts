@@ -18,6 +18,8 @@ kotlin {
                 api(libs.miuix.preference)
                 api(libs.miuix.icons)
                 api(libs.miuix.blur)
+                api(libs.miuix.material)
+                api(libs.miuix.glass)
                 implementation(libs.compose.ui.backhandler)
                 implementation(libs.compose.ui.tooling.preview)
             }

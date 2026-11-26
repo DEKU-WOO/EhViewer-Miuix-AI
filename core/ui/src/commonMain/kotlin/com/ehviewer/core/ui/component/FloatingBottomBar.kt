@@ -73,13 +73,10 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.highlight.LightPosition
-import top.yukonga.miuix.kmp.blur.highlight.LightSource
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.material.sensor.rememberDeviceTilt
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 // 单个 tab 的理想宽度（dp）：胶囊总宽 = tabsCount × 该值 + 左右各 4dp 内边距。
@@ -133,7 +130,7 @@ enum class FloatingBottomBarMode {
     None,
 }
 
-private val iosIndicatorSpecular: Highlight = LiquidGlassNavHighlight
+private val iosIndicatorSpecular: EdgeStroke = LiquidGlassNavHighlight
 
 // Light reference point in normalized UV coordinate system
 private const val LIGHT_REF_X = 0.5f
@@ -165,28 +162,22 @@ private fun rememberQuantizedGravityAngle(): State<Float> {
 
 /**
  * Tracks gravity angle for specular Bloom highlight with an extra UV-clockwise angle offset.
- * Value should be read in draw phase lambda (e.g. `highlight = { ... }`).
+ * Value should be read in draw phase lambda (e.g. `edgeStroke(stroke = { ... })`).
  */
 @Composable
 private fun rememberGravityRotatedHighlight(
-    base: Highlight,
+    base: EdgeStroke,
     extraDegrees: Float = 0f,
-): State<Highlight> {
+): State<EdgeStroke> {
     val gravityAngle = rememberQuantizedGravityAngle()
     return remember(gravityAngle, base, extraDegrees) {
         derivedStateOf {
-            val baseStyle = base.style as BloomStroke
-            val basePrimary = baseStyle.primaryLight
+            val basePrimary = base.primary
             val rad = gravityAngle.value + (extraDegrees * PI / 180.0).toFloat()
             base.copy(
-                style = baseStyle.copy(
-                    primaryLight = basePrimary.copy(
-                        position = LightPosition(
-                            x = LIGHT_REF_X + cos(rad),
-                            y = LIGHT_REF_Y + sin(rad),
-                            z = basePrimary.position.z,
-                        ),
-                    ),
+                primary = basePrimary.copy(
+                    x = LIGHT_REF_X + cos(rad),
+                    y = LIGHT_REF_Y + sin(rad),
                 ),
             )
         }

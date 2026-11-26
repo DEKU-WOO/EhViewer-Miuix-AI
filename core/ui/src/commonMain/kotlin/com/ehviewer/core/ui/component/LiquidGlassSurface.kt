@@ -27,8 +27,9 @@ import com.ehviewer.core.ui.liquid.vibrancy
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.edgeStroke
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -79,7 +80,7 @@ fun LiquidGlassSurface(
     elevation: Dp = 8.dp,
     refractionHeight: Dp = 16.dp,
     refractionAmount: Dp = 16.dp,
-    highlight: Highlight? = null,
+    highlight: EdgeStroke? = null,
     contentAlignment: Alignment = Alignment.Center,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -128,9 +129,8 @@ fun LiquidGlassSurface(
                                 refractionAmount = refractionAmount.toPx(),
                             )
                         },
-                        highlight = { highlight ?: specularHighlight },
                         onDrawSurface = { drawRect(finalContainerColor) },
-                    )
+                    ).edgeStroke(shape = shape, stroke = highlight ?: specularHighlight)
                 } else if (backdrop != null) {
                     Modifier.drawBackdrop(
                         backdrop = backdrop,

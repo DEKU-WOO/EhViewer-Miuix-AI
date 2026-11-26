@@ -34,12 +34,12 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.highlight.LightPosition
-import top.yukonga.miuix.kmp.blur.highlight.LightSource
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.material.EdgeLightSource
+import top.yukonga.miuix.kmp.material.EdgePeak
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.edgeStroke
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private val DefaultBlurRadius = 20.dp
@@ -48,67 +48,34 @@ private const val DEFAULT_REFRACTION_RATIO = 0.12f
 private const val DEFAULT_CHROMATIC_ABERRATION = 0.15f
 private const val PRESSED_SCALE = 0.96f
 
-val LiquidGlassHighlightLight = Highlight(
+val LiquidGlassHighlightLight = EdgeStroke(
     width = 1.dp,
-    alpha = 0.85f,
-    style = BloomStroke(
-        color = Color.White.copy(alpha = 0.08f),
-        innerBlurRadius = 2.8.dp,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.2f, -0.15f),
-            color = Color.White,
-            intensity = 0.55f,
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.85f, -0.5f),
-            color = Color.White,
-            intensity = 0.3f,
-        ),
-        dualPeak = true,
-    ),
+    bevel = 2.8.dp,
+    color = Color.White.copy(alpha = 0.08f),
+    primary = EdgeLightSource(0.5f, 0.5f, -0.5f, intensity = 0.55f),
+    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, intensity = 0.3f),
+    peak = EdgePeak.Dual,
 )
 
-val LiquidGlassHighlightDark = Highlight(
+val LiquidGlassHighlightDark = EdgeStroke(
     width = 0.8.dp,
-    alpha = 0.9f,
-    style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.15f, -0.1f),
-            color = Color.White,
-            intensity = 0.65f,
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.45f),
-            color = Color.White,
-            intensity = 0.25f,
-        ),
-        dualPeak = true,
-    ),
+    bevel = 2.0.dp,
+    color = Color.White.copy(alpha = 0.12f),
+    primary = EdgeLightSource(0.5f, 0.5f, -0.5f, intensity = 0.65f),
+    secondary = EdgeLightSource(0.5f, 0.8f, -0.45f, intensity = 0.25f),
+    peak = EdgePeak.Dual,
 )
 
 /**
  * 底部悬浮导航胶囊使用的高光规范；搜索栏、多选圆钮等需要与导航栏保持同一轮廓与描边粗细。
  */
-val LiquidGlassNavHighlight = Highlight(
+val LiquidGlassNavHighlight = EdgeStroke(
     width = 1.dp,
-    alpha = 1f,
-    style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = Color.White,
-            intensity = 1f,
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = Color.White,
-            intensity = 0.4f,
-        ),
-        dualPeak = true,
-    ),
+    bevel = 2.0.dp,
+    color = Color.White.copy(alpha = 0.12f),
+    primary = EdgeLightSource(0.5f, 0.5f, -0.05f, intensity = 1f),
+    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, intensity = 0.4f),
+    peak = EdgePeak.Dual,
 )
 
 val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
@@ -128,7 +95,6 @@ fun Modifier.backdropBlur(
         effects = {
             blur(blurRadius.toPx(), blurRadius.toPx())
         },
-        highlight = null,
         onDrawSurface = {
             val color = if (tintColor != Color.Unspecified) tintColor else Color.White
             drawRect(color.copy(alpha = tintAlpha))
@@ -163,12 +129,11 @@ fun Modifier.liquidGlass(
                 blur(blurRadius.toPx(), blurRadius.toPx())
                 lens(16.dp.toPx(), 20.dp.toPx())
             },
-            highlight = { highlight },
             onDrawSurface = {
                 val color = if (tintColor != Color.Unspecified) tintColor else Color.White
                 drawRect(color.copy(alpha = tintAlpha))
             },
-        )
+        ).edgeStroke(shape = shape, stroke = highlight)
     } else if (backdrop != null) {
         this.backdropBlur(
             backdrop = backdrop,
@@ -249,7 +214,6 @@ fun LiquidGlass(
                         chromaticAberration = chromaticAberration,
                     )
                 },
-                highlight = { highlight },
                 onDrawSurface = {
                     drawRect(
                         color = if (isDark) {
@@ -259,7 +223,8 @@ fun LiquidGlass(
                         },
                     )
                 },
-            ),
+            )
+            .edgeStroke(shape = shape, stroke = highlight),
         content = content,
     )
 }

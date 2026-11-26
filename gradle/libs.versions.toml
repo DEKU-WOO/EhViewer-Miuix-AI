@@ -19,7 +19,7 @@ coil = "3.6.3"
 compose-bom = "2026.08.00"
 compose-multiplatform = "1.12.2"
 compose-destinations = "2.3.0"
-miuix = "0.9.4"
+miuix = "0.9.5-rc01"
 java = "21"
 kotlin = "2.4.21"
 kotlinx-coroutines = "1.11.0"
@@ -46,6 +46,8 @@ miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
 miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference", version.ref = "miuix" }
 miuix-icons = { module = "top.yukonga.miuix.kmp:miuix-icons", version.ref = "miuix" }
 miuix-blur = { module = "top.yukonga.miuix.kmp:miuix-blur", version.ref = "miuix" }
+miuix-material = { module = "top.yukonga.miuix.kmp:miuix-material", version.ref = "miuix" }
+miuix-glass = { module = "top.yukonga.miuix.kmp:miuix-glass", version.ref = "miuix" }
 miuix-nav = { module = "top.yukonga.miuix.kmp:miuix-nav", version.ref = "miuix" }
 aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutlibraries" }
 aboutlibraries-compose-m3 = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutlibraries" }
