@@ -32,7 +32,12 @@ plugins {
 }
 
 android {
-    compileSdk = 37
+    // miuix 0.9.5-rc01 的 AAR 元数据要求 compileSdk 至少 37.2
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
     minSdk = 24
     targetSdk = 37
     ndkVersion = "29.0.14206865"
