@@ -101,7 +101,7 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -676,8 +676,9 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                         val syncModeItems = remember {
                             listOf("双向增量同步", "仅上传本地新增", "仅从远端拉取")
                         }
-                        OverlayDropdownPreference(
+                        GlassDropdownPreference(
                             title = "同步模式",
+                            backdrop = backdrop,
                             summary = when (webdavSyncMode.value) {
                                 WebDavGallerySync.MODE_UPLOAD_ONLY -> "只上传本地新增画廊，不从云端拉取"
                                 WebDavGallerySync.MODE_DOWNLOAD_ONLY -> "只拉取云端新增画廊，不上传本地文件"

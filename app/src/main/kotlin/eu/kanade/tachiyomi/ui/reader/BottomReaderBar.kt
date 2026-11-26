@@ -27,13 +27,12 @@ import com.hippo.ehviewer.collectAsState
 import eu.kanade.tachiyomi.ui.reader.setting.OrientationType
 import eu.kanade.tachiyomi.ui.reader.setting.PreferenceType
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingModeType
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -41,6 +40,10 @@ fun BottomReaderBar(
     onClickSettings: () -> Unit,
     modifier: Modifier = Modifier,
     containerColor: Color = MiuixTheme.colorScheme.surfaceContainer,
+    readingModeAnchor: GlassPopupAnchor = remember { GlassPopupAnchor() },
+    orientationAnchor: GlassPopupAnchor = remember { GlassPopupAnchor() },
+    onReadingModeClick: () -> Unit = {},
+    onOrientationClick: () -> Unit = {},
 ) = LiquidGlassSurface(
     modifier = modifier
         .fillMaxWidth()
@@ -57,20 +60,16 @@ fun BottomReaderBar(
         val readingMode by Settings.readingMode.collectAsState { ReadingModeType.fromPreference(it) }
         DropdownIconButton(
             label = stringResource(R.string.viewer),
-            menuItems = ReadingModeType.entries,
             selectedItem = readingMode,
-            onSelectedItemChange = {
-                Settings.readingMode.value = it.prefValue
-            },
+            anchor = readingModeAnchor,
+            onClick = onReadingModeClick,
         )
         val orientationMode by Settings.orientationMode.collectAsState { OrientationType.fromPreference(it) }
         DropdownIconButton(
             label = stringResource(R.string.pref_rotation_type),
-            menuItems = OrientationType.entries,
             selectedItem = orientationMode,
-            onSelectedItemChange = {
-                Settings.orientationMode.value = it.prefValue
-            },
+            anchor = orientationAnchor,
+            onClick = onOrientationClick,
         )
         var cropBorder by Settings.cropBorder.asMutableState()
         ActionButton(
@@ -89,26 +88,14 @@ fun BottomReaderBar(
 @Composable
 private fun DropdownIconButton(
     label: String,
-    menuItems: List<PreferenceType>,
     selectedItem: PreferenceType,
-    onSelectedItemChange: (PreferenceType) -> Unit,
+    anchor: GlassPopupAnchor,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val titles = menuItems.map { stringResource(it.stringRes) }
-    val entry = remember(menuItems, titles, selectedItem, onSelectedItemChange) {
-        DropdownEntry(
-            items = menuItems.mapIndexed { index, item ->
-                DropdownItem(
-                    text = titles[index],
-                    selected = item == selectedItem,
-                    onClick = { onSelectedItemChange(item) },
-                )
-            },
-        )
-    }
-    WindowIconDropdownMenu(
-        entry = entry,
-        modifier = modifier,
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.glassPopupAnchor(anchor, cornerRadius = 28.dp),
     ) {
         Icon(
             imageVector = selectedItem.icon,

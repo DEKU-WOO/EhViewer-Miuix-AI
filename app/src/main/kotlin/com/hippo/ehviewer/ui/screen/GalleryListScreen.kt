@@ -159,8 +159,6 @@ import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.ListPopupColumn
-import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Check
@@ -171,9 +169,12 @@ import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Favorites
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Sort
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassPopupSizing
+import top.yukonga.miuix.kmp.glass.GlassTransformPopup
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowListPopup
 
 @Destination<RootGraph>
 @Composable
@@ -302,6 +303,96 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 data.refresh()
             }
         }
+    // 榜单 / 快速搜索菜单状态提升到页面级，菜单本体渲染在根 Box 内以获得整屏实时模糊
+    val toplistMenuAnchor = rememberGlassPopupAnchor()
+    var toplistMenuShow by remember { mutableStateOf(false) }
+    val toplistEntry = DropdownEntry(
+        items = toplists.map { (name, keyword) ->
+            DropdownItem(
+                text = name,
+                selected = urlBuilder.keyword == keyword,
+                onClick = {
+                    Settings.recentToplist = keyword
+                    urlBuilder = ListUrlBuilder(MODE_TOPLIST, keyword = keyword)
+                    data.refresh()
+                },
+            )
+        },
+    )
+
+    val quickSearchMenuAnchor = rememberGlassPopupAnchor()
+    var quickSearchMenuShow by remember { mutableStateOf(false) }
+    val quickSearchList = remember { mutableStateListOf<QuickSearch>() }
+    LaunchedEffect(Unit) {
+        quickSearchList.addAll(EhDB.getAllQuickSearch())
+    }
+    val invalidImageQuickSearch = stringResource(R.string.image_search_not_quick_search)
+    val nameEmpty = stringResource(R.string.name_is_empty)
+    val dupName = stringResource(R.string.duplicate_name)
+    fun saveCurrentQuickSearch() = launch {
+        if (urlBuilder.mode == MODE_IMAGE_SEARCH) {
+            snackbar(invalidImageQuickSearch)
+        } else {
+            // A refresh can temporarily expose an empty snapshot even when the
+            // load state is idle (for example after a failed/empty search). Do
+            // not index into it; quick-search names can still be created without
+            // the optional progress suffix.
+            val firstItem = data.itemSnapshotList.items
+                .getOrNull(getFirstVisibleItemIndex())
+            val next = firstItem?.gid?.plus(1)
+            quickSearchList.fastForEach { q ->
+                if (next != null && urlBuilder.equalsQuickSearch(q)) {
+                    val nextStr = q.name.substringAfterLast('@', "")
+                    if (nextStr.toLongOrNull() == next) {
+                        snackbar(string(R.string.duplicate_quick_search, q.name))
+                        return@launch
+                    }
+                }
+            }
+            awaitInputTextWithCheckBox(
+                initial = quickSearchName ?: urlBuilder.keyword.orEmpty(),
+                title = R.string.add_quick_search_dialog_title,
+                hint = R.string.quick_search,
+                checked = saveProgress,
+                checkBoxText = R.string.save_progress,
+            ) { input, checked ->
+                var text = input.trim()
+                ensure(text.isNotBlank()) { nameEmpty }
+                if (checked && next != null) text += "@$next"
+                ensure(quickSearchList.none { it.name == text }) { dupName }
+                val quickSearch = urlBuilder.toQuickSearch(text)
+                quickSearch.position = quickSearchList.size
+                // Insert to DB first to update the id
+                EhDB.insertQuickSearch(quickSearch)
+                quickSearchList.add(quickSearch)
+                saveProgress = checked
+            }
+        }
+    }
+    // 长按操作态与行内编辑态（同一时间只作用于一条标签）
+    var quickSearchActionsId by remember { mutableStateOf<Long?>(null) }
+    var quickSearchEditingId by remember { mutableStateOf<Long?>(null) }
+    var quickSearchEditingValue by remember { mutableStateOf(TextFieldValue("")) }
+    val quickSearchEditFocus = remember { FocusRequester() }
+
+    fun commitQuickSearchRename() {
+        val id = quickSearchEditingId ?: return
+        quickSearchEditingId = null
+        val index = quickSearchList.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val newName = quickSearchEditingValue.text.trim()
+        // 空名称或纯空格时回退保留原名
+        if (newName.isEmpty() || newName == quickSearchList[index].name) return
+        // 同步当前排序位置，避免删除后 position 出现空洞
+        val updated = quickSearchList[index].copy(name = newName, position = index)
+        quickSearchList[index] = updated
+        launch { EhDB.updateQuickSearch(listOf(updated)) }
+    }
+
+    fun closeQuickSearchMenu() {
+        commitQuickSearchRename()
+        quickSearchActionsId = null
+        quickSearchMenuShow = false
     }
 
     SearchBarScreen(
@@ -328,196 +419,19 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         hideSearchBar = selectMode,
         trailingIcon = {
             if (isTopList) {
-                // 榜单选择改为图标正下方的锚点下拉菜单，替代原本占半屏的全高右侧抽屉
-                val toplistEntry = DropdownEntry(
-                    items = toplists.map { (name, keyword) ->
-                        DropdownItem(
-                            text = name,
-                            selected = urlBuilder.keyword == keyword,
-                            onClick = {
-                                Settings.recentToplist = keyword
-                                urlBuilder = ListUrlBuilder(MODE_TOPLIST, keyword = keyword)
-                                data.refresh()
-                            },
-                        )
-                    },
-                )
-                WindowIconDropdownMenu(
-                    entry = toplistEntry,
-                    maxHeight = 480.dp,
+                // 榜单选择：以图标为锚点形变展开
+                IconButton(
+                    onClick = { toplistMenuShow = true },
+                    modifier = Modifier.glassPopupAnchor(toplistMenuAnchor, cornerRadius = 20.dp),
                 ) {
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist))
                 }
             } else {
-                // 快速搜索改为图标正下方的悬浮下拉菜单，替代原本占半屏的全高侧边抽屉
-                val quickSearchList = remember { mutableStateListOf<QuickSearch>() }
-                LaunchedEffect(Unit) {
-                    quickSearchList.addAll(EhDB.getAllQuickSearch())
-                }
-                val invalidImageQuickSearch = stringResource(R.string.image_search_not_quick_search)
-                val nameEmpty = stringResource(R.string.name_is_empty)
-                val dupName = stringResource(R.string.duplicate_name)
-                fun saveCurrentQuickSearch() = launch {
-                    if (urlBuilder.mode == MODE_IMAGE_SEARCH) {
-                        snackbar(invalidImageQuickSearch)
-                    } else {
-                        // A refresh can temporarily expose an empty snapshot even when the
-                        // load state is idle (for example after a failed/empty search). Do
-                        // not index into it; quick-search names can still be created without
-                        // the optional progress suffix.
-                        val firstItem = data.itemSnapshotList.items
-                            .getOrNull(getFirstVisibleItemIndex())
-                        val next = firstItem?.gid?.plus(1)
-                        quickSearchList.fastForEach { q ->
-                            if (next != null && urlBuilder.equalsQuickSearch(q)) {
-                                val nextStr = q.name.substringAfterLast('@', "")
-                                if (nextStr.toLongOrNull() == next) {
-                                    snackbar(string(R.string.duplicate_quick_search, q.name))
-                                    return@launch
-                                }
-                            }
-                        }
-                        awaitInputTextWithCheckBox(
-                            initial = quickSearchName ?: urlBuilder.keyword.orEmpty(),
-                            title = R.string.add_quick_search_dialog_title,
-                            hint = R.string.quick_search,
-                            checked = saveProgress,
-                            checkBoxText = R.string.save_progress,
-                        ) { input, checked ->
-                            var text = input.trim()
-                            ensure(text.isNotBlank()) { nameEmpty }
-                            if (checked && next != null) text += "@$next"
-                            ensure(quickSearchList.none { it.name == text }) { dupName }
-                            val quickSearch = urlBuilder.toQuickSearch(text)
-                            quickSearch.position = quickSearchList.size
-                            // Insert to DB first to update the id
-                            EhDB.insertQuickSearch(quickSearch)
-                            quickSearchList.add(quickSearch)
-                            saveProgress = checked
-                        }
-                    }
-                }
-                // 长按操作态与行内编辑态（同一时间只作用于一条标签）
-                var quickSearchActionsId by remember { mutableStateOf<Long?>(null) }
-                var quickSearchEditingId by remember { mutableStateOf<Long?>(null) }
-                var quickSearchEditingValue by remember { mutableStateOf(TextFieldValue("")) }
-                val quickSearchEditFocus = remember { FocusRequester() }
-                val quickSearchMenuExpanded = remember { mutableStateOf(false) }
-
-                fun commitQuickSearchRename() {
-                    val id = quickSearchEditingId ?: return
-                    quickSearchEditingId = null
-                    val index = quickSearchList.indexOfFirst { it.id == id }
-                    if (index < 0) return
-                    val newName = quickSearchEditingValue.text.trim()
-                    // 空名称或纯空格时回退保留原名
-                    if (newName.isEmpty() || newName == quickSearchList[index].name) return
-                    // 同步当前排序位置，避免删除后 position 出现空洞
-                    val updated = quickSearchList[index].copy(name = newName, position = index)
-                    quickSearchList[index] = updated
-                    launch { EhDB.updateQuickSearch(listOf(updated)) }
-                }
-
-                fun closeQuickSearchMenu() {
-                    commitQuickSearchRename()
-                    quickSearchActionsId = null
-                    quickSearchMenuExpanded.value = false
-                }
-
-                Box {
-                    IconButton(onClick = { quickSearchMenuExpanded.value = true }) {
-                        Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
-                    }
-                    WindowListPopup(
-                        show = quickSearchMenuExpanded.value,
-                        alignment = PopupPositionProvider.Align.End,
-                        onDismissRequest = { closeQuickSearchMenu() },
-                        maxHeight = 480.dp,
-                    ) {
-                        ListPopupColumn {
-                            quickSearchList.forEachIndexed { index, item ->
-                                key(item.id) {
-                                    QuickSearchMenuRow(
-                                        name = item.name,
-                                        selected = urlBuilder.equalsQuickSearch(item),
-                                        actionsVisible = quickSearchActionsId == item.id,
-                                        editing = quickSearchEditingId == item.id,
-                                        editValue = quickSearchEditingValue,
-                                        onEditValueChange = { quickSearchEditingValue = it },
-                                        focusRequester = quickSearchEditFocus,
-                                        isFirst = index == 0,
-                                        onClick = {
-                                            when {
-                                                // 正在编辑本行时点击行内区域不打断输入
-                                                quickSearchEditingId == item.id -> Unit
-                                                // 点击其他标签：先提交当前修改并退出编辑态
-                                                quickSearchEditingId != null -> commitQuickSearchRename()
-                                                // 操作态下点击本行只收起操作按钮，不触发选择
-                                                quickSearchActionsId == item.id -> quickSearchActionsId = null
-                                                else -> {
-                                                    closeQuickSearchMenu()
-                                                    if (urlBuilder.mode == MODE_WHATS_HOT) {
-                                                        val builder = ListUrlBuilder(item).apply {
-                                                            language = languageFilter
-                                                        }
-                                                        navigate(builder.asDst())
-                                                    } else {
-                                                        urlBuilder = ListUrlBuilder(item).apply {
-                                                            language = languageFilter
-                                                        }
-                                                        data.refresh()
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        onLongClick = {
-                                            if (quickSearchEditingId != null) commitQuickSearchRename()
-                                            quickSearchActionsId = if (quickSearchActionsId == item.id) null else item.id
-                                        },
-                                        onEdit = {
-                                            quickSearchActionsId = null
-                                            quickSearchEditingId = item.id
-                                            quickSearchEditingValue = TextFieldValue(
-                                                text = item.name,
-                                                selection = TextRange(0, item.name.length),
-                                            )
-                                        },
-                                        onDelete = {
-                                            quickSearchActionsId = null
-                                            if (quickSearchEditingId == item.id) quickSearchEditingId = null
-                                            quickSearchList.removeAll { it.id == item.id }
-                                            launch { EhDB.deleteQuickSearch(item) }
-                                        },
-                                        onCommitEdit = { commitQuickSearchRename() },
-                                    )
-                                }
-                            }
-                            // 底部添加按钮：删光所有标签后仍保留
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (quickSearchEditingId != null) commitQuickSearchRename()
-                                        quickSearchActionsId = null
-                                        saveCurrentQuickSearch()
-                                    }
-                                    .padding(
-                                        start = 20.dp,
-                                        end = 20.dp,
-                                        top = if (quickSearchList.isEmpty()) 20.dp else 12.dp,
-                                        bottom = 20.dp,
-                                    ),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
-                                    fontSize = MiuixTheme.textStyles.body1.fontSize,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MiuixTheme.colorScheme.onSurfaceContainer,
-                                )
-                            }
-                        }
-                    }
+                IconButton(
+                    onClick = { quickSearchMenuShow = true },
+                    modifier = Modifier.glassPopupAnchor(quickSearchMenuAnchor, cornerRadius = 20.dp),
+                ) {
+                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
                 }
             }
             // 个人头像（图片配额/资金）不再放在搜索栏，避免右侧图标拥挤
@@ -696,6 +610,106 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 ),
                 backdrop = backdrop,
             )
+        }
+        // 榜单时间范围：以图标为锚点的液态玻璃菜单
+        GlassIconDropdownMenu(
+            show = toplistMenuShow,
+            onDismissRequest = { toplistMenuShow = false },
+            anchor = toplistMenuAnchor,
+            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null) },
+            entries = listOf(toplistEntry),
+            backdrop = backdrop,
+        )
+        // 快速搜索：自定义行（长按编辑/删除、行内重命名）通过锚点形变展开
+        GlassTransformPopup(
+            show = quickSearchMenuShow,
+            onDismissRequest = { closeQuickSearchMenu() },
+            anchor = quickSearchMenuAnchor,
+            backdrop = backdrop,
+            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null) },
+            sizing = GlassPopupSizing(minWidth = 240.dp, maxWidth = 320.dp),
+        ) {
+            quickSearchList.forEachIndexed { index, item ->
+                key(item.id) {
+                    QuickSearchMenuRow(
+                        name = item.name,
+                        selected = urlBuilder.equalsQuickSearch(item),
+                        actionsVisible = quickSearchActionsId == item.id,
+                        editing = quickSearchEditingId == item.id,
+                        editValue = quickSearchEditingValue,
+                        onEditValueChange = { quickSearchEditingValue = it },
+                        focusRequester = quickSearchEditFocus,
+                        isFirst = index == 0,
+                        onClick = {
+                            when {
+                                // 正在编辑本行时点击行内区域不打断输入
+                                quickSearchEditingId == item.id -> Unit
+                                // 点击其他标签：先提交当前修改并退出编辑态
+                                quickSearchEditingId != null -> commitQuickSearchRename()
+                                // 操作态下点击本行只收起操作按钮，不触发选择
+                                quickSearchActionsId == item.id -> quickSearchActionsId = null
+                                else -> {
+                                    closeQuickSearchMenu()
+                                    if (urlBuilder.mode == MODE_WHATS_HOT) {
+                                        val builder = ListUrlBuilder(item).apply {
+                                            language = languageFilter
+                                        }
+                                        navigate(builder.asDst())
+                                    } else {
+                                        urlBuilder = ListUrlBuilder(item).apply {
+                                            language = languageFilter
+                                        }
+                                        data.refresh()
+                                    }
+                                }
+                            }
+                        },
+                        onLongClick = {
+                            if (quickSearchEditingId != null) commitQuickSearchRename()
+                            quickSearchActionsId = if (quickSearchActionsId == item.id) null else item.id
+                        },
+                        onEdit = {
+                            quickSearchActionsId = null
+                            quickSearchEditingId = item.id
+                            quickSearchEditingValue = TextFieldValue(
+                                text = item.name,
+                                selection = TextRange(0, item.name.length),
+                            )
+                        },
+                        onDelete = {
+                            quickSearchActionsId = null
+                            if (quickSearchEditingId == item.id) quickSearchEditingId = null
+                            quickSearchList.removeAll { it.id == item.id }
+                            launch { EhDB.deleteQuickSearch(item) }
+                        },
+                        onCommitEdit = { commitQuickSearchRename() },
+                    )
+                }
+            }
+            // 底部添加按钮：删光所有标签后仍保留
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        if (quickSearchEditingId != null) commitQuickSearchRename()
+                        quickSearchActionsId = null
+                        saveCurrentQuickSearch()
+                    }
+                    .padding(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = if (quickSearchList.isEmpty()) 20.dp else 12.dp,
+                        bottom = 20.dp,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
+                    fontSize = MiuixTheme.textStyles.body1.fontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurfaceContainer,
+                )
+            }
         }
     }
 }

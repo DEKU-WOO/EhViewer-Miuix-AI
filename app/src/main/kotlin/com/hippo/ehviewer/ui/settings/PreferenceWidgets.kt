@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.readableWidth
@@ -58,8 +59,8 @@ import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -206,11 +207,12 @@ fun SimpleMenuPreferenceInt(
     val valuesArray = integerArrayResource(id = entryValueRes)
     check(entryArray.size == valuesArray.size)
     val selectedIndex = valuesArray.indexOf(state.value).coerceAtLeast(0)
-    OverlayDropdownPreference(
+    GlassDropdownPreference(
         title = title,
         summary = summary,
         items = entryArray.toList(),
         selectedIndex = selectedIndex,
+        backdrop = LocalBackdrop.current,
         // 未显式给出说明时必须展示当前选中项，否则用户看不到自己选了什么
         showValue = true,
         onSelectedIndexChange = { index ->

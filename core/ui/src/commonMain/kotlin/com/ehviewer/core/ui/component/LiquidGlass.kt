@@ -52,8 +52,9 @@ val LiquidGlassHighlightLight = EdgeStroke(
     width = 1.dp,
     bevel = 2.8.dp,
     color = Color.White.copy(alpha = 0.08f),
-    primary = EdgeLightSource(0.5f, 0.5f, -0.5f, intensity = 0.55f),
-    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, intensity = 0.3f),
+    // 左上主高光 + 右下副反射，与底部导航栏保持同一斜向光源
+    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.6f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.25f),
     peak = EdgePeak.Dual,
 )
 
@@ -61,8 +62,8 @@ val LiquidGlassHighlightDark = EdgeStroke(
     width = 0.8.dp,
     bevel = 2.0.dp,
     color = Color.White.copy(alpha = 0.12f),
-    primary = EdgeLightSource(0.5f, 0.5f, -0.5f, intensity = 0.65f),
-    secondary = EdgeLightSource(0.5f, 0.8f, -0.45f, intensity = 0.25f),
+    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.85f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.45f, intensity = 0.35f),
     peak = EdgePeak.Dual,
 )
 
@@ -73,8 +74,8 @@ val LiquidGlassNavHighlight = EdgeStroke(
     width = 1.dp,
     bevel = 2.0.dp,
     color = Color.White.copy(alpha = 0.12f),
-    primary = EdgeLightSource(0.5f, 0.5f, -0.05f, intensity = 1f),
-    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, intensity = 0.4f),
+    primary = EdgeLightSource(0.25f, 0.3f, -0.05f, intensity = 1f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.4f),
     peak = EdgePeak.Dual,
 )
 

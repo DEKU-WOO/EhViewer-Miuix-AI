@@ -141,7 +141,9 @@ import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pause
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Refresh
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
@@ -174,6 +176,10 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     val checkedInfoMap = remember { mutableStateMapOf<Long, DownloadInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
     val backdrop = rememberBlurBackdrop()
+    // ⋮ 菜单提升到页面级：菜单本体渲染在 Screen 根 Box 内，获得整屏实时模糊与锚点形变
+    val downloadMenuAnchor = rememberGlassPopupAnchor()
+    var downloadMenuShow by remember { mutableStateOf(false) }
+    var downloadMenuEntries by remember { mutableStateOf<List<DropdownEntry>>(emptyList()) }
     DrawerHandle(!selectMode && !searchBarExpanded)
     // 选中态同步给主界面（暂停左右滑动切页），退出页面时兜底复位
     LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
@@ -261,6 +267,141 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         filterState = filterState.copy(label = label)
     }
 
+    // 「下载标签」二级锚点菜单：完整保留标签数量、新建与管理交互
+    val groupingCustomStr = stringResource(R.string.select_grouping_mode_custom)
+    val groupingArtistStr = stringResource(R.string.select_grouping_mode_artist)
+    val letMeSelectStr = stringResource(R.string.let_me_select)
+    val labelChildren = buildList {
+        add(
+            DropdownItem(
+                text = allName,
+                summary = totalCount.toString(),
+                selected = filterState.label == "",
+                onClick = { switchLabel("") },
+            ),
+        )
+        add(
+            DropdownItem(
+                text = emptyLabelName,
+                summary = downloadsCount.getOrDefault(null, 0).toString(),
+                selected = filterState.label == null,
+                onClick = { switchLabel(null) },
+            ),
+        )
+        groupEntries.forEach { entry ->
+            if (entry.label != null) {
+                add(
+                    DropdownItem(
+                        text = entry.displayName,
+                        summary = entry.count.toString(),
+                        selected = filterState.label == entry.label,
+                        onClick = { switchLabel(entry.label) },
+                    ),
+                )
+            }
+        }
+        if (filterMode == DownloadsFilterMode.CUSTOM) {
+            add(
+                DropdownItem(
+                    text = "+ 新建标签",
+                    onClick = {
+                        launch {
+                            val text = awaitInputText(title = newLabel, hint = labelsStr) { text ->
+                                when {
+                                    text.isBlank() -> raise(labelEmpty)
+                                    text == emptyLabelName -> raise(defaultInvalid)
+                                    DownloadManager.containLabel(text) -> raise(labelExists)
+                                }
+                            }
+                            DownloadManager.addLabel(text)
+                        }
+                    },
+                ),
+            )
+            add(
+                DropdownItem(
+                    text = "管理标签",
+                    onClick = {
+                        launch {
+                            while (true) {
+                                val current = DownloadManager.labelList.map { it.label }
+                                when (val action = awaitManageDownloadLabels(renameLabel, current)) {
+                                    is DownloadLabelManageResult.Rename -> {
+                                        val old = action.label
+                                        val text = awaitInputText(initial = old, title = renameLabel, hint = labelsStr) { text ->
+                                            when {
+                                                text.isBlank() -> raise(labelEmpty)
+                                                text == emptyLabelName -> raise(defaultInvalid)
+                                                text != old && DownloadManager.containLabel(text) -> raise(labelExists)
+                                            }
+                                        }
+                                        DownloadManager.renameLabel(old, text)
+                                        if (filterState.label == old) switchLabel(text)
+                                    }
+                                    is DownloadLabelManageResult.Delete -> {
+                                        awaitConfirmationOrCancel(confirmText = R.string.delete) {
+                                            Text(text = stringResource(R.string.delete_label, action.label))
+                                        }
+                                        DownloadManager.deleteLabel(action.label)
+                                        if (filterState.label == action.label) switchLabel("")
+                                    }
+                                    DownloadLabelManageResult.Dismiss -> break
+                                }
+                            }
+                        }
+                    },
+                ),
+            )
+            add(
+                DropdownItem(
+                    text = "默认下载标签",
+                    onClick = {
+                        launch {
+                            val selected = if (!Settings.hasDefaultDownloadLabel) {
+                                0
+                            } else {
+                                DownloadManager.labelList.indexOfFirst { it.label == Settings.defaultDownloadLabel } + 2
+                            }
+                            awaitSelectAction(R.string.default_download_label, selected) {
+                                onSelect(letMeSelectStr) {
+                                    Settings.hasDefaultDownloadLabel = false
+                                }
+                                onSelect(defaultName) {
+                                    Settings.hasDefaultDownloadLabel = true
+                                    Settings.defaultDownloadLabel = null
+                                }
+                                DownloadManager.labelList.forEach { (label) ->
+                                    onSelect(label) {
+                                        Settings.hasDefaultDownloadLabel = true
+                                        Settings.defaultDownloadLabel = label
+                                    }
+                                }
+                            }()
+                        }
+                    },
+                ),
+            )
+        }
+        add(
+            DropdownItem(
+                text = "分组方式",
+                onClick = {
+                    launch {
+                        awaitSelectAction(R.string.select_grouping_mode) {
+                            val select = { mode: DownloadsFilterMode ->
+                                filterState = filterState.copy(mode = mode, label = "")
+                                Settings.downloadFilterMode.value = mode.flag
+                                Settings.recentDownloadLabel.value = ""
+                            }
+                            onSelect(groupingCustomStr) { select(DownloadsFilterMode.CUSTOM) }
+                            onSelect(groupingArtistStr) { select(DownloadsFilterMode.ARTIST) }
+                        }()
+                    }
+                },
+            ),
+        )
+    }
+
     LaunchedEffect(filterState) {
         searchBarOffsetY = 0
     }
@@ -324,6 +465,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 items = listOf(
                     DropdownItem(
                         text = labelsStr,
+                        children = labelChildren,
                         onClick = {
                             launch {
                                 // 「下载标签」改为就地弹出的卡片面板，替代原来的全高侧边抽屉
@@ -474,7 +616,13 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                     ),
                 ),
             )
-            WindowIconDropdownMenu(entry = menuEntry) {
+            IconButton(
+                onClick = {
+                    downloadMenuEntries = listOf(menuEntry)
+                    downloadMenuShow = true
+                },
+                modifier = Modifier.glassPopupAnchor(downloadMenuAnchor, cornerRadius = 20.dp),
+            ) {
                 Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
             }
         },
@@ -721,6 +869,15 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
             )
         }
     }
+    // ⋮ 菜单：液态玻璃锚点菜单（「下载标签」通过 GlassSecondaryPopup 展开二级菜单）
+    GlassIconDropdownMenu(
+        show = downloadMenuShow,
+        onDismissRequest = { downloadMenuShow = false },
+        anchor = downloadMenuAnchor,
+        anchorContent = { Icon(imageVector = MiuixIcons.More, contentDescription = null) },
+        entries = downloadMenuEntries,
+        backdrop = backdrop,
+    )
 }
 
 private const val LABEL_PREFIX = "label:"

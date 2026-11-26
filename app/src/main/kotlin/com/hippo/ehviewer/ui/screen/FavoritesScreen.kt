@@ -100,7 +100,9 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
@@ -144,6 +146,54 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
     val backdrop = rememberBlurBackdrop()
+    // 收藏分类数量不是 Compose 快照状态，变更时失效整个页面以刷新菜单数量
+    val localFavCount by viewModel.localFavCount.collectAsState(0)
+    val favRecomposeScope = currentRecomposeScope
+    LaunchedEffect(Unit) {
+        Settings.favChangesFlow.collect { favRecomposeScope.invalidate() }
+    }
+    val favMenuAnchor = rememberGlassPopupAnchor()
+    var favMenuShow by remember { mutableStateOf(false) }
+    // 点击文件夹图标后在图标正下方弹出液态玻璃菜单
+    val favItems = buildList {
+        add(
+            DropdownItem(
+                text = stringResource(id = R.string.local_favorites),
+                summary = localFavCount.toString(),
+                selected = urlBuilder.favCat == -2,
+                onClick = {
+                    refresh(FavListUrlBuilder(-2))
+                    Settings.recentFavCat = -2
+                },
+            ),
+        )
+        if (hasSignedIn) {
+            add(
+                DropdownItem(
+                    text = stringResource(id = R.string.cloud_favorites),
+                    summary = Settings.favCloudCount.toString(),
+                    selected = urlBuilder.favCat == -1,
+                    onClick = {
+                        refresh(FavListUrlBuilder(-1))
+                        Settings.recentFavCat = -1
+                    },
+                ),
+            )
+            Settings.favCat.forEachIndexed { index, name ->
+                add(
+                    DropdownItem(
+                        text = name,
+                        summary = Settings.favCount[index].toString(),
+                        selected = urlBuilder.favCat == index,
+                        onClick = {
+                            refresh(FavListUrlBuilder(index))
+                            Settings.recentFavCat = index
+                        },
+                    ),
+                )
+            }
+        }
+    }
     // 已加载项全部勾选时顶栏全选按钮显示激活态
     val loadedItems = data.itemSnapshotList.items
     val allSelected = loadedItems.isNotEmpty() && loadedItems.all { it.gid in checkedInfoMap }
@@ -171,55 +221,9 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         backdrop = backdrop,
         hideSearchBar = selectMode,
         trailingIcon = {
-            val localFavCount by viewModel.localFavCount.collectAsState(0)
-            // 收藏分类数据不是 Compose 快照状态，变更时手动触发本区域重组以刷新数量
-            val scope = currentRecomposeScope
-            LaunchedEffect(Unit) {
-                Settings.favChangesFlow.collect { scope.invalidate() }
-            }
-            // 点击文件夹图标后在图标正下方弹出悬浮菜单，替代原本占半屏的全高侧边抽屉
-            val favItems = buildList {
-                add(
-                    DropdownItem(
-                        text = stringResource(id = R.string.local_favorites),
-                        summary = localFavCount.toString(),
-                        selected = urlBuilder.favCat == -2,
-                        onClick = {
-                            refresh(FavListUrlBuilder(-2))
-                            Settings.recentFavCat = -2
-                        },
-                    ),
-                )
-                if (hasSignedIn) {
-                    add(
-                        DropdownItem(
-                            text = stringResource(id = R.string.cloud_favorites),
-                            summary = Settings.favCloudCount.toString(),
-                            selected = urlBuilder.favCat == -1,
-                            onClick = {
-                                refresh(FavListUrlBuilder(-1))
-                                Settings.recentFavCat = -1
-                            },
-                        ),
-                    )
-                    Settings.favCat.forEachIndexed { index, name ->
-                        add(
-                            DropdownItem(
-                                text = name,
-                                summary = Settings.favCount[index].toString(),
-                                selected = urlBuilder.favCat == index,
-                                onClick = {
-                                    refresh(FavListUrlBuilder(index))
-                                    Settings.recentFavCat = index
-                                },
-                            ),
-                        )
-                    }
-                }
-            }
-            WindowIconDropdownMenu(
-                entry = DropdownEntry(items = favItems),
-                maxHeight = 480.dp,
+            IconButton(
+                onClick = { favMenuShow = true },
+                modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = 20.dp),
             ) {
                 Icon(imageVector = MiuixIcons.Folder, contentDescription = null)
             }
@@ -342,6 +346,15 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                     .fillMaxWidth(),
             )
         }
+        // 收藏夹切换：液态玻璃锚点菜单
+        GlassIconDropdownMenu(
+            show = favMenuShow,
+            onDismissRequest = { favMenuShow = false },
+            anchor = favMenuAnchor,
+            anchorContent = { Icon(imageVector = MiuixIcons.Folder, contentDescription = null) },
+            entries = listOf(DropdownEntry(items = favItems)),
+            backdrop = backdrop,
+        )
         // 多选操作栏：替换原右下角展开式悬浮按钮组
         Box(
             modifier = Modifier.fillMaxSize(),

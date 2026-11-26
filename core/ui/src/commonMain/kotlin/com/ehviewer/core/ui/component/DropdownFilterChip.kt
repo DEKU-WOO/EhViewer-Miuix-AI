@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,15 +21,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.ehviewer.core.ui.util.LocalWindowLayout
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.glass.GlassPopupItem
+import top.yukonga.miuix.kmp.glass.GlassPopupSizing
+import top.yukonga.miuix.kmp.glass.GlassTransformPopup
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
-import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -40,22 +43,9 @@ fun DropdownFilterChip(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val anchor = rememberGlassPopupAnchor()
     val isSelected = selectedItemIndex != 0
     val chipText = if (selectedItemIndex == 0) label else menuItems.getOrElse(selectedItemIndex) { label }
-
-    val entry = remember(menuItems, selectedItemIndex) {
-        DropdownEntry(
-            items = menuItems.mapIndexed { index, item ->
-                DropdownItem(
-                    text = item,
-                    selected = index == selectedItemIndex,
-                    onClick = {
-                        onSelectedItemIndexChange(index)
-                    },
-                )
-            },
-        )
-    }
 
     val backgroundColor = if (isSelected) {
         MiuixTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -77,6 +67,7 @@ fun DropdownFilterChip(
             refractionAmount = 8.dp,
             modifier = Modifier
                 .clip(CircleShape)
+                .glassPopupAnchor(anchor, cornerRadius = 24.dp)
                 .clickable(role = Role.Button) { expanded = true },
         ) {
             Row(
@@ -100,16 +91,40 @@ fun DropdownFilterChip(
         }
 
         if (expanded) {
-            // 横屏矮视口下限制下拉高度，否则长列表（如语言）会超出窗口被裁切
-            val dropdownMaxHeight = LocalWindowLayout.current.overlayMaxHeight
-            WindowDropdownPopup(
-                entry = entry,
-                show = expanded,
-                onDismiss = { expanded = false },
-                onDismissFinished = {},
-                maxHeight = dropdownMaxHeight,
-                dropdownColors = DropdownDefaults.dropdownColors(),
-            )
+            // 承载在独立 Popup 窗口中，保证 FlowRow/对话框内的 chip 也能获得整屏锚点形变菜单
+            Popup(
+                onDismissRequest = { expanded = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                Box(Modifier.fillMaxSize()) {
+                    GlassTransformPopup(
+                        show = expanded,
+                        onDismissRequest = { expanded = false },
+                        anchor = anchor,
+                        backdrop = null,
+                        anchorContent = {
+                            Text(
+                                text = chipText,
+                                color = contentColor,
+                                style = MiuixTheme.textStyles.body2,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            )
+                        },
+                        sizing = GlassPopupSizing(minWidth = 160.dp, maxWidth = 280.dp),
+                    ) {
+                        menuItems.forEachIndexed { index, item ->
+                            GlassPopupItem(
+                                text = item,
+                                selected = index == selectedItemIndex,
+                                onClick = {
+                                    onSelectedItemIndexChange(index)
+                                    expanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

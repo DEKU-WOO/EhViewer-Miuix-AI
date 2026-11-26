@@ -82,7 +82,7 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 
@@ -352,8 +352,9 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
                     val mode = Settings.aiTranslationMode.asMutableState()
-                    OverlayDropdownPreference(
+                    GlassDropdownPreference(
                         title = stringResource(id = R.string.settings_ai_translation_mode),
+                        backdrop = backdrop,
                         items = listOf(
                             stringResource(id = R.string.settings_ai_translation_mode_auto),
                             stringResource(id = R.string.settings_ai_translation_mode_manual),
@@ -371,8 +372,9 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                         .padding(horizontal = 12.dp, vertical = 4.dp),
                 ) {
                     if (profiles.isNotEmpty()) {
-                        OverlayDropdownPreference(
+                        GlassDropdownPreference(
                             title = stringResource(id = R.string.settings_ai_translation_profile),
+                            backdrop = backdrop,
                             items = profiles.map { it.name },
                             selectedIndex = profiles.indexOfFirst { it.id == activeProfile?.id }.coerceAtLeast(0),
                             showValue = true,
@@ -438,8 +440,9 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                         AiProfileStore.updateProfile(profile.id) { it.copy(apiKey = text) }
                                     },
                                 )
-                                OverlayDropdownPreference(
+                                GlassDropdownPreference(
                                     title = stringResource(R.string.settings_ai_translation_model_select),
+                                    backdrop = backdrop,
                                     items = profile.models,
                                     selectedIndex = profile.models.indexOf(profile.selectedModel).coerceAtLeast(0),
                                     showValue = true,

@@ -1,11 +1,15 @@
 package com.hippo.ehviewer.ui.main
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -51,7 +55,9 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.RemoveContact
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 
 private val limitScope = CoroutineScope(Dispatchers.IO)
 private val refreshEvent = MutableSharedFlow<Unit>()
@@ -75,6 +81,30 @@ fun AvatarIcon() {
     val hasSignedIn by Settings.hasSignedIn.collectAsState()
     if (hasSignedIn) {
         val placeholder = stringResource(id = R.string.please_wait)
+
+        @Composable
+        fun AvatarContent() {
+            val avatar by Settings.avatar.collectAsState()
+            AnimatedContent(targetState = avatar == null) { noAvatar ->
+                if (noAvatar) {
+                    Icon(imageVector = MiuixIcons.Contacts, contentDescription = null)
+                } else {
+                    AsyncImage(
+                        model = avatar,
+                        contentDescription = null,
+                        onError = { (_, r) ->
+                            val e = r.throwable
+                            if (e is HttpException && e.response.code == 404) {
+                                launchIO { refreshAccountInfo() }
+                            }
+                        },
+                        modifier = Modifier.clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+            }
+        }
+
         val result by limitFlow.collectAsState()
         // 就近悬浮气泡：点击头像后直接在按钮正下方弹出图片配额与资金信息，不再从屏幕底部弹出大面板
         val menuEntry = DropdownEntry(
@@ -124,30 +154,26 @@ fun AvatarIcon() {
                 )
             },
         )
-        WindowIconDropdownMenu(
-            entry = menuEntry,
-            maxHeight = 420.dp,
-            onExpandedChange = { expanded -> if (expanded) launch { refreshEvent.emit(Unit) } },
-        ) {
-            val avatar by Settings.avatar.collectAsState()
-            AnimatedContent(targetState = avatar == null) { noAvatar ->
-                if (noAvatar) {
-                    Icon(imageVector = MiuixIcons.Contacts, contentDescription = null)
-                } else {
-                    AsyncImage(
-                        model = avatar,
-                        contentDescription = null,
-                        onError = { (_, r) ->
-                            val e = r.throwable
-                            if (e is HttpException && e.response.code == 404) {
-                                launchIO { refreshAccountInfo() }
-                            }
-                        },
-                        modifier = Modifier.clip(CircleShape),
-                        contentScale = ContentScale.Crop,
-                    )
-                }
+        val menuAnchor = rememberGlassPopupAnchor()
+        var menuShow by remember { mutableStateOf(false) }
+        Box {
+            IconButton(
+                onClick = {
+                    menuShow = true
+                    launch { refreshEvent.emit(Unit) }
+                },
+                modifier = Modifier.glassPopupAnchor(menuAnchor, cornerRadius = 20.dp),
+            ) {
+                AvatarContent()
             }
+            GlassIconDropdownMenu(
+                show = menuShow,
+                onDismissRequest = { menuShow = false },
+                anchor = menuAnchor,
+                anchorContent = { AvatarContent() },
+                entries = listOf(menuEntry),
+                backdrop = null,
+            )
         }
     } else {
         IconButton(

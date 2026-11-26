@@ -25,17 +25,31 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.util.AdaptiveBreakpoints
 import com.ehviewer.core.ui.util.LocalWindowLayout
+import com.hippo.ehviewer.Settings
+import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.main.NavigationIcon
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import eu.kanade.tachiyomi.ui.reader.setting.OrientationType
+import eu.kanade.tachiyomi.ui.reader.setting.ReadingModeType
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private val animationSpec = tween<IntOffset>(200)
@@ -52,6 +66,12 @@ fun BoxScope.ReaderAppBars(
     onSliderValueChange: (Int) -> Unit,
     onClickSettings: () -> Unit,
 ) {
+    val readingMode by Settings.readingMode.collectAsState { ReadingModeType.fromPreference(it) }
+    val orientationMode by Settings.orientationMode.collectAsState { OrientationType.fromPreference(it) }
+    val readingModeAnchor = rememberGlassPopupAnchor()
+    var readingModeMenuShow by remember { mutableStateOf(false) }
+    val orientationAnchor = rememberGlassPopupAnchor()
+    var orientationMenuShow by remember { mutableStateOf(false) }
     AnimatedVisibility(
         visible = visible,
         modifier = Modifier
@@ -137,7 +157,50 @@ fun BoxScope.ReaderAppBars(
                     onSliderValueChange = onSliderValueChange,
                 )
             }
-            BottomReaderBar(onClickSettings = onClickSettings)
+            BottomReaderBar(
+                onClickSettings = onClickSettings,
+                readingModeAnchor = readingModeAnchor,
+                orientationAnchor = orientationAnchor,
+                onReadingModeClick = { readingModeMenuShow = true },
+                onOrientationClick = { orientationMenuShow = true },
+            )
         }
     }
+    // 阅读器底部栏下拉菜单：以按钮为锚点形变展开的液态玻璃菜单
+    GlassIconDropdownMenu(
+        show = readingModeMenuShow,
+        onDismissRequest = { readingModeMenuShow = false },
+        anchor = readingModeAnchor,
+        anchorContent = { Icon(imageVector = readingMode.icon, contentDescription = null) },
+        entries = listOf(
+            DropdownEntry(
+                items = ReadingModeType.entries.map { item ->
+                    DropdownItem(
+                        text = stringResource(item.stringRes),
+                        selected = item == readingMode,
+                        onClick = { Settings.readingMode.value = item.prefValue },
+                    )
+                },
+            ),
+        ),
+        backdrop = null,
+    )
+    GlassIconDropdownMenu(
+        show = orientationMenuShow,
+        onDismissRequest = { orientationMenuShow = false },
+        anchor = orientationAnchor,
+        anchorContent = { Icon(imageVector = orientationMode.icon, contentDescription = null) },
+        entries = listOf(
+            DropdownEntry(
+                items = OrientationType.entries.map { item ->
+                    DropdownItem(
+                        text = stringResource(item.stringRes),
+                        selected = item == orientationMode,
+                        onClick = { Settings.orientationMode.value = item.prefValue },
+                    )
+                },
+            ),
+        ),
+        backdrop = null,
+    )
 }
