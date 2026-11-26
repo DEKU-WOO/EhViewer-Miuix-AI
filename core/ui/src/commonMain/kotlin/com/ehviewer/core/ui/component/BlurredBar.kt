@@ -1,5 +1,6 @@
 package com.ehviewer.core.ui.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.requiredHeight
@@ -10,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
@@ -74,10 +77,6 @@ fun BlurredBar(
         val density = LocalDensity.current
         var barHeightPx by remember { mutableIntStateOf(0) }
         if (backdrop != null && blurEnabled) {
-            // 磨砂满强度只覆盖顶栏本体，下方仅保留 scrimExtraHeight 的缓冲带内快速衰减到 0
-            val barHeightDp = with(density) { barHeightPx.toDp() }
-            val totalDp = barHeightDp + scrimExtraHeight
-            val barFraction = if (totalDp > 0.dp) barHeightDp / totalDp else 0f
             val alphaProvider: Density.() -> Float = {
                 scrollBehavior?.state
                     // 停靠时保留基础磨砂层，避免顶部大面积纯透明导致内容生硬透出
@@ -96,17 +95,24 @@ fun BlurredBar(
                         .progressiveTextureBlur(
                             backdrop = backdrop,
                             shape = RectangleShape,
-                            // 顶栏范围内满强度，进入缓冲带后线性衰减到底部 0，避免压盖下方卡片
-                            gradient = ProgressiveBlur(
-                                angle = 90f,
-                                startFraction = barFraction,
-                                endFraction = 1f,
-                            ),
+                            // 模糊权重从顶部满强度连续衰减到底部 0，恢复自然渐隐而非整块均匀半透
+                            gradient = ProgressiveBlur.Top,
                             // 与 Miuix 默认半径 20f 对齐，过小会导致模糊不足、文字轮廓穿透
                             blurRadius = 20f,
                             colors = BlurDefaults.blurColors(
                                 blendColors = listOf(
-                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.55f)),
+                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.3f)),
+                                ),
+                            ),
+                        )
+                        // 叠加有限高度内的垂直渐变着色：顶部遮挡状态栏，向下平滑归零
+                        .background(
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0f to MiuixTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                    0.5f to MiuixTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                    0.85f to MiuixTheme.colorScheme.surface.copy(alpha = 0.12f),
+                                    1f to Color.Transparent,
                                 ),
                             ),
                         ),

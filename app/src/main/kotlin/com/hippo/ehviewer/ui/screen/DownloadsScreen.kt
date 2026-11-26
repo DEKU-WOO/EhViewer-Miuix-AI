@@ -19,6 +19,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,12 +31,15 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
@@ -59,12 +66,14 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalGrid
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalStaggeredGrid
 import com.ehviewer.core.ui.component.SelectionAction
@@ -147,6 +156,20 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
     var searchBarOffsetY by remember { mutableIntStateOf(0) }
     val animateItems by Settings.animateItems.collectAsState()
+    // 两种视图的滚动状态提升到页面级，便于从阅读器返回时判断是否仍在顶部
+    val detailGridState = rememberLazyGridState()
+    val staggeredGridState = rememberLazyStaggeredGridState()
+    // 全屏阅读器返回后系统状态栏重新展开：列表位于顶部时复位搜索栏偏移，
+    // 避免首张卡片直接顶在搜索栏下方；不在顶部则保留原有滚动位置
+    LifecycleResumeEffect(Unit) {
+        val atTop = if (gridView) {
+            staggeredGridState.firstVisibleItemIndex == 0 && staggeredGridState.firstVisibleItemScrollOffset <= 1
+        } else {
+            detailGridState.firstVisibleItemIndex == 0 && detailGridState.firstVisibleItemScrollOffset <= 1
+        }
+        if (atTop) searchBarOffsetY = 0
+        onPauseOrDispose { }
+    }
 
     val checkedInfoMap = remember { mutableStateMapOf<Long, DownloadInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
@@ -458,7 +481,18 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     ) { contentPadding ->
         val height by collectListThumbSizeAsState()
         val marginH = dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_h)
-        val realPadding = contentPadding + PaddingValues(marginH, dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_v))
+        val marginV = dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_v)
+        // 从隐藏状态栏的全屏阅读器返回时，Scaffold 首帧可能沿用旧 inset 导致顶部内边距变矮；
+        // 这里按「状态栏 + 搜索栏 + 8.dp」兜底，保证首张卡片始终在搜索栏下方
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val expectedTop = statusBarTop + SearchBarDefaults.InputFieldMinHeight + 16.dp + 8.dp
+        val layoutDirection = LocalLayoutDirection.current
+        val realPadding = PaddingValues(
+            start = contentPadding.calculateStartPadding(layoutDirection) + marginH,
+            top = maxOf(contentPadding.calculateTopPadding(), expectedTop) + marginV,
+            end = contentPadding.calculateEndPadding(layoutDirection) + marginH,
+            bottom = contentPadding.calculateBottomPadding() + marginV,
+        )
         // 原地旋转时 paddingValues/density 会变化，连接体内惰性读取最新值（remember 无 key 不重建）
         val currentContentPadding by rememberUpdatedState(contentPadding)
         val currentDensity by rememberUpdatedState(density)
@@ -496,6 +530,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                     FastScrollLazyVerticalStaggeredGrid(
                         columns = StaggeredGridCells.Fixed(thumbColumns),
                         modifier = Modifier.nestedScroll(searchBarConnection).fillMaxSize(),
+                        state = staggeredGridState,
                         contentPadding = realPadding,
                         verticalItemSpacing = gridInterval,
                         horizontalArrangement = Arrangement.spacedBy(gridInterval),
@@ -546,6 +581,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                     FastScrollLazyVerticalGrid(
                         columns = GridCells.Adaptive(columnWidth),
                         modifier = Modifier.nestedScroll(searchBarConnection).fillMaxSize(),
+                        state = detailGridState,
                         contentPadding = realPadding,
                         verticalArrangement = Arrangement.spacedBy(listSpacing),
                         horizontalArrangement = Arrangement.spacedBy(listSpacing),

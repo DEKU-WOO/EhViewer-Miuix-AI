@@ -54,6 +54,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -272,32 +273,33 @@ fun SearchBarScreen(
                             // matchParentSize 让渐变只做绘制、不参与顶栏高度测量；
                             // requiredHeight 允许渐变层向下溢出绘制，避免把列表内容整体顶下去。
                             Box(modifier = Modifier.matchParentSize()) {
-                                // 磨砂满强度只覆盖状态栏 + 搜索栏本体，下方仅 8dp 缓冲带内衰减到 0
-                                val scrimBarDp = statusBarPadding + fullBarHeight
-                                val scrimTotalDp = scrimBarDp + TopScrimExtraHeight
-                                val scrimBarFraction = if (scrimTotalDp > 0.dp) {
-                                    scrimBarDp / scrimTotalDp
-                                } else {
-                                    0f
-                                }
+                                // 总高度保持收紧：状态栏 + 搜索栏 + 8dp 缓冲带
+                                val scrimTotalDp = statusBarPadding + fullBarHeight + TopScrimExtraHeight
                                 if (activeBackdrop != null && isRuntimeShaderSupported()) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            // 统一放宽：从状态栏上缘平滑渐变到首张卡片上边缘附近的参考线
                                             .requiredHeight(scrimTotalDp)
                                             .progressiveTextureBlur(
                                                 backdrop = activeBackdrop,
                                                 shape = RectangleShape,
-                                                gradient = ProgressiveBlur(
-                                                    angle = 90f,
-                                                    startFraction = scrimBarFraction,
-                                                    endFraction = 1f,
-                                                ),
+                                                // 模糊权重从顶部满强度连续衰减到底部 0，恢复自然渐隐
+                                                gradient = ProgressiveBlur.Top,
                                                 blurRadius = 20f,
                                                 colors = BlurDefaults.blurColors(
                                                     blendColors = listOf(
-                                                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                                                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.3f)),
+                                                    ),
+                                                ),
+                                            )
+                                            // 有限高度内叠加垂直渐变着色：顶部遮挡状态栏，向下平滑归零
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colorStops = arrayOf(
+                                                        0f to MiuixTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                                        0.5f to MiuixTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                                        0.85f to MiuixTheme.colorScheme.surface.copy(alpha = 0.12f),
+                                                        1f to Color.Transparent,
                                                     ),
                                                 ),
                                             ),
@@ -307,8 +309,16 @@ fun SearchBarScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .requiredHeight(statusBarPadding + fullBarHeight + TopScrimExtraHeight)
-                                            .background(scrim),
+                                            .requiredHeight(scrimTotalDp)
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colorStops = arrayOf(
+                                                        0f to scrim,
+                                                        0.5f to scrim.copy(alpha = scrim.alpha * 0.5f),
+                                                        1f to Color.Transparent,
+                                                    ),
+                                                ),
+                                            ),
                                     )
                                 }
                             }
