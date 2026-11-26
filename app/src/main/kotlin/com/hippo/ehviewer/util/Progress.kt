@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.ui.component.glassRim
 import com.hippo.ehviewer.ui.tools.DialogState
 import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 import kotlin.coroutines.intrinsics.startCoroutineUninterceptedOrReturn
@@ -19,13 +18,13 @@ import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 @Composable
 fun ProgressDialog() {
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { },
     ) {
         Row(

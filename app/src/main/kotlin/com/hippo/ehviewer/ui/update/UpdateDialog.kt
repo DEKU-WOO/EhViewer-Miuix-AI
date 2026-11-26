@@ -37,7 +37,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.util.isAtLeastO
 import com.hippo.ehviewer.BuildConfig
 import com.hippo.ehviewer.ui.component.MarkdownText
@@ -52,7 +51,7 @@ import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 private val DialogNotesMaxHeight = 240.dp
 private val DialogNotesFade = 40.dp
@@ -104,9 +103,9 @@ fun UpdateDialog(
         )
     }
 
-    WindowDialog(
+    LiquidGlassDialog(
         show = show,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         title = stringResource(R.string.update_dialog_title),
         summary = summaryText,
         onDismissRequest = onDismiss,

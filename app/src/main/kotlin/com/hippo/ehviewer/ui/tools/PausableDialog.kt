@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.util.lerp
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.util.unreachable
 import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
@@ -46,7 +45,7 @@ import kotlinx.serialization.encoding.Encoder
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 fun lerp(start: IntOffset, stop: IntOffset, fraction: Float) = IntOffset(
     lerp(start.x, stop.x, fraction),
@@ -70,9 +69,9 @@ fun BoxScope.PausableAlertDialog(
     val scope = rememberCoroutineScope()
     val mutex = remember { MutatorMutex() }
     var showDialog by remember { mutableStateOf(true) }
-    WindowDialog(
+    LiquidGlassDialog(
         show = showDialog,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { showDialog = false },
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.fillMaxWidth()) {

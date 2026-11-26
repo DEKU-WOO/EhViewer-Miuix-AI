@@ -101,7 +101,8 @@ fun DropdownFilterChip(
                         show = expanded,
                         onDismissRequest = { expanded = false },
                         anchor = anchor,
-                        backdrop = null,
+                        backdrop = LocalBackdrop.current,
+                        visuals = liquidGlassPopupVisuals(),
                         anchorContent = {
                             Text(
                                 text = chipText,

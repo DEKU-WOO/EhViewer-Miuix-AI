@@ -36,7 +36,6 @@ inline fun ComponentActivity.setMiuixContent(crossinline content: @Composable Di
             CompositionLocalProvider(LocalGlobalDialogState provides dialogState) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     content(dialogState)
-                    dialogState.Place()
                 }
             }
         }

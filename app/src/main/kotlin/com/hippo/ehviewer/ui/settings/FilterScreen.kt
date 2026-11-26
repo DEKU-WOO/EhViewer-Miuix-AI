@@ -42,7 +42,6 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.DropdownFilterChip
 import com.ehviewer.core.ui.component.blurBackdropSource
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.readableWidth
@@ -82,7 +81,7 @@ import top.yukonga.miuix.kmp.icon.extended.Filter
 import top.yukonga.miuix.kmp.icon.extended.Help
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 @Destination<RootGraph>
 @Composable
@@ -117,9 +116,9 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
                         }
                     }
                 }
-                WindowDialog(
+                LiquidGlassDialog(
                     show = true,
-                    modifier = Modifier.glassRim(),
+                    modifier = Modifier,
                     onDismissRequest = { cont.cancel() },
                     title = stringResource(id = R.string.add_filter),
                 ) {

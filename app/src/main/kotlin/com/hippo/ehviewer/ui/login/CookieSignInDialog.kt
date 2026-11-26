@@ -26,7 +26,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
-import com.ehviewer.core.ui.component.glassRim
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -36,7 +35,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 @Composable
 fun CookieSignInDialog(
@@ -73,9 +72,9 @@ fun CookieSignInDialog(
         }
     }
 
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = onDismissRequest,
         title = stringResource(R.string.cookie_sign_in_dialog_title),
     ) {

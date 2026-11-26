@@ -76,7 +76,6 @@ import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.MenuBook
@@ -123,7 +122,7 @@ import top.yukonga.miuix.kmp.icon.extended.Image
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 fun interface SuggestionProvider {
     suspend fun providerSuggestions(text: String): List<Suggestion>
@@ -638,9 +637,9 @@ fun SearchBarScreen(
             if (filter != null) {
                 // 统一为与「清空历史」一致的底部对齐悬浮弹窗：四周等距留白、四角完整大圆角，
                 // 并绘制一整圈连续的微光玻璃描边，替代贴底抽屉
-                WindowDialog(
+                LiquidGlassDialog(
                     show = showFilterSheet,
-                    modifier = Modifier.glassRim(cornerRadius = FilterDialogCornerRadius),
+                    modifier = Modifier,
                     onDismissRequest = { showFilterSheet = false },
                     cornerRadius = FilterDialogCornerRadius,
                     backgroundColor = MiuixTheme.colorScheme.background,

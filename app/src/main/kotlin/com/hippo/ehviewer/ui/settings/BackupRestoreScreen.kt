@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.readableWidth
 import com.ehviewer.core.util.launch
@@ -103,7 +104,7 @@ import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 private const val SETTINGS_MIME = "application/json"
 
@@ -276,7 +277,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
         )
         val thisDeviceId = Settings.syncDeviceId.value
         val chosen = dialog<CloudSettingsRecord?> { cont ->
-            WindowDialog(
+            LiquidGlassDialog(
                 show = true,
                 title = stringResource(R.string.backup_cloud_restore),
                 onDismissRequest = { cont.resume(null) },
@@ -335,7 +336,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
 
         val isLocal = chosen.deviceId == thisDeviceId
         val option = dialog<Int?> { cont ->
-            WindowDialog(
+            LiquidGlassDialog(
                 show = true,
                 title = stringResource(R.string.backup_cloud_restore),
                 onDismissRequest = { cont.resume(null) },
@@ -547,7 +548,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                 }
 
                 if (showDeployGuide) {
-                    WindowDialog(
+                    LiquidGlassDialog(
                         show = true,
                         title = "VPS 同步服务部署步骤",
                         onDismissRequest = { showDeployGuide = false },
@@ -679,6 +680,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                         GlassDropdownPreference(
                             title = "同步模式",
                             backdrop = backdrop,
+                            visuals = liquidGlassPopupVisuals(),
                             summary = when (webdavSyncMode.value) {
                                 WebDavGallerySync.MODE_UPLOAD_ONLY -> "只上传本地新增画廊，不从云端拉取"
                                 WebDavGallerySync.MODE_DOWNLOAD_ONLY -> "只拉取云端新增画廊，不上传本地文件"
@@ -731,7 +733,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                             state = webdavAutoSync,
                         )
                         if (showMeteredConfirm) {
-                            WindowDialog(
+                            LiquidGlassDialog(
                                 show = true,
                                 title = "移动数据网络",
                                 onDismissRequest = { showMeteredConfirm = false },

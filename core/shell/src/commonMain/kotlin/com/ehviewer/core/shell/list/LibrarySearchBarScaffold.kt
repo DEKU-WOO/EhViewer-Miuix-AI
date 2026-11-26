@@ -88,7 +88,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import com.ehviewer.core.ui.component.LiquidGlassBottomSheet
 
 // 搜索建议条目（宿主供给；桌面=本地搜索历史，移动端=搜索库+标签翻译，共享层不感知）
 data class SearchSuggestion(
@@ -429,7 +429,7 @@ fun LibrarySearchBarScaffold(
             }
 
             if (filter != null) {
-                WindowBottomSheet(
+                LiquidGlassBottomSheet(
                     show = showFilterSheet,
                     onDismissRequest = { showFilterSheet = false },
                 ) {

@@ -58,7 +58,6 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.blurBackdropSource
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.asyncInVM
@@ -113,7 +112,7 @@ import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import com.ehviewer.core.ui.component.LiquidGlassBottomSheet
 
 @Serializable
 sealed interface ReaderScreenArgs {
@@ -285,9 +284,9 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                         val blocked = page.status is PageStatus.Blocked
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
-                            WindowBottomSheet(
+                            LiquidGlassBottomSheet(
                                 show = true,
-                                modifier = Modifier.glassRim(topOnly = true),
+                                modifier = Modifier,
                                 onDismissRequest = { dispose() },
                             ) {
                                 ReaderPageSheetMeta(
@@ -409,7 +408,7 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
                             var isColorFilter by remember { mutableStateOf(false) }
-                            WindowBottomSheet(
+                            LiquidGlassBottomSheet(
                                 show = true,
                                 onDismissRequest = { dispose() },
                                 enableWindowDim = !isColorFilter,

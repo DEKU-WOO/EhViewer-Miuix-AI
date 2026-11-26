@@ -58,6 +58,7 @@ import com.ehviewer.core.ui.component.ProvideSideSheetContent
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
@@ -354,6 +355,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             anchorContent = { Icon(imageVector = MiuixIcons.Folder, contentDescription = null) },
             entries = listOf(DropdownEntry(items = favItems)),
             backdrop = backdrop,
+            visuals = liquidGlassPopupVisuals(),
         )
         // 多选操作栏：替换原右下角展开式悬浮按钮组
         Box(

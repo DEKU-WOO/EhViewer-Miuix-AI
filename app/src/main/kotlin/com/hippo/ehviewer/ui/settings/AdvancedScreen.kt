@@ -40,6 +40,7 @@ import com.ehviewer.core.files.toOkioPath
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.readableWidth
 import com.ehviewer.core.util.isAtLeastO
@@ -162,6 +163,7 @@ fun AnimatedVisibilityScope.AdvancedScreen(navigator: DestinationsNavigator) = S
                     GlassDropdownPreference(
                         title = stringResource(id = R.string.settings_advanced_app_language_title),
                         backdrop = backdrop,
+                        visuals = liquidGlassPopupVisuals(),
                         items = languageValues,
                         selectedIndex = selectedLangIndex,
                         showValue = true,

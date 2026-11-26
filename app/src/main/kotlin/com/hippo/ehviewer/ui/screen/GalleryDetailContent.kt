@@ -93,7 +93,6 @@ import com.ehviewer.core.ui.component.FilledTertiaryIconToggleButton
 import com.ehviewer.core.ui.component.GalleryDetailRating
 import com.ehviewer.core.ui.component.GalleryRatingBar
 import com.ehviewer.core.ui.component.SquircleShape
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Magnet
 import com.ehviewer.core.ui.util.AdaptiveBreakpoints
@@ -186,7 +185,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import com.ehviewer.core.ui.component.LiquidGlassBottomSheet
 
 /** 画廊详情布局模式：跟随方向。 */
 const val GALLERY_DETAIL_LAYOUT_AUTO = 0
@@ -255,9 +254,9 @@ fun GalleryDetailContent(
         galleryDetail ?: return
         launch {
             dialog { cont ->
-                WindowBottomSheet(
+                LiquidGlassBottomSheet(
                     show = true,
-                    modifier = Modifier.glassRim(topOnly = true),
+                    modifier = Modifier,
                     onDismissRequest = { cont.cancel() },
                 ) {
                     GalleryInfoBottomSheet(galleryDetail)
@@ -297,9 +296,9 @@ fun GalleryDetailContent(
     fun onCoverClick() {
         launch {
             dialog { cont ->
-                WindowBottomSheet(
+                LiquidGlassBottomSheet(
                     show = true,
-                    modifier = Modifier.glassRim(topOnly = true),
+                    modifier = Modifier,
                     onDismissRequest = { cont.cancel() },
                 ) {
                     Column(

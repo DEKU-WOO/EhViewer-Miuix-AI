@@ -92,6 +92,7 @@ import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Bookmarks
@@ -622,6 +623,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null) },
             entries = listOf(toplistEntry),
             backdrop = backdrop,
+            visuals = liquidGlassPopupVisuals(),
         )
         // 快速搜索：自定义行（长按编辑/删除、行内重命名）通过锚点形变展开
         GlassTransformPopup(
@@ -631,6 +633,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             backdrop = backdrop,
             anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null) },
             sizing = GlassPopupSizing(minWidth = 240.dp, maxWidth = 320.dp),
+            visuals = liquidGlassPopupVisuals(),
         ) {
             quickSearchList.forEachIndexed { index, item ->
                 key(item.id) {

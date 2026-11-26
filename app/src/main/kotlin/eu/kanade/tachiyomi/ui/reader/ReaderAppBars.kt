@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.component.LiquidGlassSurface
+import com.ehviewer.core.ui.component.LocalBackdrop
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.util.AdaptiveBreakpoints
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.hippo.ehviewer.Settings
@@ -183,7 +185,8 @@ fun BoxScope.ReaderAppBars(
                 },
             ),
         ),
-        backdrop = null,
+        backdrop = LocalBackdrop.current,
+        visuals = liquidGlassPopupVisuals(),
     )
     GlassIconDropdownMenu(
         show = orientationMenuShow,
@@ -201,6 +204,7 @@ fun BoxScope.ReaderAppBars(
                 },
             ),
         ),
-        backdrop = null,
+        backdrop = LocalBackdrop.current,
+        visuals = liquidGlassPopupVisuals(),
     )
 }

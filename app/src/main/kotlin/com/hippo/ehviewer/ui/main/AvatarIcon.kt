@@ -23,6 +23,8 @@ import arrow.core.some
 import coil3.compose.AsyncImage
 import coil3.network.HttpException
 import com.ehviewer.core.i18n.R
+import com.ehviewer.core.ui.component.LocalBackdrop
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
 import com.hippo.ehviewer.Settings
@@ -172,7 +174,8 @@ fun AvatarIcon() {
                 anchor = menuAnchor,
                 anchorContent = { AvatarContent() },
                 entries = listOf(menuEntry),
-                backdrop = null,
+                backdrop = LocalBackdrop.current,
+                visuals = liquidGlassPopupVisuals(),
             )
         }
     } else {

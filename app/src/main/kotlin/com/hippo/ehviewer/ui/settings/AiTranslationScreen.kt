@@ -47,7 +47,7 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
-import com.ehviewer.core.ui.component.glassRim
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.util.readableWidth
 import com.ehviewer.core.util.launch
@@ -84,7 +84,7 @@ import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 /** 添加模型弹窗中的历史记录上限。 */
 private const val ModelHistoryLimit = 10
@@ -179,9 +179,9 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
         val model = dialog<String> { cont ->
             var error by remember { mutableStateOf<String?>(null) }
             val fieldState = rememberTextFieldState()
-            WindowDialog(
+            LiquidGlassDialog(
                 show = true,
-                modifier = Modifier.glassRim(),
+                modifier = Modifier,
                 onDismissRequest = { cont.cancel() },
                 title = addModelTitle,
             ) {
@@ -355,6 +355,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                     GlassDropdownPreference(
                         title = stringResource(id = R.string.settings_ai_translation_mode),
                         backdrop = backdrop,
+                        visuals = liquidGlassPopupVisuals(),
                         items = listOf(
                             stringResource(id = R.string.settings_ai_translation_mode_auto),
                             stringResource(id = R.string.settings_ai_translation_mode_manual),
@@ -375,6 +376,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                         GlassDropdownPreference(
                             title = stringResource(id = R.string.settings_ai_translation_profile),
                             backdrop = backdrop,
+                            visuals = liquidGlassPopupVisuals(),
                             items = profiles.map { it.name },
                             selectedIndex = profiles.indexOfFirst { it.id == activeProfile?.id }.coerceAtLeast(0),
                             showValue = true,
@@ -443,6 +445,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                 GlassDropdownPreference(
                                     title = stringResource(R.string.settings_ai_translation_model_select),
                                     backdrop = backdrop,
+                                    visuals = liquidGlassPopupVisuals(),
                                     items = profile.models,
                                     selectedIndex = profile.models.indexOf(profile.selectedModel).coerceAtLeast(0),
                                     showValue = true,

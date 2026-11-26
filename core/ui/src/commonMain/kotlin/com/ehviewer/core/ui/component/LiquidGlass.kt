@@ -35,9 +35,20 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.glass.GlassBottomSheet
+import top.yukonga.miuix.kmp.glass.GlassDialog
+import top.yukonga.miuix.kmp.glass.GlassDialogDefaults
+import top.yukonga.miuix.kmp.glass.GlassPopupDefaults
+import top.yukonga.miuix.kmp.glass.GlassPopupVisuals
+import top.yukonga.miuix.kmp.layout.BottomSheetDefaults
+import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.material.EdgeLightSource
 import top.yukonga.miuix.kmp.material.EdgePeak
 import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.GlassColorBlendMode
+import top.yukonga.miuix.kmp.material.GlassColorLayer
+import top.yukonga.miuix.kmp.material.GlassMaterial
+import top.yukonga.miuix.kmp.material.GlassMaterials
 import top.yukonga.miuix.kmp.material.edgeStroke
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -50,20 +61,20 @@ private const val PRESSED_SCALE = 0.96f
 
 val LiquidGlassHighlightLight = EdgeStroke(
     width = 1.dp,
-    bevel = 2.8.dp,
-    color = Color.White.copy(alpha = 0.08f),
+    bevel = 3.0.dp,
+    color = Color.White.copy(alpha = 0.10f),
     // 左上主高光 + 右下副反射，与底部导航栏保持同一斜向光源
-    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.6f),
-    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.25f),
+    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.75f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.32f),
     peak = EdgePeak.Dual,
 )
 
 val LiquidGlassHighlightDark = EdgeStroke(
-    width = 0.8.dp,
-    bevel = 2.0.dp,
-    color = Color.White.copy(alpha = 0.12f),
-    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.85f),
-    secondary = EdgeLightSource(0.8f, 0.85f, -0.45f, intensity = 0.35f),
+    width = 0.9.dp,
+    bevel = 2.4.dp,
+    color = Color.White.copy(alpha = 0.16f),
+    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 1f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.45f, intensity = 0.42f),
     peak = EdgePeak.Dual,
 )
 
@@ -72,12 +83,99 @@ val LiquidGlassHighlightDark = EdgeStroke(
  */
 val LiquidGlassNavHighlight = EdgeStroke(
     width = 1.dp,
-    bevel = 2.0.dp,
-    color = Color.White.copy(alpha = 0.12f),
-    primary = EdgeLightSource(0.25f, 0.3f, -0.05f, intensity = 1f),
-    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.4f),
+    bevel = 2.2.dp,
+    color = Color.White.copy(alpha = 0.16f),
+    primary = EdgeLightSource(0.25f, 0.3f, -0.05f, intensity = 1.1f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.48f),
     peak = EdgePeak.Dual,
 )
+
+/** 弹层统一使用更清晰的斜向双峰高光，仍保持细腻而非白色硬边。 */
+val LiquidGlassOverlayHighlight = EdgeStroke(
+    width = 1.dp,
+    bevel = 2.8.dp,
+    color = Color.White.copy(alpha = 0.18f),
+    primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 1.05f),
+    secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.46f),
+    peak = EdgePeak.Dual,
+)
+
+/**
+ * 弹窗/菜单统一的高通透玻璃材质。
+ *
+ * 最后一层使用 SrcOver 直接控制表面遮罩强度：深色 62%、浅色 68%，剩余部分实时透出
+ * 背后的模糊色彩；前两层保留 MIUIX 的明暗与饱和度处理，避免封面过亮时文字失去对比度。
+ */
+@Composable
+fun liquidGlassOverlayMaterial(dialog: Boolean = false): GlassMaterial {
+    val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
+    val base = if (dialog) GlassMaterials.dialogGlass(isDark) else GlassMaterials.popupViewGlass(isDark)
+    val surface = if (isDark) MiuixTheme.colorScheme.surfaceContainer else Color.White
+    return base.copy(
+        blurRadius = 48.dp,
+        third = GlassColorLayer(
+            color = surface.copy(alpha = if (isDark) 0.62f else 0.68f),
+            mode = GlassColorBlendMode.SrcOver,
+        ),
+    )
+}
+
+@Composable
+fun liquidGlassPopupVisuals(): GlassPopupVisuals = GlassPopupDefaults.visuals(
+    material = liquidGlassOverlayMaterial(),
+    stroke = LiquidGlassOverlayHighlight,
+)
+
+/** 全应用对话框统一入口：仅定制玻璃表面，标题、内容与交互仍由调用方原样提供。 */
+@Composable
+fun LiquidGlassDialog(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    summary: String? = null,
+    maxWidth: Dp = DialogDefaults.MaxWidth,
+    cornerRadius: Dp? = null,
+    backgroundColor: Color = GlassDialogDefaults.containerColor(),
+    enableWindowDim: Boolean = true,
+    content: @Composable () -> Unit,
+) = GlassDialog(
+    show = show,
+    onDismissRequest = onDismissRequest,
+    backdrop = LocalBackdrop.current,
+    modifier = modifier,
+    enableWindowDim = enableWindowDim,
+    title = title,
+    summary = summary,
+    maxWidth = maxWidth,
+    cornerRadius = cornerRadius,
+    material = liquidGlassOverlayMaterial(dialog = true),
+    stroke = LiquidGlassOverlayHighlight,
+    containerColor = backgroundColor,
+    content = content,
+)
+
+/** 全应用底部抽屉统一入口；沿用原 WindowBottomSheet 的内容边距，避免改变页内布局。 */
+@Composable
+fun LiquidGlassBottomSheet(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    enableWindowDim: Boolean = true,
+    content: @Composable () -> Unit,
+) = GlassBottomSheet(
+    show = show,
+    onDismissRequest = onDismissRequest,
+    backdrop = LocalBackdrop.current,
+    modifier = modifier,
+    enableWindowDim = enableWindowDim,
+    progressiveBlur = false,
+    insideMargin = BottomSheetDefaults.insideMargin,
+    material = liquidGlassOverlayMaterial(dialog = true),
+    stroke = LiquidGlassOverlayHighlight,
+) {
+    content()
+}
 
 val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 

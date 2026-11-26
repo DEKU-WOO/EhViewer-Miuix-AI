@@ -79,6 +79,7 @@ import com.ehviewer.core.ui.component.FastScrollLazyVerticalStaggeredGrid
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
@@ -878,6 +879,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         anchorContent = { Icon(imageVector = MiuixIcons.More, contentDescription = null) },
         entries = downloadMenuEntries,
         backdrop = backdrop,
+        visuals = liquidGlassPopupVisuals(),
     )
     }
 }

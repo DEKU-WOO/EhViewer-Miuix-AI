@@ -104,6 +104,7 @@ import com.ehviewer.core.ui.component.LocalSideSheetState
 import com.ehviewer.core.ui.component.MutableSideSheet
 import com.ehviewer.core.ui.component.SideSheetValue
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.component.rememberSideSheetState
@@ -262,6 +263,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         setMiuixContent {
+            val globalDialogState = this@setMiuixContent
             val configuration = LocalConfiguration.current
             val sideSheetState = rememberSideSheetState()
             val snackbarState = remember { SnackbarHostState() }
@@ -524,6 +526,7 @@ class MainActivity : AppCompatActivity() {
             val effectiveFabPadding = snackbarFabPadding.coerceAtLeast(bottomBarPadding)
 
             CompositionLocalProvider(
+                LocalBackdrop provides contentBackdrop,
                 LocalSideSheetState provides sideSheetState,
                 LocalDrawerHandle provides drawerHandle,
                 LocalSnackBarHostState provides snackbarState,
@@ -681,31 +684,35 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
-                }
-            }
 
-            if (startupRelease != null) {
-                val release = startupRelease
-                val ignoreAlertText = stringResource(R.string.update_msg_ignore_alert, release.version)
-                val undoText = stringResource(R.string.update_msg_undo_ignore)
-                UpdateDialog(
-                    show = true,
-                    release = release,
-                    onDismiss = { UpdateStartupPrompt.release = null },
-                    onIgnore = { version ->
-                        val previous = Settings.ignoredUpdateVersion.value
-                        Settings.ignoredUpdateVersion.value = version
-                        UpdateStartupPrompt.release = null
-                        scope.launch {
-                            val result = snackbarState.showSnackbar(ignoreAlertText, undoText, true)
-                            if (result == SnackbarResult.ActionPerformed) {
-                                Settings.ignoredUpdateVersion.value = previous
-                                // 撤销忽略后解除本版本的提示压制，否则同版本仍然不会再提示。
-                                UpdatePromptTracker.forget(version)
-                            }
-                        }
-                    },
-                )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        globalDialogState.Place()
+                    }
+
+                    if (startupRelease != null) {
+                        val release = startupRelease
+                        val ignoreAlertText = stringResource(R.string.update_msg_ignore_alert, release.version)
+                        val undoText = stringResource(R.string.update_msg_undo_ignore)
+                        UpdateDialog(
+                            show = true,
+                            release = release,
+                            onDismiss = { UpdateStartupPrompt.release = null },
+                            onIgnore = { version ->
+                                val previous = Settings.ignoredUpdateVersion.value
+                                Settings.ignoredUpdateVersion.value = version
+                                UpdateStartupPrompt.release = null
+                                scope.launch {
+                                    val result = snackbarState.showSnackbar(ignoreAlertText, undoText, true)
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        Settings.ignoredUpdateVersion.value = previous
+                                        // 撤销忽略后解除本版本的提示压制，否则同版本仍然不会再提示。
+                                        UpdatePromptTracker.forget(version)
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
             }
         }
 

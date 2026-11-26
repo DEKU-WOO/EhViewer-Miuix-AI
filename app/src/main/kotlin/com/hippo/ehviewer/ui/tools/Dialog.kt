@@ -1,6 +1,8 @@
 package com.hippo.ehviewer.ui.tools
 
+import android.app.Activity
 import android.content.Context
+import android.view.WindowManager
 import androidx.annotation.StringRes
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.background
@@ -71,7 +73,6 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.LabeledCheckbox
 import com.ehviewer.core.ui.component.SquircleShape
-import com.ehviewer.core.ui.component.glassRim
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.ifNotNullThen
 import com.ehviewer.core.ui.util.ifTrueThen
@@ -101,7 +102,7 @@ import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.layout.DialogDefaults as MiuixDialogDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 fun interface ActionScope {
     fun onSelect(action: String, that: suspend () -> Unit)
@@ -165,9 +166,9 @@ suspend fun <R> awaitResult(
             }
         }
     }
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { cont.cancel() },
         title = title?.let { stringResource(id = it) },
     ) {
@@ -356,9 +357,9 @@ suspend fun awaitInputText(
     val coroutineScope = rememberCoroutineScope()
     var text by remember(cont) { mutableStateOf(initial) }
     var error by remember(cont) { mutableStateOf<String?>(null) }
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = {
             cont.cancel()
             onUserDismiss?.invoke()
@@ -437,9 +438,9 @@ suspend fun awaitInputTextWithCheckBox(
     var text by remember(cont) { mutableStateOf(initial) }
     var error by remember(cont) { mutableStateOf<String?>(null) }
     var checkedState by remember { mutableStateOf(checked) }
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { cont.cancel() },
         title = title?.let { stringResource(id = it) },
     ) {
@@ -515,9 +516,9 @@ suspend fun awaitConfirmationOrCancel(
     secure: Boolean = false,
     text: @Composable (() -> Unit)? = null,
 ) = dialog<Unit> { cont ->
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { cont.cancel() },
         title = title?.let { stringResource(id = it) },
     ) {
@@ -579,9 +580,9 @@ suspend fun awaitSelectDate(
         displayMode,
         selectableDates,
     )
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { cont.cancel() },
         maxWidth = 560.dp,
     ) {
@@ -618,9 +619,9 @@ suspend fun awaitSelectDate(
 
 context(_: DialogState)
 suspend fun <R> showNoButton(respectDefaultWidth: Boolean = true, block: @Composable Continuation<R>.() -> Unit): R = dialog { cont ->
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { cont.cancel() },
         maxWidth = if (!respectDefaultWidth) 560.dp else MiuixDialogDefaults.MaxWidth,
     ) {
@@ -635,9 +636,9 @@ suspend fun awaitSelectTime(
     initialMinute: Int,
 ) = dialog { cont ->
     val state = rememberTimePickerState(initialHour, initialMinute)
-    WindowDialog(
+    LiquidGlassDialog(
         show = true,
-        modifier = Modifier.glassRim(),
+        modifier = Modifier,
         onDismissRequest = { cont.cancel() },
     ) {
         Column(
@@ -921,19 +922,20 @@ private fun CheckableItem(text: String, checked: Boolean, modifier: Modifier = M
 
 private val IconWithTextCorner = SquircleShape(8.dp)
 
-/**
- * 给当前弹窗所在的窗口加上 FLAG_SECURE，禁止截图与录屏。
- *
- * Miuix 的 WindowDialog 不接受 DialogProperties，只能在内容里拿到弹窗自己的窗口。
- * 用于展示身份 Cookie 的弹窗，避免凭据通过截图泄露。
- */
+/** 给承载弹窗的窗口加上 FLAG_SECURE，避免身份 Cookie 被截图或录屏泄露。 */
 @Composable
 private fun SecureDialogWindow() {
     val view = LocalView.current
     DisposableEffect(view) {
         val window = (view.parent as? DialogWindowProvider)?.window
+            ?: (view.context as? Activity)?.window
+        val wasSecure = window?.attributes?.flags?.let {
+            it and WindowManager.LayoutParams.FLAG_SECURE != 0
+        } == true
         window?.setSecureScreen(true)
-        onDispose { window?.setSecureScreen(false) }
+        onDispose {
+            if (!wasSecure) window?.setSecureScreen(false)
+        }
     }
 } private val DatePickerTitlePadding = PaddingValues(start = 24.dp, end = 12.dp, top = 16.dp)
 

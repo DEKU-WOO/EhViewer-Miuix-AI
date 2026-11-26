@@ -42,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.component.LocalBackdrop
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.readableWidth
@@ -213,6 +214,7 @@ fun SimpleMenuPreferenceInt(
         items = entryArray.toList(),
         selectedIndex = selectedIndex,
         backdrop = LocalBackdrop.current,
+        visuals = liquidGlassPopupVisuals(),
         // 未显式给出说明时必须展示当前选中项，否则用户看不到自己选了什么
         showValue = true,
         onSelectedIndexChange = { index ->

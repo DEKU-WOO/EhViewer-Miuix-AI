@@ -112,10 +112,12 @@ internal fun BottomBarBaseLayer(
                             effects = {
                                 padding = maxOf(padding, 40.dp.toPx())
                                 vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
+                                blur(18.dp.toPx(), 18.dp.toPx())
                                 lens(
                                     refractionHeight = 24.dp.toPx(),
                                     refractionAmount = 24.dp.toPx(),
+                                    depthEffect = true,
+                                    chromaticAberration = 0.12f,
                                 )
                             },
                             layerBlock = {
@@ -190,10 +192,12 @@ internal fun BottomBarActiveTabsLayer(
                         shape = { pillShape },
                         effects = {
                             vibrancy()
-                            blur(4.dp.toPx(), 4.dp.toPx())
+                            blur(18.dp.toPx(), 18.dp.toPx())
                             lens(
                                 refractionHeight = 24.dp.toPx(),
                                 refractionAmount = 24.dp.toPx(),
+                                depthEffect = true,
+                                chromaticAberration = 0.12f,
                             )
                         },
                         onDrawSurface = { drawRect(containerColor) },
