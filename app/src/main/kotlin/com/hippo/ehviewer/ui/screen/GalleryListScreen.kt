@@ -612,6 +612,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             )
         }
         // 榜单时间范围：以图标为锚点的液态玻璃菜单
+        Box(Modifier.fillMaxSize()) {
         GlassIconDropdownMenu(
             show = toplistMenuShow,
             onDismissRequest = { toplistMenuShow = false },
@@ -710,6 +711,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                     color = MiuixTheme.colorScheme.onSurfaceContainer,
                 )
             }
+        }
         }
     }
 }

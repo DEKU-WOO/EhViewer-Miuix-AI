@@ -870,6 +870,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         }
     }
     // ⋮ 菜单：液态玻璃锚点菜单（「下载标签」通过 GlassSecondaryPopup 展开二级菜单）
+    Box(Modifier.fillMaxSize()) {
     GlassIconDropdownMenu(
         show = downloadMenuShow,
         onDismissRequest = { downloadMenuShow = false },
@@ -878,6 +879,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         entries = downloadMenuEntries,
         backdrop = backdrop,
     )
+    }
 }
 
 private const val LABEL_PREFIX = "label:"
