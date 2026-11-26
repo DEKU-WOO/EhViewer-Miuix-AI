@@ -303,6 +303,8 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 data.refresh()
             }
         }
+    }
+
     // 榜单 / 快速搜索菜单状态提升到页面级，菜单本体渲染在根 Box 内以获得整屏实时模糊
     val toplistMenuAnchor = rememberGlassPopupAnchor()
     var toplistMenuShow by remember { mutableStateOf(false) }
