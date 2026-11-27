@@ -31,6 +31,7 @@ import com.ehviewer.core.ui.util.LocalIsPageVisible
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.BottomBarScrollState
+import com.hippo.ehviewer.ui.MainActivity
 import com.hippo.ehviewer.ui.MainNavItem
 import com.hippo.ehviewer.ui.MainNavItems
 import com.hippo.ehviewer.ui.Screen
@@ -63,7 +64,7 @@ private const val TAB_TRANSITION_DURATION_MS = 280
 @Destination<RootGraph>
 @Composable
 fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
-    val activity = with(LocalContext.current) { remember { findActivity() } }
+    val activity: MainActivity = with(LocalContext.current) { remember { findActivity() } }
     val tabsViewModel: MainTabsViewModel = viewModel(activity)
 
     val rawNavConfig by Settings.bottomNavItems.collectAsState()
