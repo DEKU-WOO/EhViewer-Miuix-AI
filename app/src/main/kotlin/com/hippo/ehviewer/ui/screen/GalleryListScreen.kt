@@ -427,14 +427,14 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                     onClick = { toplistMenuShow = true },
                     modifier = Modifier.glassPopupAnchor(toplistMenuAnchor, cornerRadius = 20.dp),
                 ) {
-                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist))
+                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist), modifier = Modifier.size(SearchBarIconSize))
                 }
             } else {
                 SearchBarCircleAction(
                     onClick = { quickSearchMenuShow = true },
                     modifier = Modifier.glassPopupAnchor(quickSearchMenuAnchor, cornerRadius = 20.dp),
                 ) {
-                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search))
+                    Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search), modifier = Modifier.size(SearchBarIconSize))
                 }
             }
             // 个人头像（图片配额/资金）不再放在搜索栏，避免右侧图标拥挤

@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ehviewer.core.database.dao.SearchDao
 import com.ehviewer.core.database.model.Search
 import com.ehviewer.core.i18n.R
@@ -451,25 +452,62 @@ fun SearchBarScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .widthIn(max = SearchBarMaxWidth),
+                                            .widthIn(max = SearchBarMaxWidth)
+                                            // 下边缘与原高度完全一致，缩小省出的高度全部留给顶部上方呼吸空间
+                                            .padding(top = SearchBarTopBreathingSpace),
                                         horizontalArrangement = Arrangement.spacedBy(SearchBarActionGap),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         LiquidGlassSurface(
                                             shape = CircleShape,
                                             elevation = 4.dp,
-                                            refractionHeight = 16.dp,
-                                            refractionAmount = 16.dp,
+                                            refractionHeight = 14.dp,
+                                            refractionAmount = 14.dp,
                                             highlight = LiquidGlassNavHighlight,
                                             containerColor = MiuixTheme.colorScheme.surfaceContainer,
-                                            modifier = Modifier.weight(1f),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(SearchBarHeight),
                                             backdrop = activeBackdrop,
                                         ) {
-                                            inputContent()
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clickable(role = Role.Button) { onExpandedChange(true) }
+                                                    .padding(
+                                                        start = SearchBarHalfHeight,
+                                                        end = SearchBarHalfHeight,
+                                                    ),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = MiuixIcons.Search,
+                                                    contentDescription = null,
+                                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.size(SearchBarIconSize),
+                                                )
+                                                Spacer(modifier = Modifier.width(SearchBarTextGap))
+                                                Text(
+                                                    text = query.ifEmpty { placeholder },
+                                                    style = MiuixTheme.textStyles.body2.copy(fontSize = SearchBarTextSize),
+                                                    color = if (query.isEmpty()) {
+                                                        MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                                    } else {
+                                                        MiuixTheme.colorScheme.onSurface
+                                                    },
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                            }
                                         }
                                         if (filter != null) {
                                             SearchBarCircleAction(onClick = { showFilterSheet = true }) {
-                                                Icon(MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
+                                                Icon(
+                                                    imageVector = MiuixIcons.More,
+                                                    contentDescription = stringResource(R.string.more_actions),
+                                                    modifier = Modifier.size(SearchBarIconSize),
+                                                )
                                             }
                                         }
                                         trailingIcon()
@@ -696,17 +734,24 @@ private val SearchBarHorizontalPadding = 16.dp
 private val SearchBarMaxWidth = 720.dp
 private val FilterDialogCornerRadius = 32.dp
 
-// 让左右图标几何中心落在胶囊左右半圆圆心（距边缘 H/2）所需的额外内边距（IconButton 宽 40.dp）
+// 展开态 InputField 左右图标内边距（IconButton 宽 40.dp）
 private val SearchBarIconCenterInset = SearchBarDefaults.InputFieldMinHeight * 0.5f - 20.dp
 
-// 胶囊半高 = 两端半圆半径；放大镜、文本与右侧弧内留白都以它为基准。
-private val SearchBarHalfHeight = SearchBarDefaults.InputFieldMinHeight * 0.5f
+// 顶部搜索栏缩小为原高度的 3/4（H_new = 0.75 * H_old），下边缘固定不动，省出的高度全部留给顶部上方
+private val SearchBarOriginalHeight = SearchBarDefaults.InputFieldMinHeight
+private val SearchBarHeight = SearchBarOriginalHeight * 0.75f
+private val SearchBarTopBreathingSpace = SearchBarOriginalHeight - SearchBarHeight
 
-// 放大镜右边缘到搜索文本的间距，与放大镜到胶囊左边缘的间距保持同一数值。
-private val SearchBarTextGap = SearchBarIconCenterInset
+// 按缩小后的新高度 H_new 明确搜索栏内部水平间距：左右内边距 = H_new / 2，放大镜与文字之间固定 8.dp
+private val SearchBarHalfHeight = SearchBarHeight * 0.5f
+private val SearchBarTextGap = 8.dp
 
-// 右侧独立正圆按钮的直径与间距：直径 = 胶囊高度 H，按钮之间/与胶囊之间均 8.dp。
-private val SearchBarActionSize = SearchBarDefaults.InputFieldMinHeight
+// 同步等比例缩小搜索栏与右侧圆形按钮内部图标尺寸及搜索框字号
+internal val SearchBarIconSize = 17.dp
+private val SearchBarTextSize = 13.sp
+
+// 右侧独立正圆按钮的直径与间距：直径 = 缩小后的胶囊高度 H_new，按钮之间/与胶囊之间均 8.dp。
+private val SearchBarActionSize = SearchBarHeight
 private val SearchBarActionGap = 8.dp
 
 /** 供 [SearchBarCircleAction] 取实时 backdrop，由搜索栏在胶囊同一层级提供。 */
@@ -715,7 +760,7 @@ internal val LocalSearchBarBackdrop = staticCompositionLocalOf<Backdrop?> { null
 // 顶部磨砂在覆盖整条搜索栏后继续向下延伸缓冲带，渐变终点落在首张卡片上缘下方并完全归零
 private val TopScrimExtraHeight = 8.dp
 
-/** 搜索栏右侧的独立正圆玻璃按钮：直径 = 胶囊高度，彼此以 8.dp 间隔分离。 */
+/** 搜索栏右侧的独立正圆玻璃按钮：直径 = 胶囊高度 H_new，彼此以 8.dp 间隔分离。 */
 @Composable
 fun SearchBarCircleAction(
     onClick: () -> Unit,
@@ -726,14 +771,19 @@ fun SearchBarCircleAction(
     LiquidGlassSurface(
         shape = CircleShape,
         elevation = 4.dp,
-        refractionHeight = 16.dp,
-        refractionAmount = 16.dp,
+        refractionHeight = 14.dp,
+        refractionAmount = 14.dp,
         highlight = LiquidGlassNavHighlight,
         containerColor = MiuixTheme.colorScheme.surfaceContainer,
         modifier = modifier.size(SearchBarActionSize),
         backdrop = backdrop,
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(role = Role.Button, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
             content()
         }
     }

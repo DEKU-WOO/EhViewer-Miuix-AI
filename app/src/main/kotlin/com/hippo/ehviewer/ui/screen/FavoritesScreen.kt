@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
@@ -226,7 +227,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                 onClick = { favMenuShow = true },
                 modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = 20.dp),
             ) {
-                Icon(imageVector = MiuixIcons.Folder, contentDescription = null)
+                Icon(imageVector = MiuixIcons.Folder, contentDescription = null, modifier = Modifier.size(SearchBarIconSize))
             }
         },
     ) { contentPadding ->

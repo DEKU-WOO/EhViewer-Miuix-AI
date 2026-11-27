@@ -112,7 +112,7 @@ internal fun BottomBarBaseLayer(
                             effects = {
                                 padding = maxOf(padding, 40.dp.toPx())
                                 vibrancy()
-                                blur(18.dp.toPx(), 18.dp.toPx())
+                                blur(4.dp.toPx(), 4.dp.toPx())
                                 lens(
                                     refractionHeight = 24.dp.toPx(),
                                     refractionAmount = 24.dp.toPx(),
@@ -192,7 +192,7 @@ internal fun BottomBarActiveTabsLayer(
                         shape = { pillShape },
                         effects = {
                             vibrancy()
-                            blur(18.dp.toPx(), 18.dp.toPx())
+                            blur(4.dp.toPx(), 4.dp.toPx())
                             lens(
                                 refractionHeight = 24.dp.toPx(),
                                 refractionAmount = 24.dp.toPx(),

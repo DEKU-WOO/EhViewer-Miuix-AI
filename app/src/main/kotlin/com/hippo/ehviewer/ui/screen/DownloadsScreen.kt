@@ -450,7 +450,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
             SearchBarCircleAction(onClick = { gridView = !gridView }) {
                 val icon = if (gridView) MiuixIcons.ListView else MiuixIcons.GridView
                 val desc = stringResource(if (gridView) R.string.settings_eh_list_mode else R.string.settings_eh_list_mode_thumb)
-                Icon(imageVector = icon, contentDescription = desc)
+                Icon(imageVector = icon, contentDescription = desc, modifier = Modifier.size(SearchBarIconSize))
             }
             val startAllStr = stringResource(id = R.string.download_start_all)
             val stopAllStr = stringResource(id = R.string.download_stop_all)
@@ -624,7 +624,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 },
                 modifier = Modifier.glassPopupAnchor(downloadMenuAnchor, cornerRadius = 20.dp),
             ) {
-                Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
+                Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more_actions), modifier = Modifier.size(SearchBarIconSize))
             }
         },
     ) { contentPadding ->

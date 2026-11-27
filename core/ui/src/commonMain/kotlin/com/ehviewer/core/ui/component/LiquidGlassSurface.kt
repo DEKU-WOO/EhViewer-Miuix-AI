@@ -49,7 +49,8 @@ fun LiquidGlassSurface(
     val specularHighlight = if (isDark) LiquidGlassHighlightDark else LiquidGlassHighlightLight
 
     val finalContainerColor = if (shaderSupported) {
-        containerColor.copy(alpha = if (isDark) 0.22f else 0.20f)
+        // 深色纯黑 / 浅色纯白 0.18f 低不透明通透遮罩，彻底消除灰色磨砂感
+        (if (isDark) Color.Black else Color.White).copy(alpha = 0.18f)
     } else if (backdrop != null) {
         containerColor.copy(alpha = if (isDark) 0.62f else 0.72f)
     } else {
@@ -81,7 +82,7 @@ fun LiquidGlassSurface(
                         effects = {
                             padding = maxOf(padding, 40.dp.toPx())
                             vibrancy()
-                            blur(24.dp.toPx(), 24.dp.toPx())
+                            blur(14.dp.toPx(), 14.dp.toPx())
                             lens(
                                 refractionHeight = refractionHeight.toPx(),
                                 refractionAmount = refractionAmount.toPx(),

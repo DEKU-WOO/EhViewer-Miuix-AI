@@ -224,8 +224,8 @@ fun FloatingBottomBar(
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass && backdrop != null && isRuntimeShaderSupported()
     val isBlurMode = mode == FloatingBottomBarMode.Blur && backdrop != null
     val containerColor = if (isLiquidGlassMode) {
-        // 高通透：深色 24% / 浅色 20%，其余权重交给后台实时模糊与 vibrancy
-        colors.containerColor.copy(alpha = if (isDark) 0.24f else 0.20f)
+        // 去掉厚实灰色磨砂遮罩，仅保留极轻的纯黑/纯白通透底色，突出水晶玻璃边缘折射质感
+        if (isDark) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
     } else {
         colors.containerColor
     }
