@@ -80,6 +80,7 @@ fun GalleryList(
     thumbItemContent: @Composable (LazyStaggeredGridItemScope.(BaseGalleryInfo) -> Unit),
     searchBarOffsetY: () -> Int,
     scrollToTopOnRefresh: Boolean = true,
+    suppressInitialLoadingSpinner: Boolean = false,
     onRefresh: () -> Unit,
     onLoading: () -> Unit,
 ) {
@@ -191,7 +192,7 @@ fun GalleryList(
             }
 
             when (val state = data.loadState.refresh) {
-                is LoadState.Loading -> if (!isRefreshing && scrollToTopOnRefresh) {
+                is LoadState.Loading -> if (!isRefreshing && scrollToTopOnRefresh && !suppressInitialLoadingSpinner && data.itemCount == 0) {
                     LaunchedEffect(Unit) {
                         onLoading()
                     }

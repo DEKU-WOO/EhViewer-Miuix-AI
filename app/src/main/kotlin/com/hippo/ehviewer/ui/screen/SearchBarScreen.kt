@@ -48,6 +48,7 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,7 +99,11 @@ import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.MenuBook
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
+import com.ehviewer.core.ui.util.LocalIsPageInViewport
+import com.ehviewer.core.ui.util.LocalIsPageVisible
+import com.hippo.ehviewer.ui.SearchExpandController
 import com.ehviewer.core.ui.util.ifNotNullThen
 import com.ehviewer.core.ui.util.ifTrueThen
 import com.ehviewer.core.ui.util.thenIf
@@ -184,6 +189,8 @@ fun SearchBarScreen(
     backdrop: LayerBackdrop? = null,
     /** 多选模式接管顶栏时隐藏搜索栏内容，只保留统一磨砂渐变。 */
     hideSearchBar: Boolean = false,
+    onPersistFilter: () -> Unit = {},
+    ownerKey: String = "default",
     floatingActionButton: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
@@ -278,6 +285,41 @@ fun SearchBarScreen(
     }
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    val isPageVisible = LocalIsPageVisible.current
+    val isPageInViewport = LocalIsPageInViewport.current
+
+    LaunchedEffect(ownerKey, isPageVisible, expanded) {
+        SearchExpandController.update(ownerKey, isPageVisible && expanded)
+    }
+    DisposableEffect(ownerKey) {
+        onDispose { SearchExpandController.clearOwner(ownerKey) }
+    }
+
+    var prevFilterSheet by remember { mutableStateOf(showFilterSheet) }
+    LaunchedEffect(showFilterSheet) {
+        if (prevFilterSheet && !showFilterSheet && filter != null) {
+            onPersistFilter()
+        }
+        prevFilterSheet = showFilterSheet
+    }
+
+    var prevExpanded by remember { mutableStateOf(expanded) }
+    LaunchedEffect(expanded) {
+        if (prevExpanded && !expanded && filter != null) {
+            onPersistFilter()
+        }
+        prevExpanded = expanded
+    }
+
+    if (filter != null) {
+        LifecycleResumeEffect(showFilterSheet, expanded) {
+            onPauseOrDispose {
+                if (showFilterSheet || expanded) {
+                    onPersistFilter()
+                }
+            }
+        }
+    }
     var showImageSearchPopup by rememberSaveable { mutableStateOf(false) }
     var selectedImageUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     val imageSearchAnchor = rememberGlassPopupAnchor()
@@ -332,7 +374,7 @@ fun SearchBarScreen(
                             Box(modifier = Modifier.matchParentSize()) {
                                 // 总高度保持收紧：状态栏 + 搜索栏 + 8dp 缓冲带
                                 val scrimTotalDp = statusBarPadding + fullBarHeight + TopScrimExtraHeight
-                                if (activeBackdrop != null && isRuntimeShaderSupported()) {
+                                if (isPageInViewport && activeBackdrop != null && isRuntimeShaderSupported()) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -897,7 +939,10 @@ fun SearchBarScreen(
                 LiquidGlassDialog(
                     show = showFilterSheet,
                     modifier = Modifier,
-                    onDismissRequest = { showFilterSheet = false },
+                    onDismissRequest = {
+                        showFilterSheet = false
+                        onPersistFilter()
+                    },
                     cornerRadius = FilterDialogCornerRadius,
                     backgroundColor = MiuixTheme.colorScheme.background,
                 ) {

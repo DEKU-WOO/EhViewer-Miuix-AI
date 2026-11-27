@@ -5,32 +5,22 @@ import android.view.ViewConfiguration
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.currentRecomposeScope
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,32 +29,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
-import com.ehviewer.core.ui.component.LocalSideSheetState
-import com.ehviewer.core.ui.component.ProvideSideSheetContent
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
-import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.MenuBook
-import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
+import com.ehviewer.core.ui.util.LocalIsPageVisible
+import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.takeAndClear
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
@@ -76,52 +60,71 @@ import com.hippo.ehviewer.client.data.FavListUrlBuilder
 import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
+import com.hippo.ehviewer.ui.MainActivity
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.SelectionModeController
+import com.hippo.ehviewer.ui.main.FavoritesTabSession
 import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
 import com.hippo.ehviewer.ui.main.GalleryList
+import com.hippo.ehviewer.ui.main.MainTabsViewModel
 import com.hippo.ehviewer.ui.main.SelectableGalleryItem
 import com.hippo.ehviewer.ui.startDownload
+import com.hippo.ehviewer.ui.tools.DialogState
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitSelectItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
 import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
-import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
-import top.yukonga.miuix.kmp.glass.glassPopupAnchor
-import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
 @Composable
-fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, viewModel: FavoritesViewModel = viewModel()) = Screen(navigator) {
-    // Immutables
+fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    FavoritesTabContent(session = tabsViewModel.favoritesSession, ownerKey = "route_favorites")
+}
+
+@Composable
+context(
+    _: MainActivity,
+    _: SnackbarHostState,
+    _: DialogState,
+    _: SharedTransitionScope,
+    _: TransitionsVisibilityScope,
+    _: DestinationsNavigator,
+    _: CoroutineScope,
+)
+fun FavoritesTabContent(
+    session: FavoritesTabSession,
+    ownerKey: String = "tab_favorites",
+) {
+    val isPageVisible = LocalIsPageVisible.current
     val localFavName = stringResource(R.string.local_favorites)
     val cloudFavName = stringResource(R.string.cloud_favorites)
     val animateItems by Settings.animateItems.collectAsState()
     val hasSignedIn by Settings.hasSignedIn.collectAsState()
 
-    // Meta State
-    var urlBuilder by viewModel.urlBuilder
+    var urlBuilder by session.urlBuilder
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
-    var searchBarOffsetY by remember { mutableIntStateOf(0) }
+    var searchBarOffsetY by session.searchBarOffsetY
 
-    // Derived State
     val keyword = urlBuilder.keyword
     val favCatName = remember(urlBuilder) {
         when (val favCat = urlBuilder.favCat) {
@@ -137,26 +140,25 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
     }
     val density = LocalDensity.current
     val searchBarHint = stringResource(R.string.search_bar_hint, favCatName)
-    val data = viewModel.data.collectAsLazyPagingItems()
+    val data = session.data.collectAsLazyPagingItems()
 
     fun refresh(newUrlBuilder: FavListUrlBuilder = urlBuilder.copy(jumpTo = null, prev = null, next = null)) {
+        session.markExplicitNetworkRefresh()
         urlBuilder = newUrlBuilder
         data.refresh()
     }
-
 
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
     val backdrop = rememberBlurBackdrop()
     // 收藏分类数量不是 Compose 快照状态，变更时失效整个页面以刷新菜单数量
-    val localFavCount by viewModel.localFavCount.collectAsState(0)
+    val localFavCount by session.localFavCount.collectAsState(0)
     val favRecomposeScope = currentRecomposeScope
     LaunchedEffect(Unit) {
         Settings.favChangesFlow.collect { favRecomposeScope.invalidate() }
     }
     val favMenuAnchor = rememberGlassPopupAnchor()
     var favMenuShow by remember { mutableStateOf(false) }
-    // 点击文件夹图标后在图标正下方弹出液态玻璃菜单
     val favItems = buildList {
         add(
             DropdownItem(
@@ -196,139 +198,147 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             }
         }
     }
-    // 已加载项全部勾选时顶栏全选按钮显示激活态
     val loadedItems = data.itemSnapshotList.items
     val allSelected = loadedItems.isNotEmpty() && loadedItems.all { it.gid in checkedInfoMap }
-    // 进入/退出多选时同步全局状态，主界面据此暂停左右切页
-    LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
-    DisposableEffect(Unit) {
-        onDispose { SelectionModeController.active = false }
+    // 进入/退出多选时按页面 ownerKey 同步全局状态，主界面据此暂停左右切页
+    LaunchedEffect(ownerKey, isPageVisible, selectMode) {
+        SelectionModeController.update(ownerKey, isPageVisible && selectMode)
     }
-    // 系统侧滑返回优先退出多选
-    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
-    DrawerHandle(!selectMode && !searchBarExpanded)
+    DisposableEffect(ownerKey) {
+        onDispose { SelectionModeController.clearOwner(ownerKey) }
+    }
+    BackHandler(enabled = isPageVisible && selectMode) { checkedInfoMap.clear() }
+    DrawerHandle(isPageVisible && !selectMode && !searchBarExpanded)
 
     Box(Modifier.fillMaxSize()) {
-    SearchBarScreen(
-        onApplySearch = { refresh(FavListUrlBuilder(urlBuilder.favCat, it)) },
-        expanded = searchBarExpanded,
-        onExpandedChange = {
-            searchBarExpanded = it
-            if (it) checkedInfoMap.clear()
-        },
-        title = title,
-        searchFieldHint = searchBarHint,
-        localSearch = urlBuilder.isLocal,
-        searchBarOffsetY = { searchBarOffsetY },
-        backdrop = backdrop,
-        hideSearchBar = selectMode,
-        trailingIcon = {
-            SearchBarCircleAction(
-                onClick = { favMenuShow = true },
-                modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = SearchBarActionCornerRadius, floating = true),
-            ) {
-                Icon(imageVector = MiuixIcons.Folder, contentDescription = null, modifier = Modifier.size(SearchBarIconSize))
+        SearchBarScreen(
+            onApplySearch = { refresh(FavListUrlBuilder(urlBuilder.favCat, it)) },
+            expanded = searchBarExpanded,
+            onExpandedChange = {
+                searchBarExpanded = it
+                if (it) checkedInfoMap.clear()
+            },
+            title = title,
+            searchFieldHint = searchBarHint,
+            searchFieldState = session.searchFieldState,
+            localSearch = urlBuilder.isLocal,
+            searchBarOffsetY = { searchBarOffsetY },
+            backdrop = backdrop,
+            hideSearchBar = selectMode,
+            ownerKey = ownerKey,
+            trailingIcon = {
+                SearchBarCircleAction(
+                    onClick = { favMenuShow = true },
+                    modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = SearchBarActionCornerRadius, floating = true),
+                ) {
+                    Icon(imageVector = MiuixIcons.Folder, contentDescription = null, modifier = Modifier.size(SearchBarIconSize))
+                }
+            },
+        ) { contentPadding ->
+            val listMode by Settings.listMode.collectAsState()
+            val height by collectListThumbSizeAsState()
+            val showPages by Settings.showGalleryPages.collectAsState()
+            val showProgress by Settings.showReadingProgress.collectAsState()
+            val currentContentPadding by rememberUpdatedState(contentPadding)
+            val currentDensity by rememberUpdatedState(density)
+            val currentVisible by rememberUpdatedState(isPageVisible)
+            val searchBarConnection = remember {
+                val slop = ViewConfiguration.get(contextOf<Context>()).scaledTouchSlop
+                object : NestedScrollConnection {
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                        val dy = -consumed.y
+                        if (currentVisible) {
+                            if (dy >= slop) {
+                                BottomBarScrollState.hidden = true
+                            } else if (dy <= -slop / 2) {
+                                BottomBarScrollState.hidden = false
+                            }
+                        }
+                        val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
+                        searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
+                        return Offset.Zero
+                    }
+                }
             }
-        },
-    ) { contentPadding ->
-        val listMode by Settings.listMode.collectAsState()
-        val height by collectListThumbSizeAsState()
-        val showPages by Settings.showGalleryPages.collectAsState()
-        val showProgress by Settings.showReadingProgress.collectAsState()
-        // 原地旋转时 paddingValues/density 会变化，连接体内惰性读取最新值（remember 无 key 不重建）
-        val currentContentPadding by rememberUpdatedState(contentPadding)
-        val currentDensity by rememberUpdatedState(density)
-        val searchBarConnection = remember {
-            val slop = ViewConfiguration.get(contextOf<Context>()).scaledTouchSlop
-            object : NestedScrollConnection {
-                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                    val dy = -consumed.y
-                    if (dy >= slop) {
-                        BottomBarScrollState.hidden = true
-                    } else if (dy <= -slop / 2) {
+            GalleryList(
+                data = data,
+                contentModifier = Modifier.nestedScroll(searchBarConnection),
+                contentPadding = contentPadding,
+                listMode = listMode,
+                detailListState = session.listState,
+                detailItemContent = { info ->
+                    val checked = info.gid in checkedInfoMap
+                    SelectableGalleryItem(
+                        checked = checked,
+                        modifier = Modifier.thenIf(animateItems) { animateItem() },
+                    ) { interactionSource ->
+                        GalleryInfoListItem(
+                            onClick = {
+                                if (selectMode) {
+                                    if (checked) {
+                                        checkedInfoMap.remove(info.gid)
+                                    } else {
+                                        checkedInfoMap[info.gid] = info
+                                    }
+                                } else {
+                                    navigate(info.asDst())
+                                }
+                            },
+                            onLongClick = {
+                                checkedInfoMap[info.gid] = info
+                            },
+                            info = info,
+                            showPages = showPages,
+                            showProgress = showProgress,
+                            modifier = Modifier.height(height),
+                            isInFavScene = true,
+                            interactionSource = interactionSource,
+                        )
+                    }
+                },
+                thumbListState = session.gridState,
+                thumbItemContent = { info ->
+                    val checked = info.gid in checkedInfoMap
+                    SelectableGalleryItem(
+                        checked = checked,
+                        modifier = Modifier.thenIf(animateItems) { animateItem() },
+                    ) { interactionSource ->
+                        GalleryInfoGridItem(
+                            onClick = {
+                                if (selectMode) {
+                                    if (checked) {
+                                        checkedInfoMap.remove(info.gid)
+                                    } else {
+                                        checkedInfoMap[info.gid] = info
+                                    }
+                                } else {
+                                    navigate(info.asDst())
+                                }
+                            },
+                            onLongClick = {
+                                checkedInfoMap[info.gid] = info
+                            },
+                            info = info,
+                            showPages = showPages,
+                            showProgress = showProgress,
+                            showFavoriteStatus = false,
+                            interactionSource = interactionSource,
+                        )
+                    }
+                },
+                searchBarOffsetY = { searchBarOffsetY },
+                scrollToTopOnRefresh = urlBuilder.favCat != FavListUrlBuilder.FAV_CAT_LOCAL,
+                suppressInitialLoadingSpinner = session.isHydratingSeed.value,
+                onRefresh = { refresh() },
+                onLoading = {
+                    searchBarOffsetY = 0
+                    if (currentVisible) {
                         BottomBarScrollState.hidden = false
                     }
-                    val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
-                    searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
-                    return Offset.Zero // We never consume it
-                }
-            }
+                },
+            )
         }
-        GalleryList(
-            data = data,
-            contentModifier = Modifier.nestedScroll(searchBarConnection),
-            contentPadding = contentPadding,
-            listMode = listMode,
-            detailItemContent = { info ->
-                val checked = info.gid in checkedInfoMap
-                SelectableGalleryItem(
-                    checked = checked,
-                    modifier = Modifier.thenIf(animateItems) { animateItem() },
-                ) { interactionSource ->
-                    GalleryInfoListItem(
-                        onClick = {
-                            if (selectMode) {
-                                if (checked) {
-                                    checkedInfoMap.remove(info.gid)
-                                } else {
-                                    checkedInfoMap[info.gid] = info
-                                }
-                            } else {
-                                navigate(info.asDst())
-                            }
-                        },
-                        onLongClick = {
-                            checkedInfoMap[info.gid] = info
-                        },
-                        info = info,
-                        showPages = showPages,
-                        showProgress = showProgress,
-                        modifier = Modifier.height(height),
-                        isInFavScene = true,
-                        interactionSource = interactionSource,
-                    )
-                }
-            },
-            thumbItemContent = { info ->
-                val checked = info.gid in checkedInfoMap
-                SelectableGalleryItem(
-                    checked = checked,
-                    modifier = Modifier.thenIf(animateItems) { animateItem() },
-                ) { interactionSource ->
-                    GalleryInfoGridItem(
-                        onClick = {
-                            if (selectMode) {
-                                if (checked) {
-                                    checkedInfoMap.remove(info.gid)
-                                } else {
-                                    checkedInfoMap[info.gid] = info
-                                }
-                            } else {
-                                navigate(info.asDst())
-                            }
-                        },
-                        onLongClick = {
-                            checkedInfoMap[info.gid] = info
-                        },
-                        info = info,
-                        showPages = showPages,
-                        showProgress = showProgress,
-                        showFavoriteStatus = false,
-                        interactionSource = interactionSource,
-                    )
-                }
-            },
-            searchBarOffsetY = { searchBarOffsetY },
-            scrollToTopOnRefresh = urlBuilder.favCat != FavListUrlBuilder.FAV_CAT_LOCAL,
-            onRefresh = { refresh() },
-            onLoading = {
-                searchBarOffsetY = 0
-                BottomBarScrollState.hidden = false
-            },
-        )
-    }
 
-        // 选择态顶栏直接切换搜索栏，不额外叠加背景遮罩
         if (selectMode) {
             SelectionTopBar(
                 selectedCount = checkedInfoMap.size,
@@ -348,7 +358,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                     .fillMaxWidth(),
             )
         }
-        // 收藏夹切换：液态玻璃锚点菜单
         GlassIconDropdownMenu(
             show = favMenuShow,
             onDismissRequest = { favMenuShow = false },
@@ -358,7 +367,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             backdrop = backdrop,
             visuals = liquidGlassPopupVisuals(),
         )
-        // 多选操作栏：替换原右下角展开式悬浮按钮组
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter,
@@ -389,7 +397,6 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                         },
                         SelectionAction(icon = MiuixIcons.MoveFile, label = stringResource(R.string.download_move_dialog_title)) {
                             launch {
-                                // First is local favorite, the other 10 is cloud favorite
                                 val items = buildList {
                                     add(localFavName)
                                     if (hasSignedIn) {
@@ -403,20 +410,17 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                                 if (srcCat != dstCat) {
                                     runSwallowingWithUI {
                                         if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
-                                            // Move from local to cloud
                                             val galleryList = info.map { it.gid to it.token }
                                             EhEngine.addFavorites(galleryList, dstCat)
                                             EhDB.removeLocalFavorites(info)
                                         } else if (dstCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
-                                            // Move from cloud to local
                                             EhDB.putLocalFavorites(info)
                                         } else {
-                                            // Move from cloud to cloud
                                             val gidArray = info.mapToLongArray(BaseGalleryInfo::gid)
                                             EhEngine.modifyFavorites(gidArray, srcCat, dstCat)
                                         }
                                     }
-                                    // We refresh anyway as cloud data maybe partially modified
+                                    session.markExplicitNetworkRefresh()
                                     data.refresh()
                                 }
                             }
@@ -429,14 +433,14 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
                                 }
                                 val srcCat = urlBuilder.favCat
                                 runSwallowingWithUI {
-                                    if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) { // Delete local fav
+                                    if (srcCat == FavListUrlBuilder.FAV_CAT_LOCAL) {
                                         EhDB.removeLocalFavorites(info)
                                     } else {
                                         val delList = info.mapToLongArray(BaseGalleryInfo::gid)
                                         EhEngine.modifyFavorites(delList, srcCat, -1)
                                     }
                                 }
-                                // We refresh anyway as cloud data maybe partially modified
+                                session.markExplicitNetworkRefresh()
                                 data.refresh()
                             }
                         },

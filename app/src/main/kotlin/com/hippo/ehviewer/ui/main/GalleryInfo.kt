@@ -43,6 +43,7 @@ import com.ehviewer.core.model.GalleryInfo.Companion.NOT_FAVORITED
 import com.ehviewer.core.ui.component.CrystalCard
 import com.ehviewer.core.ui.component.GalleryListCardRating
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.util.LocalIsPageVisible
 import com.ehviewer.core.ui.util.SharedElementBox
 import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.listThumbGenerator
@@ -341,9 +342,10 @@ fun GalleryTitleText(
     var reportFailure by remember(info.gid) { mutableStateOf(false) }
     val context = LocalContext.current
 
-    // 仅做轻量入队：请求不绑定卡片生命周期，滑出屏幕也不会被取消
-    LaunchedEffect(info.gid, enabled, triggerMode, original) {
-        if (enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) {
+    // 仅当所在页面真正处于可见视口内才轻量入队，严禁离屏预组合页触发 AI 翻译导致 429 限流
+    val isPageVisible = LocalIsPageVisible.current
+    LaunchedEffect(info.gid, enabled, triggerMode, original, isPageVisible) {
+        if (isPageVisible && enabled && triggerMode == AI_TRANSLATION_MODE_AUTO) {
             AiTranslationManager.enqueueTranslation(info.gid, original)
         }
     }

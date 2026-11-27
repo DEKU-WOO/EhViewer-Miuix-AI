@@ -58,6 +58,7 @@ fun updateWhenRequestNewsChanges() {
 }
 
 suspend fun updateWhenGallerySiteChanges(gallerySite: Int) {
+    com.hippo.ehviewer.ui.main.TabDiskSnapshotStore.clearAll()
     if (Settings.hasSignedIn.value) {
         catch {
             EhEngine.getUConfig(gallerySite)

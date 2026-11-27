@@ -284,13 +284,14 @@ internal fun SettingsScrollColumn(
     scrollBehavior: ScrollBehavior,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(contentPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

@@ -6,31 +6,23 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
@@ -38,10 +30,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.material3.SwipeToDismissBoxDefaults
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.fork.SwipeToDismissBox
-import androidx.compose.material3.fork.SwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -87,8 +75,6 @@ import arrow.core.raise.ensure
 import com.ehviewer.core.database.model.QuickSearch
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
-import com.ehviewer.core.ui.component.FabLayout
-import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.SelectionAction
 import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
@@ -97,16 +83,11 @@ import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Bookmarks
 import com.ehviewer.core.ui.icons.filled.MenuBook
-import com.ehviewer.core.ui.icons.filled.Shuffle
-import com.ehviewer.core.ui.util.Await
-import com.ehviewer.core.ui.util.HapticFeedbackType
-import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
-import com.ehviewer.core.ui.util.asyncState
-import com.ehviewer.core.ui.util.rememberHapticFeedback
+import com.ehviewer.core.ui.util.LocalIsPageVisible
+import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
-import com.ehviewer.core.util.onEachLatest
 import com.ehviewer.core.util.withUIContext
 import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
@@ -127,71 +108,80 @@ import com.hippo.ehviewer.client.parser.GalleryPageUrlParser
 import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
+import com.hippo.ehviewer.ui.MainActivity
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.SelectionModeController
 import com.hippo.ehviewer.ui.destinations.ProgressScreenDestination
-import com.hippo.ehviewer.ui.main.AdvancedSearchOption
 import com.hippo.ehviewer.ui.main.GalleryInfoGridItem
 import com.hippo.ehviewer.ui.main.GalleryInfoListItem
 import com.hippo.ehviewer.ui.main.GalleryList
+import com.hippo.ehviewer.ui.main.GalleryTabSession
+import com.hippo.ehviewer.ui.main.MainTabsViewModel
 import com.hippo.ehviewer.ui.main.SearchFilter
+import com.hippo.ehviewer.ui.main.SearchFilterStore
 import com.hippo.ehviewer.ui.main.SelectableGalleryItem
 import com.hippo.ehviewer.ui.navToReader
 import com.hippo.ehviewer.ui.startDownload
 import com.hippo.ehviewer.ui.tools.DialogState
-import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.awaitInputTextWithCheckBox
-import com.hippo.ehviewer.ui.tools.rememberMutableStateInDataStore
 import com.hippo.ehviewer.util.FavouriteStatusRouter
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.spec.Direction
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
 import moe.tarsin.snackbar
 import moe.tarsin.string
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.basic.Check
-import top.yukonga.miuix.kmp.icon.extended.Add
-import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Download
-import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.Favorites
-import top.yukonga.miuix.kmp.icon.extended.Refresh
-import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.glass.GlassIconDropdownMenu
 import top.yukonga.miuix.kmp.glass.GlassPopupSizing
 import top.yukonga.miuix.kmp.glass.GlassTransformPopup
 import top.yukonga.miuix.kmp.glass.glassPopupAnchor
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.Check
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Favorites
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Destination<RootGraph>
 @Composable
-fun AnimatedVisibilityScope.HomePageScreen(navigator: DestinationsNavigator) = GalleryListScreen(ListUrlBuilder(), navigator)
+fun AnimatedVisibilityScope.HomePageScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    GalleryListTabContent(session = tabsViewModel.homeSession, ownerKey = "route_home")
+}
 
 @Destination<RootGraph>
 @Composable
-fun AnimatedVisibilityScope.SubscriptionScreen(navigator: DestinationsNavigator) = GalleryListScreen(ListUrlBuilder(MODE_SUBSCRIPTION), navigator)
+fun AnimatedVisibilityScope.SubscriptionScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    GalleryListTabContent(session = tabsViewModel.subscriptionSession, ownerKey = "route_subscription")
+}
 
 @Destination<RootGraph>
 @Composable
-fun AnimatedVisibilityScope.WhatshotScreen(navigator: DestinationsNavigator) = GalleryListScreen(ListUrlBuilder(MODE_WHATS_HOT), navigator)
+fun AnimatedVisibilityScope.WhatshotScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    GalleryListTabContent(session = tabsViewModel.whatshotSession, ownerKey = "route_whatshot")
+}
 
 @Destination<RootGraph>
 @Composable
-fun AnimatedVisibilityScope.ToplistScreen(navigator: DestinationsNavigator) = GalleryListScreen(ListUrlBuilder(MODE_TOPLIST, keyword = Settings.recentToplist), navigator)
+fun AnimatedVisibilityScope.ToplistScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    GalleryListTabContent(session = tabsViewModel.toplistSession, ownerKey = "route_toplist")
+}
 
 @Destination<RootGraph>
 @Composable
@@ -200,32 +190,77 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     navigator: DestinationsNavigator,
     viewModel: GalleryListViewModel = viewModel { GalleryListViewModel(lub, createSavedStateHandle()) },
 ) = Screen(navigator) {
-    val searchFieldState = rememberTextFieldState()
-    var urlBuilder by viewModel.urlBuilder
+    GalleryListBody(
+        session = null,
+        standaloneViewModel = viewModel,
+        ownerKey = remember { "standalone_${System.identityHashCode(viewModel)}" },
+    )
+}
+
+@Composable
+context(
+    _: MainActivity,
+    _: SnackbarHostState,
+    _: DialogState,
+    _: SharedTransitionScope,
+    _: TransitionsVisibilityScope,
+    _: DestinationsNavigator,
+    _: CoroutineScope,
+)
+fun GalleryListTabContent(
+    session: GalleryTabSession,
+    ownerKey: String,
+) {
+    GalleryListBody(
+        session = session,
+        standaloneViewModel = null,
+        ownerKey = ownerKey,
+    )
+}
+
+@Composable
+context(
+    _: MainActivity,
+    _: SnackbarHostState,
+    _: DialogState,
+    _: SharedTransitionScope,
+    _: TransitionsVisibilityScope,
+    _: DestinationsNavigator,
+    _: CoroutineScope,
+)
+private fun GalleryListBody(
+    session: GalleryTabSession?,
+    standaloneViewModel: GalleryListViewModel?,
+    ownerKey: String,
+) {
+    val isPageVisible = LocalIsPageVisible.current
+    val searchFieldState = session?.searchFieldState ?: rememberTextFieldState()
+    var urlBuilder by (session?.urlBuilder ?: standaloneViewModel!!.urlBuilder)
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
-    var searchBarOffsetY by remember { mutableIntStateOf(0) }
+    var searchBarOffsetY by (session?.searchBarOffsetY ?: remember { mutableIntStateOf(0) })
 
     val animateItems by Settings.animateItems.collectAsState()
-
-    var category by rememberMutableStateInDataStore("SearchCategory") { EhUtils.ALL_CATEGORY }
-    var advancedSearchOption by rememberMutableStateInDataStore("AdvancedSearchOption") { AdvancedSearchOption() }
 
     // 长按多选：按 gid 去重记录选中项，非空即进入选择态
     val checkedInfoMap = remember { mutableStateMapOf<Long, BaseGalleryInfo>() }
     val selectMode = checkedInfoMap.isNotEmpty()
     val backdrop = rememberBlurBackdrop()
-    // 选择态期间暂停主界面左右滑动切页
-    LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
-    DisposableEffect(Unit) {
-        onDispose { SelectionModeController.active = false }
+    // 选择态期间暂停主界面左右滑动切页（按页面 ownerKey 隔离，离屏页不污染前台页）
+    LaunchedEffect(ownerKey, isPageVisible, selectMode) {
+        SelectionModeController.update(ownerKey, isPageVisible && selectMode)
     }
-    // 系统返回（含侧滑返回）直接退出选择态
-    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
+    DisposableEffect(ownerKey) {
+        onDispose { SelectionModeController.clearOwner(ownerKey) }
+    }
+    // 系统返回（含侧滑返回）仅在当前可见页激活时退出选择态
+    BackHandler(enabled = isPageVisible && selectMode) { checkedInfoMap.clear() }
 
-    DrawerHandle(!selectMode && !searchBarExpanded)
+    DrawerHandle(isPageVisible && !selectMode && !searchBarExpanded)
 
     LaunchedEffect(urlBuilder) {
-        if (urlBuilder.category != EhUtils.NONE) category = urlBuilder.category
+        if (session != null && urlBuilder.category != EhUtils.NONE) {
+            SearchFilterStore.category = urlBuilder.category
+        }
         val keyword = urlBuilder.keyword?.let { keyword ->
             when (urlBuilder.mode) {
                 MODE_UPLOADER -> "uploader:\"$keyword\""
@@ -238,16 +273,17 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     }
 
     val density = LocalDensity.current
-    val positionalThreshold = SwipeToDismissBoxDefaults.positionalThreshold
-    val listState = rememberLazyGridState()
-    val gridState = rememberLazyStaggeredGridState()
+    val listState = session?.listState ?: rememberLazyGridState()
+    val gridState = session?.gridState ?: rememberLazyStaggeredGridState()
     val isTopList = remember(urlBuilder) { urlBuilder.mode == MODE_TOPLIST }
     val ehHint = stringResource(R.string.gallery_list_search_bar_hint_e_hentai)
     val exHint = stringResource(R.string.gallery_list_search_bar_hint_exhentai)
     val searchBarHint by rememberUpdatedState(if (EhUtils.isExHentai) exHint else ehHint)
     val suitableTitle = getSuitableTitleForUrlBuilder(urlBuilder)
-    val data = viewModel.data.collectAsLazyPagingItems()
-    ReportDrawnWhen { data.loadState.refresh !is LoadState.Loading }
+    val data = (session?.data ?: standaloneViewModel!!.data).collectAsLazyPagingItems()
+    if (isPageVisible) {
+        ReportDrawnWhen { data.loadState.refresh !is LoadState.Loading }
+    }
     FavouriteStatusRouter.Observe(data)
     val listMode by Settings.listMode.collectAsState()
 
@@ -256,7 +292,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     val toplists = remember { entries zip values }
     val quickSearchName = getSuitableTitleForUrlBuilder(urlBuilder, false)
     var saveProgress by Settings.qSSaveProgress.asMutableState()
-    var languageFilter by Settings.languageFilter.asMutableState()
 
     fun getFirstVisibleItemIndex() = if (listMode == 0) {
         listState.firstVisibleItemIndex
@@ -281,18 +316,20 @@ fun AnimatedVisibilityScope.GalleryListScreen(
     }
 
     fun onApplySearch(query: String) = launchIO {
+        SearchFilterStore.persist()
         val builder = ListUrlBuilder()
         val oldMode = urlBuilder.mode
+        val advancedOption = SearchFilterStore.advancedOption
         // If it's MODE_SUBSCRIPTION, keep it
         val newMode = if (oldMode == MODE_SUBSCRIPTION) MODE_SUBSCRIPTION else MODE_NORMAL
         builder.mode = newMode
         builder.keyword = query
-        builder.category = category
-        builder.language = languageFilter
-        builder.advanceSearch = advancedSearchOption.advanceSearch
-        builder.minRating = advancedSearchOption.minRating
-        builder.pageFrom = advancedSearchOption.fromPage
-        builder.pageTo = advancedSearchOption.toPage
+        builder.category = SearchFilterStore.category
+        builder.language = SearchFilterStore.language
+        builder.advanceSearch = advancedOption.advanceSearch
+        builder.minRating = advancedOption.minRating
+        builder.pageFrom = advancedOption.fromPage
+        builder.pageTo = advancedOption.toPage
         when (oldMode) {
             MODE_TOPLIST, MODE_WHATS_HOT -> {
                 // Wait for search view to hide
@@ -300,6 +337,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 withUIContext { navigate(builder.asDst()) }
             }
             else -> {
+                session?.markExplicitNetworkRefresh()
                 urlBuilder = builder
                 data.refresh()
             }
@@ -316,6 +354,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 selected = urlBuilder.keyword == keyword,
                 onClick = {
                     Settings.recentToplist = keyword
+                    session?.markExplicitNetworkRefresh()
                     urlBuilder = ListUrlBuilder(MODE_TOPLIST, keyword = keyword)
                     data.refresh()
                 },
@@ -336,10 +375,6 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         if (urlBuilder.mode == MODE_IMAGE_SEARCH) {
             snackbar(invalidImageQuickSearch)
         } else {
-            // A refresh can temporarily expose an empty snapshot even when the
-            // load state is idle (for example after a failed/empty search). Do
-            // not index into it; quick-search names can still be created without
-            // the optional progress suffix.
             val firstItem = data.itemSnapshotList.items
                 .getOrNull(getFirstVisibleItemIndex())
             val next = firstItem?.gid?.plus(1)
@@ -420,6 +455,8 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         searchBarOffsetY = { searchBarOffsetY },
         backdrop = backdrop,
         hideSearchBar = selectMode,
+        onPersistFilter = SearchFilterStore::persist,
+        ownerKey = ownerKey,
         trailingIcon = {
             if (isTopList) {
                 // 榜单选择：以图标为锚点形变展开
@@ -437,16 +474,15 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search), modifier = Modifier.size(SearchBarIconSize))
                 }
             }
-            // 个人头像（图片配额/资金）不再放在搜索栏，避免右侧图标拥挤
         },
         filter = {
             SearchFilter(
-                category = category,
-                onCategoryChange = { category = it },
-                language = languageFilter,
-                onLanguageChange = { languageFilter = it },
-                advancedOption = advancedSearchOption,
-                onAdvancedOptionChange = { advancedSearchOption = it },
+                category = SearchFilterStore.category,
+                onCategoryChange = { SearchFilterStore.category = it },
+                language = SearchFilterStore.language,
+                onLanguageChange = { SearchFilterStore.language = it },
+                advancedOption = SearchFilterStore.advancedOption,
+                onAdvancedOptionChange = { SearchFilterStore.advancedOption = it },
             )
         },
     ) { contentPadding ->
@@ -456,15 +492,18 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         // 原地旋转时 paddingValues/density 会变化，连接体内惰性读取最新值（remember 无 key 不重建）
         val currentContentPadding by rememberUpdatedState(contentPadding)
         val currentDensity by rememberUpdatedState(density)
+        val currentVisible by rememberUpdatedState(isPageVisible)
         val searchBarConnection = remember {
             val slop = ViewConfiguration.get(contextOf<Context>()).scaledTouchSlop
             object : NestedScrollConnection {
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
-                    if (dy >= slop) {
-                        BottomBarScrollState.hidden = true
-                    } else if (dy <= -slop / 2) {
-                        BottomBarScrollState.hidden = false
+                    if (currentVisible) {
+                        if (dy >= slop) {
+                            BottomBarScrollState.hidden = true
+                        } else if (dy <= -slop / 2) {
+                            BottomBarScrollState.hidden = false
+                        }
                     }
                     val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }
                     searchBarOffsetY = (searchBarOffsetY - dy).roundToInt().coerceIn(-topPaddingPx, 0)
@@ -525,13 +564,17 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 }
             },
             searchBarOffsetY = { searchBarOffsetY },
+            suppressInitialLoadingSpinner = session?.isHydratingSeed?.value == true,
             onRefresh = {
+                session?.markExplicitNetworkRefresh()
                 urlBuilder.setRange(0)
                 data.refresh()
             },
             onLoading = {
                 searchBarOffsetY = 0
-                BottomBarScrollState.hidden = false
+                if (currentVisible) {
+                    BottomBarScrollState.hidden = false
+                }
             },
         )
     }
@@ -616,107 +659,108 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         }
         // 榜单时间范围：以图标为锚点的液态玻璃菜单
         Box(Modifier.fillMaxSize()) {
-        GlassIconDropdownMenu(
-            show = toplistMenuShow,
-            onDismissRequest = { toplistMenuShow = false },
-            anchor = toplistMenuAnchor,
-            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
-            entries = listOf(toplistEntry),
-            backdrop = backdrop,
-            visuals = liquidGlassPopupVisuals(),
-        )
-        // 快速搜索：自定义行（长按编辑/删除、行内重命名）通过锚点形变展开
-        GlassTransformPopup(
-            show = quickSearchMenuShow,
-            onDismissRequest = { closeQuickSearchMenu() },
-            anchor = quickSearchMenuAnchor,
-            backdrop = backdrop,
-            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
-            sizing = GlassPopupSizing(minWidth = 240.dp, maxWidth = 320.dp),
-            visuals = liquidGlassPopupVisuals(),
-        ) {
-            quickSearchList.forEachIndexed { index, item ->
-                key(item.id) {
-                    QuickSearchMenuRow(
-                        name = item.name,
-                        selected = urlBuilder.equalsQuickSearch(item),
-                        actionsVisible = quickSearchActionsId == item.id,
-                        editing = quickSearchEditingId == item.id,
-                        editValue = quickSearchEditingValue,
-                        onEditValueChange = { quickSearchEditingValue = it },
-                        focusRequester = quickSearchEditFocus,
-                        isFirst = index == 0,
-                        onClick = {
-                            when {
-                                // 正在编辑本行时点击行内区域不打断输入
-                                quickSearchEditingId == item.id -> Unit
-                                // 点击其他标签：先提交当前修改并退出编辑态
-                                quickSearchEditingId != null -> commitQuickSearchRename()
-                                // 操作态下点击本行只收起操作按钮，不触发选择
-                                quickSearchActionsId == item.id -> quickSearchActionsId = null
-                                else -> {
-                                    closeQuickSearchMenu()
-                                    if (urlBuilder.mode == MODE_WHATS_HOT) {
-                                        val builder = ListUrlBuilder(item).apply {
-                                            language = languageFilter
+            GlassIconDropdownMenu(
+                show = toplistMenuShow,
+                onDismissRequest = { toplistMenuShow = false },
+                anchor = toplistMenuAnchor,
+                anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
+                entries = listOf(toplistEntry),
+                backdrop = backdrop,
+                visuals = liquidGlassPopupVisuals(),
+            )
+            // 快速搜索：自定义行（长按编辑/删除、行内重命名）通过锚点形变展开
+            GlassTransformPopup(
+                show = quickSearchMenuShow,
+                onDismissRequest = { closeQuickSearchMenu() },
+                anchor = quickSearchMenuAnchor,
+                backdrop = backdrop,
+                anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
+                sizing = GlassPopupSizing(minWidth = 240.dp, maxWidth = 320.dp),
+                visuals = liquidGlassPopupVisuals(),
+            ) {
+                quickSearchList.forEachIndexed { index, item ->
+                    key(item.id) {
+                        QuickSearchMenuRow(
+                            name = item.name,
+                            selected = urlBuilder.equalsQuickSearch(item),
+                            actionsVisible = quickSearchActionsId == item.id,
+                            editing = quickSearchEditingId == item.id,
+                            editValue = quickSearchEditingValue,
+                            onEditValueChange = { quickSearchEditingValue = it },
+                            focusRequester = quickSearchEditFocus,
+                            isFirst = index == 0,
+                            onClick = {
+                                when {
+                                    // 正在编辑本行时点击行内区域不打断输入
+                                    quickSearchEditingId == item.id -> Unit
+                                    // 点击其他标签：先提交当前修改并退出编辑态
+                                    quickSearchEditingId != null -> commitQuickSearchRename()
+                                    // 操作态下点击本行只收起操作按钮，不触发选择
+                                    quickSearchActionsId == item.id -> quickSearchActionsId = null
+                                    else -> {
+                                        closeQuickSearchMenu()
+                                        if (urlBuilder.mode == MODE_WHATS_HOT) {
+                                            val builder = ListUrlBuilder(item).apply {
+                                                language = SearchFilterStore.language
+                                            }
+                                            navigate(builder.asDst())
+                                        } else {
+                                            session?.markExplicitNetworkRefresh()
+                                            urlBuilder = ListUrlBuilder(item).apply {
+                                                language = SearchFilterStore.language
+                                            }
+                                            data.refresh()
                                         }
-                                        navigate(builder.asDst())
-                                    } else {
-                                        urlBuilder = ListUrlBuilder(item).apply {
-                                            language = languageFilter
-                                        }
-                                        data.refresh()
                                     }
                                 }
-                            }
-                        },
-                        onLongClick = {
+                            },
+                            onLongClick = {
+                                if (quickSearchEditingId != null) commitQuickSearchRename()
+                                quickSearchActionsId = if (quickSearchActionsId == item.id) null else item.id
+                            },
+                            onEdit = {
+                                quickSearchActionsId = null
+                                quickSearchEditingId = item.id
+                                quickSearchEditingValue = TextFieldValue(
+                                    text = item.name,
+                                    selection = TextRange(0, item.name.length),
+                                )
+                            },
+                            onDelete = {
+                                quickSearchActionsId = null
+                                if (quickSearchEditingId == item.id) quickSearchEditingId = null
+                                quickSearchList.removeAll { it.id == item.id }
+                                launch { EhDB.deleteQuickSearch(item) }
+                            },
+                            onCommitEdit = { commitQuickSearchRename() },
+                        )
+                    }
+                }
+                // 底部添加按钮：删光所有标签后仍保留
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
                             if (quickSearchEditingId != null) commitQuickSearchRename()
-                            quickSearchActionsId = if (quickSearchActionsId == item.id) null else item.id
-                        },
-                        onEdit = {
                             quickSearchActionsId = null
-                            quickSearchEditingId = item.id
-                            quickSearchEditingValue = TextFieldValue(
-                                text = item.name,
-                                selection = TextRange(0, item.name.length),
-                            )
-                        },
-                        onDelete = {
-                            quickSearchActionsId = null
-                            if (quickSearchEditingId == item.id) quickSearchEditingId = null
-                            quickSearchList.removeAll { it.id == item.id }
-                            launch { EhDB.deleteQuickSearch(item) }
-                        },
-                        onCommitEdit = { commitQuickSearchRename() },
+                            saveCurrentQuickSearch()
+                        }
+                        .padding(
+                            start = 20.dp,
+                            end = 20.dp,
+                            top = if (quickSearchList.isEmpty()) 20.dp else 12.dp,
+                            bottom = 20.dp,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
+                        fontSize = MiuixTheme.textStyles.body1.fontSize,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onSurfaceContainer,
                     )
                 }
             }
-            // 底部添加按钮：删光所有标签后仍保留
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (quickSearchEditingId != null) commitQuickSearchRename()
-                        quickSearchActionsId = null
-                        saveCurrentQuickSearch()
-                    }
-                    .padding(
-                        start = 20.dp,
-                        end = 20.dp,
-                        top = if (quickSearchList.isEmpty()) 20.dp else 12.dp,
-                        bottom = 20.dp,
-                    ),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "+ " + stringResource(R.string.add_quick_search_dialog_title),
-                    fontSize = MiuixTheme.textStyles.body1.fontSize,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurfaceContainer,
-                )
-            }
-        }
         }
     }
 }

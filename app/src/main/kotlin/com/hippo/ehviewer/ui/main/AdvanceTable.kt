@@ -1,7 +1,6 @@
 package com.hippo.ehviewer.ui.main
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 
 object AdvanceTable {
     const val SH = 0x1
@@ -13,7 +12,6 @@ object AdvanceTable {
 
 @Serializable
 data class AdvancedSearchOption(
-    @Transient
     val advanceSearch: Int = 0,
     val minRating: Int = 0,
     val fromPage: Int = 0,

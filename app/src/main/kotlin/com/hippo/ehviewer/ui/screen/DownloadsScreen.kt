@@ -5,6 +5,7 @@ import android.view.ViewConfiguration
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -74,6 +75,9 @@ import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.ehviewer.core.ui.util.LocalIsPageVisible
+import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalGrid
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalStaggeredGrid
 import com.ehviewer.core.ui.component.SelectionAction
@@ -103,6 +107,9 @@ import com.hippo.ehviewer.download.DownloadsFilterMode
 import com.hippo.ehviewer.download.SortMode
 import com.hippo.ehviewer.ui.BottomBarScrollState
 import com.hippo.ehviewer.ui.DrawerHandle
+import com.hippo.ehviewer.ui.MainActivity
+import com.hippo.ehviewer.ui.main.DownloadsTabSession
+import com.hippo.ehviewer.ui.main.MainTabsViewModel
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.SelectionModeController
 import com.hippo.ehviewer.ui.collectConfiguredThumbColumns
@@ -121,6 +128,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.DropdownEntry
@@ -130,6 +138,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.SearchBarDefaults
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -150,18 +159,37 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Destination<RootGraph>
 @Composable
 fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    DownloadsTabContent(session = tabsViewModel.downloadsSession, ownerKey = "route_downloads")
+}
+
+@Composable
+context(
+    _: MainActivity,
+    _: SnackbarHostState,
+    _: DialogState,
+    _: SharedTransitionScope,
+    _: TransitionsVisibilityScope,
+    _: DestinationsNavigator,
+    _: CoroutineScope,
+)
+fun DownloadsTabContent(
+    session: DownloadsTabSession,
+    ownerKey: String = "tab_downloads",
+) {
+    val isPageVisible = LocalIsPageVisible.current
     var gridView by Settings.gridView.asMutableState()
     val filterMode by Settings.downloadFilterMode.collectAsState { DownloadsFilterMode.from(it) }
     val showProgress by Settings.showReadingProgress.collectAsState()
     var filterState by rememberSerializable { mutableStateOf(DownloadsFilterState(filterMode, Settings.recentDownloadLabel.value)) }
     var invalidateKey by rememberSaveable { mutableStateOf(false) }
-    var isLoading by rememberSaveable { mutableStateOf(true) }
+    var isLoading by rememberSaveable { mutableStateOf(!DownloadManager.isInitialized) }
     var searchBarExpanded by rememberSaveable { mutableStateOf(false) }
-    var searchBarOffsetY by remember { mutableIntStateOf(0) }
+    var searchBarOffsetY by session.searchBarOffsetY
     val animateItems by Settings.animateItems.collectAsState()
     // 两种视图的滚动状态提升到页面级，便于从阅读器返回时判断是否仍在顶部
-    val detailGridState = rememberLazyGridState()
-    val staggeredGridState = rememberLazyStaggeredGridState()
+    val detailGridState = session.detailGridState
+    val staggeredGridState = session.staggeredGridState
     // 全屏阅读器返回后系统状态栏重新展开：列表位于顶部时复位搜索栏偏移，
     // 避免首张卡片直接顶在搜索栏下方；不在顶部则保留原有滚动位置
     LifecycleResumeEffect(Unit) {
@@ -181,12 +209,12 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
     val downloadMenuAnchor = rememberGlassPopupAnchor()
     var downloadMenuShow by remember { mutableStateOf(false) }
     var downloadMenuEntries by remember { mutableStateOf<List<DropdownEntry>>(emptyList()) }
-    DrawerHandle(!selectMode && !searchBarExpanded)
+    DrawerHandle(isPageVisible && !selectMode && !searchBarExpanded)
     // 选中态同步给主界面（暂停左右滑动切页），退出页面时兜底复位
-    LaunchedEffect(selectMode) { SelectionModeController.active = selectMode }
-    DisposableEffect(Unit) { onDispose { SelectionModeController.active = false } }
+    LaunchedEffect(ownerKey, isPageVisible, selectMode) { SelectionModeController.update(ownerKey, isPageVisible && selectMode) }
+    DisposableEffect(ownerKey) { onDispose { SelectionModeController.clearOwner(ownerKey) } }
     // 侧滑/返回键退出多选；系统返回优先由本页消费
-    BackHandler(enabled = selectMode) { checkedInfoMap.clear() }
+    BackHandler(enabled = isPageVisible && selectMode) { checkedInfoMap.clear() }
 
     val density = LocalDensity.current
     val canTranslate = Settings.showTagTranslations.value && EhTagDatabase.translatable && EhTagDatabase.initialized
@@ -219,7 +247,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                 filterState.take(info)
             }.also {
                 launch {
-                    delay(200)
+                    // delay removed for instant tab rendering
                     isLoading = false
                 }
             }
@@ -416,7 +444,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         }
     }
 
-    val searchFieldState = rememberTextFieldState()
+    val searchFieldState = session.searchFieldState
     class DownloadLabelSuggestion(private val label: String) : Suggestion() {
         override val keyword = LABEL_PREFIX + label
         override fun onClick() {
@@ -446,6 +474,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         searchBarOffsetY = { searchBarOffsetY },
         backdrop = backdrop,
         hideSearchBar = selectMode,
+        ownerKey = ownerKey,
         trailingIcon = {
             SearchBarCircleAction(onClick = { gridView = !gridView }) {
                 val icon = if (gridView) MiuixIcons.ListView else MiuixIcons.GridView
@@ -645,14 +674,15 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         // 原地旋转时 paddingValues/density 会变化，连接体内惰性读取最新值（remember 无 key 不重建）
         val currentContentPadding by rememberUpdatedState(contentPadding)
         val currentDensity by rememberUpdatedState(density)
+        val currentVisible by rememberUpdatedState(isPageVisible)
         val searchBarConnection = remember {
             val slop = ViewConfiguration.get(contextOf<Context>()).scaledTouchSlop
             object : NestedScrollConnection {
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val dy = -consumed.y
-                    if (dy >= slop) {
+                    if (currentVisible && dy >= slop) {
                         BottomBarScrollState.hidden = true
-                    } else if (dy <= -slop / 2) {
+                    } else if (currentVisible && dy <= -slop / 2) {
                         BottomBarScrollState.hidden = false
                     }
                     val topPaddingPx = with(currentDensity) { currentContentPadding.calculateTopPadding().roundToPx() }

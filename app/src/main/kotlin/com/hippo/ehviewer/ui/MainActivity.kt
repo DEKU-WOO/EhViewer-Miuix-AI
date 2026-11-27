@@ -37,8 +37,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,26 +49,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.currentCompositeKeyHashCode
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,7 +73,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -94,17 +85,19 @@ import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.ehviewer.core.files.isDirectory
 import com.ehviewer.core.files.toOkioPath
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.IosLiquidGlassNavigationBar
 import com.ehviewer.core.ui.component.LabeledCheckbox
+import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.LocalSideSheetState
+import com.ehviewer.core.ui.component.LocalTabGesturePosition
 import com.ehviewer.core.ui.component.MutableSideSheet
 import com.ehviewer.core.ui.component.SideSheetValue
 import com.ehviewer.core.ui.component.SquircleShape
-import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.component.rememberSideSheetState
@@ -138,6 +131,7 @@ import com.hippo.ehviewer.ui.destinations.DownloadsScreenDestination
 import com.hippo.ehviewer.ui.destinations.FavouritesScreenDestination
 import com.hippo.ehviewer.ui.destinations.HistoryScreenDestination
 import com.hippo.ehviewer.ui.destinations.HomePageScreenDestination
+import com.hippo.ehviewer.ui.destinations.MainTabsScreenDestination
 import com.hippo.ehviewer.ui.destinations.ProgressScreenDestination
 import com.hippo.ehviewer.ui.destinations.SettingsScreenDestination
 import com.hippo.ehviewer.ui.destinations.SignInScreenDestination
@@ -145,6 +139,7 @@ import com.hippo.ehviewer.ui.destinations.SubscriptionScreenDestination
 import com.hippo.ehviewer.ui.destinations.ToplistScreenDestination
 import com.hippo.ehviewer.ui.destinations.WebViewSignInScreenDestination
 import com.hippo.ehviewer.ui.destinations.WhatshotScreenDestination
+import com.hippo.ehviewer.ui.main.MainTabsViewModel
 import com.hippo.ehviewer.ui.screen.asDst
 import com.hippo.ehviewer.ui.screen.asDstWith
 import com.hippo.ehviewer.ui.screen.navWithUrl
@@ -163,7 +158,6 @@ import com.hippo.ehviewer.ui.update.shouldPromptUpdate
 import com.hippo.ehviewer.updater.AppUpdater
 import com.hippo.ehviewer.util.AppConfig
 import com.hippo.ehviewer.util.addTextToClipboard
-import com.hippo.ehviewer.util.calculateFraction
 import com.hippo.ehviewer.util.displayString
 import com.hippo.ehviewer.util.getParcelableExtraCompat
 import com.hippo.ehviewer.util.getUrlFromClipboard
@@ -184,7 +178,6 @@ import kotlinx.coroutines.launch
 import moe.tarsin.coroutines.runSuspendCatching
 import splitties.systemservices.clipboardManager
 import splitties.systemservices.connectivityManager
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.NavigationRail
 import top.yukonga.miuix.kmp.basic.NavigationRailItem
@@ -270,6 +263,62 @@ class MainActivity : AppCompatActivity() {
             val scope = rememberCoroutineScope()
             val navController = rememberNavController()
             val navigator = navController.rememberDestinationsNavigator()
+            val tabsViewModel: MainTabsViewModel = viewModel()
+
+            val currentDestination by navController.currentDestinationAsState()
+            val rawNavConfig by Settings.bottomNavItems.collectAsState()
+            val visibleNavItems = remember(rawNavConfig) {
+                val config = MainNavItems.decode(rawNavConfig)
+                MainNavItems.visible(config)
+            }
+            val primaryNavItems = remember(visibleNavItems) {
+                visibleNavItems.map { item ->
+                    Triple(item.direction, item.titleRes, item.icon())
+                }
+            }
+
+            val hasNetwork = remember { connectivityManager.activeNetwork != null }
+            val launchPage by Settings.launchPage.collectAsState()
+            val safeLaunchPage = launchPage.coerceIn(0, 3)
+            val launchNavItem = remember(safeLaunchPage, hasNetwork) {
+                val configured = MainNavItem.entries.getOrElse(safeLaunchPage) { MainNavItem.Home }
+                if (hasNetwork) configured else MainNavItem.Downloads
+            }
+            remember(visibleNavItems) {
+                tabsViewModel.ensureInitialTab(launchNavItem, visibleNavItems)
+            }
+
+            val isOnMainTabs = currentDestination?.route == MainTabsScreenDestination.route
+            val isStandalonePrimary = navItems.any { it.first.route == currentDestination?.route }
+            val isPrimaryDestination = isOnMainTabs || isStandalonePrimary
+
+            fun selectMainNavItem(item: MainNavItem) {
+                if (item in visibleNavItems) {
+                    if (navController.currentDestination?.route == MainTabsScreenDestination.route) {
+                        tabsViewModel.requestSwitchToItem(item, visibleNavItems, animate = true)
+                    } else {
+                        tabsViewModel.selectTabImmediate(item, visibleNavItems)
+                        val popped = navController.popBackStack(MainTabsScreenDestination.route, inclusive = false)
+                        if (!popped) {
+                            navigator.navigate(MainTabsScreenDestination) {
+                                popUpTo(NavGraphs.root.startRoute) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
+                } else {
+                    val direction = item.direction
+                    if (navController.currentDestination?.route != direction.route) {
+                        navigator.navigate(direction) {
+                            launchSingleTop = true
+                        }
+                    }
+                }
+            }
+            val latestSelectMainNavItem by rememberUpdatedState(::selectMainNavItem)
 
             suspend fun DialogState.checkDownloadLocation() {
                 val valid = withIOContext { downloadLocation.isDirectory }
@@ -290,7 +339,6 @@ class MainActivity : AppCompatActivity() {
 
             val startupRelease = UpdateStartupPrompt.release
 
-            val hasNetwork = remember { connectivityManager.activeNetwork != null }
             if (!AppConfig.isBenchmark) {
                 val noNetwork = stringResource(R.string.no_network)
                 LaunchedEffect(Unit) {
@@ -370,7 +418,6 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         UpdateNotifications.ACTION_INSTALL_UPDATE -> {
-                            // 通知里的安装动作落到前台 Activity 处理，不在后台直接 startActivity。
                             val file = UpdateDownloadManager.downloadedFile
                                 ?: File(AppConfig.tempDir.toFile(), "update.apk")
                             if (file.exists()) {
@@ -382,7 +429,7 @@ class MainActivity : AppCompatActivity() {
                             if (args.getString(DownloadService.KEY_ACTION) == DownloadService.ACTION_CLEAR_DOWNLOAD_SERVICE) {
                                 DownloadService.clear()
                             }
-                            navigator.navigate(DownloadsScreenDestination)
+                            latestSelectMainNavItem(MainNavItem.Downloads)
                         }
                     }
                 }
@@ -437,28 +484,19 @@ class MainActivity : AppCompatActivity() {
                 }
                 onPauseOrDispose { job.cancel() }
             }
-            val currentDestination by navController.currentDestinationAsState()
             val drawerHandle = remember { mutableStateListOf<Long>() }
             var snackbarFabPadding by remember { mutableStateOf(0.dp) }
             val drawerEnabled = drawerHandle.isNotEmpty()
-            // 根治「侧边抽屉自动莫名弹出」：抽屉状态是全局共享且常驻 NavHost 之上的，
-            // 底部导航切换 / 从画廊详情返回 / 进入任意新目的地时，必须强制复位为关闭态；
-            // 否则上一页打开的抽屉会把 Open 态带到下一个带抽屉的页面，造成切换后自动弹出。
-            // 仅目的地变更触发，用户点击图标 / 边缘滑入打开抽屉时路由不变，不会被误关。
-            LaunchedEffect(currentDestination?.route) {
+            // 路由或主 Tab 切换时强制收起全局共享侧边抽屉并恢复底栏
+            LaunchedEffect(currentDestination?.route, tabsViewModel.currentNavItem) {
                 if (!sideSheetState.isClosed) {
                     sideSheetState.snapTo(SideSheetValue.Closed)
                 }
-                // 切换页面时先恢复底部导航栏；列表页随后会按滚动方向重新同步。
                 BottomBarScrollState.reset()
             }
             val density = LocalDensity.current
             val adaptiveInfo = currentWindowAdaptiveInfoV2()
             val needSignIn by Settings.needSignIn.collectAsState()
-            val launchPage by Settings.launchPage.collectAsState()
-            // Preferences may contain values from an older build or manual backup. Keep an
-            // invalid launch-page value from crashing startup when indexing navItems.
-            val safeLaunchPage = launchPage.coerceIn(0, 3)
 
             val windowLayout = WindowLayout(
                 widthDp = configuration.screenWidthDp,
@@ -471,45 +509,17 @@ class MainActivity : AppCompatActivity() {
                 else -> windowLayout.navigationChrome
             }
             val showNavigationRail = navigationChrome == NavigationChrome.Rail
-            val rawNavConfig by Settings.bottomNavItems.collectAsState()
-            val primaryNavItems = remember(rawNavConfig) {
-                val config = MainNavItems.decode(rawNavConfig)
-                MainNavItems.visible(config).map { item ->
-                    Triple(item.direction, item.titleRes, item.icon())
-                }
-            }
-            val isPrimaryDestination = navItems.any { it.first.route == currentDestination?.route }
+
             // 设置主页面及其所有二级子页面固定展示底部导航栏，不参与滚动隐藏
             val settingsPackage = SettingsScreenDestination.route.substringBeforeLast('.') + "."
             val inSettingsTree = currentDestination?.route?.startsWith(settingsPackage) == true
+            val isSettingsTabActive = isOnMainTabs && tabsViewModel.currentNavItem == MainNavItem.Settings
             val showBottomBar = isPrimaryDestination || inSettingsTree
-            val primaryIndex = if (inSettingsTree) {
-                primaryNavItems.indexOfFirst { it.first.route == SettingsScreenDestination.route }.coerceAtLeast(0)
-            } else {
-                MainNavPolicy.getPrimaryBottomIndex(
-                    currentDestination,
-                    primaryNavItems.map { it.first },
-                )
-            }
-            // 严格按「设置 -> 导航项」的可见顺序判定当前页索引，隐藏项不参与滑动
-            val visibleTabIndex = primaryNavItems.indexOfFirst { it.first.route == currentDestination?.route }
-            fun navigateToTab(direction: Direction) {
-                if (currentDestination?.route == direction.route) {
-                    return
-                }
-                navigator.navigate(direction) {
-                    popUpTo(NavGraphs.root.startRoute) {
-                        saveState = true
-                    }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
 
             LaunchedEffect(needSignIn) {
                 if (!needSignIn && (currentDestination === SignInScreenDestination || currentDestination === WebViewSignInScreenDestination)) {
-                    val target = if (hasNetwork) navItems[safeLaunchPage].first else DownloadsScreenDestination
-                    navigator.navigate(target) {
+                    tabsViewModel.selectTabImmediate(launchNavItem, visibleNavItems)
+                    navigator.navigate(MainTabsScreenDestination) {
                         popUpTo(SignInScreenDestination) { inclusive = true }
                     }
                 }
@@ -552,6 +562,7 @@ class MainActivity : AppCompatActivity() {
                     @Composable
                     fun MainContent() {
                         Box(modifier = Modifier.fillMaxSize()) {
+                            // 底层内容区注册为唯一模糊源：HorizontalPager 左右滑动或跨页平推时底栏实时折射新旧页面背景
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -559,10 +570,10 @@ class MainActivity : AppCompatActivity() {
                             ) {
                                 SharedTransitionLayout {
                                     CompositionLocalProvider(LocalSharedTransitionScope provides this) {
-                                        val start = when {
-                                            needSignIn -> SignInScreenDestination
-                                            hasNetwork -> navItems[safeLaunchPage].first
-                                            else -> DownloadsScreenDestination
+                                        val start = if (needSignIn) {
+                                            SignInScreenDestination
+                                        } else {
+                                            MainTabsScreenDestination
                                         }
                                         DestinationsNavHost(
                                             navGraph = NavGraphs.root,
@@ -574,42 +585,58 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
 
-                            // 进入二级页后路由不再对应一级 Tab，锁定退出瞬间的选中项，
-                            // 避免指示器回退到 primaryIndex 造成隐藏过程中向左偏移/跳动
-                            var lastVisibleTabIndex by remember {
-                                mutableStateOf(
-                                    (if (visibleTabIndex >= 0) visibleTabIndex else primaryIndex)
-                                        .coerceIn(0, (primaryNavItems.size - 1).coerceAtLeast(0)),
+                            val currentTabIndex = when {
+                                isOnMainTabs -> tabsViewModel.selectedTabIndex.coerceIn(
+                                    0,
+                                    (primaryNavItems.size - 1).coerceAtLeast(0),
+                                )
+                                inSettingsTree -> visibleNavItems.indexOf(MainNavItem.Settings).coerceAtLeast(0)
+                                else -> MainNavPolicy.getPrimaryBottomIndex(
+                                    currentDestination,
+                                    primaryNavItems.map { it.first },
                                 )
                             }
-                            LaunchedEffect(visibleTabIndex) {
-                                if (visibleTabIndex >= 0) lastVisibleTabIndex = visibleTabIndex
+                            // 进入二级页后锁定退出瞬间的选中项，避免隐藏滑出过程中指示器向左偏移跳动
+                            var lastVisibleTabIndex by remember {
+                                mutableStateOf(
+                                    currentTabIndex.coerceIn(0, (primaryNavItems.size - 1).coerceAtLeast(0)),
+                                )
                             }
-                            val navSelectedIndex = if (visibleTabIndex >= 0) visibleTabIndex else lastVisibleTabIndex
+                            LaunchedEffect(currentTabIndex, isOnMainTabs, inSettingsTree, isStandalonePrimary) {
+                                if (currentTabIndex >= 0 && (isOnMainTabs || inSettingsTree || isStandalonePrimary)) {
+                                    lastVisibleTabIndex = currentTabIndex
+                                }
+                            }
+                            val navSelectedIndex = if (currentTabIndex >= 0) currentTabIndex else lastVisibleTabIndex
+
                             if (!showNavigationRail) {
                                 AnimatedVisibility(
-                                    // 显示/隐藏统一为垂直滑动 + 渐隐：进入子页面向下滑出淡出，返回时向上滑入淡入
                                     visible = showBottomBar &&
-                                        (!BottomBarScrollState.hidden || inSettingsTree) &&
-                                        !SelectionModeController.active,
+                                        (!BottomBarScrollState.hidden || inSettingsTree || isSettingsTabActive) &&
+                                        !SelectionModeController.active &&
+                                        !SearchExpandController.expanded,
                                     enter = slideInVertically { it } + fadeIn(),
                                     exit = slideOutVertically { it } + fadeOut(),
                                     modifier = Modifier.align(Alignment.BottomCenter),
                                 ) {
-                                    IosLiquidGlassNavigationBar(
-                                        items = primaryNavItems.map { (_, stringId, icon) ->
-                                            NavigationItem(label = stringResource(id = stringId), icon = icon)
-                                        },
-                                        selectedIndex = navSelectedIndex.coerceIn(
-                                            0,
-                                            (primaryNavItems.size - 1).coerceAtLeast(0),
-                                        ),
-                                        onItemClick = { index ->
-                                            primaryNavItems.getOrNull(index)?.let { navigateToTab(it.first) }
-                                        },
-                                        backdrop = contentBackdrop,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                                    CompositionLocalProvider(
+                                        LocalTabGesturePosition provides tabsViewModel.tabGesturePositionState,
+                                    ) {
+                                        IosLiquidGlassNavigationBar(
+                                            items = primaryNavItems.map { (_, stringId, icon) ->
+                                                NavigationItem(label = stringResource(id = stringId), icon = icon)
+                                            },
+                                            selectedIndex = navSelectedIndex.coerceIn(
+                                                0,
+                                                (primaryNavItems.size - 1).coerceAtLeast(0),
+                                            ),
+                                            onItemClick = { index ->
+                                                visibleNavItems.getOrNull(index)?.let(::selectMainNavItem)
+                                            },
+                                            backdrop = contentBackdrop,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -617,7 +644,6 @@ class MainActivity : AppCompatActivity() {
 
                     Row(modifier = Modifier.fillMaxSize()) {
                         if (showNavigationRail) {
-                            // miuix 规范侧栏：state 驱动的可展开形态（收起纯图标/展开带文字标签）
                             val railState = rememberNavigationRailState(NavigationRailValue.Collapsed)
                             NavigationRail(
                                 state = railState,
@@ -631,7 +657,6 @@ class MainActivity : AppCompatActivity() {
                                 defaultWindowInsetsPadding = false,
                                 expandContentDescription = stringResource(id = R.string.nav_rail_expand),
                                 collapseContentDescription = stringResource(id = R.string.nav_rail_collapse),
-                                // 侧栏条目多于可用高度时可滚动，避免条目被裁切后无法点击
                                 scrollState = rememberScrollState(),
                                 header = {
                                     val appIcon = rememberAppIconBitmap()
@@ -660,12 +685,17 @@ class MainActivity : AppCompatActivity() {
                                     }
                                 },
                             ) {
-                                navItems.forEach { (direction, stringId, icon) ->
+                                MainNavItem.entries.forEach { item ->
+                                    val selected = if (isOnMainTabs) {
+                                        tabsViewModel.currentNavItem == item
+                                    } else {
+                                        currentDestination?.route == item.direction.route
+                                    }
                                     NavigationRailItem(
-                                        selected = currentDestination?.route == direction.route,
-                                        onClick = { navigateToTab(direction) },
-                                        icon = icon,
-                                        label = stringResource(id = stringId),
+                                        selected = selected,
+                                        onClick = { selectMainNavItem(item) },
+                                        icon = item.icon(),
+                                        label = stringResource(id = item.titleRes),
                                     )
                                 }
                             }
@@ -705,7 +735,6 @@ class MainActivity : AppCompatActivity() {
                                     val result = snackbarState.showSnackbar(ignoreAlertText, undoText, true)
                                     if (result == SnackbarResult.ActionPerformed) {
                                         Settings.ignoredUpdateVersion.value = previous
-                                        // 撤销忽略后解除本版本的提示压制，否则同版本仍然不会再提示。
                                         UpdatePromptTracker.forget(version)
                                     }
                                 }

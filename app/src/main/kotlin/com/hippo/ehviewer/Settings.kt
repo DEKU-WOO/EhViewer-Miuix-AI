@@ -185,6 +185,11 @@ object Settings : DataStorePreferences(null) {
 
     // Misc
     val languageFilter = intPref("language_filter", -1)
+    val searchFilterCategory = intPref("search_filter_category", com.hippo.ehviewer.client.EhUtils.ALL_CATEGORY)
+    val searchFilterAdvanceBits = intPref("search_filter_advance_bits", 0)
+    val searchFilterMinRating = intPref("search_filter_min_rating", 0)
+    val searchFilterFromPage = intPref("search_filter_from_page", 0)
+    val searchFilterToPage = intPref("search_filter_to_page", 0)
     val downloadSortMode = intPref("download_sort_mode", SortMode.Default.flag)
     val downloadFilterMode = intPref("download_filter_mode", DownloadsFilterMode.Default.flag)
     val hasSignedIn = boolPref("has_signed_in", EhCookieStore.hasSignedIn())

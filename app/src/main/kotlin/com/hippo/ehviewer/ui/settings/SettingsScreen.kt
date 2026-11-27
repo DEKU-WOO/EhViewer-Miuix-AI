@@ -1,24 +1,17 @@
 package com.hippo.ehviewer.ui.settings
 
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
 import com.ehviewer.core.ui.component.blurBackdropSource
@@ -26,7 +19,7 @@ import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Compass
 import com.ehviewer.core.ui.icons.filled.SadPanda
-import com.ehviewer.core.ui.util.readableWidth
+import com.hippo.ehviewer.ui.MainActivity
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.destinations.AboutScreenDestination
 import com.hippo.ehviewer.ui.destinations.AdvancedScreenDestination
@@ -36,6 +29,8 @@ import com.hippo.ehviewer.ui.destinations.BottomNavItemsScreenDestination
 import com.hippo.ehviewer.ui.destinations.DownloadScreenDestination
 import com.hippo.ehviewer.ui.destinations.EhScreenDestination
 import com.hippo.ehviewer.ui.destinations.PrivacyScreenDestination
+import com.hippo.ehviewer.ui.main.MainTabsViewModel
+import com.hippo.ehviewer.ui.main.SettingsTabSession
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -55,6 +50,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Destination<RootGraph>
 @Composable
 fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = Screen(navigator) {
+    val tabsViewModel: MainTabsViewModel = viewModel(contextOf<MainActivity>())
+    SettingsTabContent(navigator = navigator, session = tabsViewModel.settingsSession)
+}
+
+@Composable
+fun SettingsTabContent(
+    navigator: DestinationsNavigator,
+    session: SettingsTabSession,
+) {
     val scrollBehavior = MiuixScrollBehavior()
     val colorScheme = MiuixTheme.colorScheme
     val backdrop = rememberBlurBackdrop()
@@ -78,6 +82,7 @@ fun AnimatedVisibilityScope.SettingsScreen(navigator: DestinationsNavigator) = S
         SettingsScrollColumn(
             scrollBehavior = scrollBehavior,
             contentPadding = paddingValues,
+            scrollState = session.scrollState,
             modifier = Modifier.blurBackdropSource(backdrop),
         ) {
             // 与二级页面首个分组标题保持一致的大标题 → 首张卡片间距

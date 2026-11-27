@@ -167,6 +167,7 @@ object EhUtils {
     val favoriteIconColor = Color(0xffff3040)
 
     fun signOut() {
+        com.hippo.ehviewer.ui.main.TabDiskSnapshotStore.clearAll()
         EhCookieStore.removeAllCookies()
         Settings.displayName.value = null
         Settings.hasSignedIn.value = false
