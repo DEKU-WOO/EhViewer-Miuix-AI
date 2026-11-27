@@ -92,6 +92,7 @@ import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.liquidGlassOverlayMaterial
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
@@ -136,6 +137,7 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.progressiveTextureBlur
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassPopupSizing
 import top.yukonga.miuix.kmp.glass.GlassTransformPopup
 import top.yukonga.miuix.kmp.glass.glassPopupAnchor
@@ -604,7 +606,8 @@ fun SearchBarScreen(
                                             onClick = { showImageSearchPopup = true },
                                             modifier = Modifier.glassPopupAnchor(
                                                 imageSearchAnchor,
-                                                cornerRadius = SearchBarActionSize * 0.5f,
+                                                cornerRadius = SearchBarActionCornerRadius,
+                                                floating = true,
                                             ),
                                         ) {
                                             Icon(
@@ -945,6 +948,7 @@ private val SearchBarTextSize = 13.sp
 
 // 右侧独立正圆按钮的直径与间距：直径 = 缩小后的胶囊高度 H_new，按钮之间/与胶囊之间均 8.dp。
 private val SearchBarActionSize = LiquidGlassCircleButtonSize
+internal val SearchBarActionCornerRadius = SearchBarActionSize * 0.5f
 private val SearchBarActionGap = 8.dp
 
 /** 供 [SearchBarCircleAction] 取实时 backdrop，由搜索栏在胶囊同一层级提供。 */
@@ -953,7 +957,11 @@ internal val LocalSearchBarBackdrop = staticCompositionLocalOf<Backdrop?> { null
 // 顶部磨砂在覆盖整条搜索栏后继续向下延伸缓冲带，渐变终点落在首张卡片上缘下方并完全归零
 private val TopScrimExtraHeight = 8.dp
 
-/** 搜索栏右侧的独立正圆玻璃按钮：直径 = 胶囊高度 H_new，彼此以 8.dp 间隔分离。 */
+/**
+ * 搜索栏右侧的独立正圆玻璃按钮：基于 MIUIX 0.9.5-rc01 原生 [GlassIconButton]，
+ * 挂接 [glassPopupAnchor] 时自动向 [GlassTransformPopup] / [GlassIconDropdownMenu] 供给
+ * 按钮玻璃表面与收起回弹状态，实现从圆钮边缘柔和形变展开/优雅缩回原位。
+ */
 @Composable
 fun SearchBarCircleAction(
     onClick: () -> Unit,
@@ -961,51 +969,32 @@ fun SearchBarCircleAction(
     content: @Composable () -> Unit,
 ) {
     val backdrop = LocalSearchBarBackdrop.current
-    LiquidGlassSurface(
-        shape = CircleShape,
-        elevation = 4.dp,
-        refractionHeight = 14.dp,
-        refractionAmount = 14.dp,
-        highlight = LiquidGlassNavHighlight,
-        containerColor = MiuixTheme.colorScheme.surfaceContainer,
-        modifier = modifier.size(SearchBarActionSize),
+    GlassIconButton(
+        onClick = onClick,
+        modifier = modifier,
+        inheritTopBarMaterial = false,
         backdrop = backdrop,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(role = Role.Button, onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            content()
-        }
-    }
+        material = liquidGlassOverlayMaterial(),
+        size = SearchBarActionSize,
+        stroke = LiquidGlassNavHighlight,
+        content = content,
+    )
 }
 
-/** 收缩态右侧的独立正圆毛玻璃高光按钮：直径与内边距严格锁定为全局统一规格 [SearchBarActionSize]。 */
+/** 收缩态右侧的独立正圆毛玻璃高光按钮：与 [SearchBarCircleAction] 同源 [GlassIconButton]，直径锁定为 [SearchBarActionSize]。 */
 @Composable
 private fun CollapsedCircleAction(
     backdrop: Backdrop?,
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    LiquidGlassSurface(
-        shape = CircleShape,
-        elevation = 4.dp,
-        refractionHeight = 14.dp,
-        refractionAmount = 14.dp,
-        highlight = LiquidGlassNavHighlight,
-        containerColor = MiuixTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.size(SearchBarActionSize),
+    GlassIconButton(
+        onClick = onClick,
+        inheritTopBarMaterial = false,
         backdrop = backdrop,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(role = Role.Button, onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            content()
-        }
-    }
+        material = liquidGlassOverlayMaterial(),
+        size = SearchBarActionSize,
+        stroke = LiquidGlassNavHighlight,
+        content = content,
+    )
 }

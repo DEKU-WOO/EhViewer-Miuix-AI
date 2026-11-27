@@ -425,14 +425,14 @@ fun AnimatedVisibilityScope.GalleryListScreen(
                 // 榜单选择：以图标为锚点形变展开
                 SearchBarCircleAction(
                     onClick = { toplistMenuShow = true },
-                    modifier = Modifier.glassPopupAnchor(toplistMenuAnchor, cornerRadius = 20.dp),
+                    modifier = Modifier.glassPopupAnchor(toplistMenuAnchor, cornerRadius = SearchBarActionCornerRadius, floating = true),
                 ) {
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist), modifier = Modifier.size(SearchBarIconSize))
                 }
             } else {
                 SearchBarCircleAction(
                     onClick = { quickSearchMenuShow = true },
-                    modifier = Modifier.glassPopupAnchor(quickSearchMenuAnchor, cornerRadius = 20.dp),
+                    modifier = Modifier.glassPopupAnchor(quickSearchMenuAnchor, cornerRadius = SearchBarActionCornerRadius, floating = true),
                 ) {
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.quick_search), modifier = Modifier.size(SearchBarIconSize))
                 }
@@ -620,7 +620,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             show = toplistMenuShow,
             onDismissRequest = { toplistMenuShow = false },
             anchor = toplistMenuAnchor,
-            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null) },
+            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
             entries = listOf(toplistEntry),
             backdrop = backdrop,
             visuals = liquidGlassPopupVisuals(),
@@ -631,7 +631,7 @@ fun AnimatedVisibilityScope.GalleryListScreen(
             onDismissRequest = { closeQuickSearchMenu() },
             anchor = quickSearchMenuAnchor,
             backdrop = backdrop,
-            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null) },
+            anchorContent = { Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
             sizing = GlassPopupSizing(minWidth = 240.dp, maxWidth = 320.dp),
             visuals = liquidGlassPopupVisuals(),
         ) {

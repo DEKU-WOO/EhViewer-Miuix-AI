@@ -225,7 +225,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         trailingIcon = {
             SearchBarCircleAction(
                 onClick = { favMenuShow = true },
-                modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = 20.dp),
+                modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = SearchBarActionCornerRadius, floating = true),
             ) {
                 Icon(imageVector = MiuixIcons.Folder, contentDescription = null, modifier = Modifier.size(SearchBarIconSize))
             }
@@ -353,7 +353,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
             show = favMenuShow,
             onDismissRequest = { favMenuShow = false },
             anchor = favMenuAnchor,
-            anchorContent = { Icon(imageVector = MiuixIcons.Folder, contentDescription = null) },
+            anchorContent = { Icon(imageVector = MiuixIcons.Folder, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
             entries = listOf(DropdownEntry(items = favItems)),
             backdrop = backdrop,
             visuals = liquidGlassPopupVisuals(),

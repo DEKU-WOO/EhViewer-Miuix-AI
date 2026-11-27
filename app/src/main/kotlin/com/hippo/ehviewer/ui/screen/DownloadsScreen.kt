@@ -622,7 +622,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                     downloadMenuEntries = listOf(menuEntry)
                     downloadMenuShow = true
                 },
-                modifier = Modifier.glassPopupAnchor(downloadMenuAnchor, cornerRadius = 20.dp),
+                modifier = Modifier.glassPopupAnchor(downloadMenuAnchor, cornerRadius = SearchBarActionCornerRadius, floating = true),
             ) {
                 Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more_actions), modifier = Modifier.size(SearchBarIconSize))
             }
@@ -876,7 +876,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         show = downloadMenuShow,
         onDismissRequest = { downloadMenuShow = false },
         anchor = downloadMenuAnchor,
-        anchorContent = { Icon(imageVector = MiuixIcons.More, contentDescription = null) },
+        anchorContent = { Icon(imageVector = MiuixIcons.More, contentDescription = null, modifier = Modifier.size(SearchBarIconSize)) },
         entries = downloadMenuEntries,
         backdrop = backdrop,
         visuals = liquidGlassPopupVisuals(),
