@@ -240,7 +240,7 @@ internal fun BottomBarIndicatorLayer(
         if (isLiquidGlassMode && combinedBackdrop != null) {
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 4.dp)
+                    .padding(horizontal = NavBarInsidePadding)
                     .graphicsLayer {
                         val progressOffset = (gesturePosition?.value ?: dampedDragAnimation.value) * tabWidthPx
                         translationX = if (isLtr) progressOffset + panelOffsetState.value else -progressOffset + panelOffsetState.value
