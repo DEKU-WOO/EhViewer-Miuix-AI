@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -105,16 +106,16 @@ private fun SelectionCircleButton(
     LiquidGlassSurface(
         shape = CircleShape,
         elevation = 4.dp,
-        refractionHeight = 18.dp,
-        refractionAmount = 18.dp,
+        refractionHeight = 14.dp,
+        refractionAmount = 14.dp,
         highlight = LiquidGlassNavHighlight,
         containerColor = MiuixTheme.colorScheme.surface,
-        modifier = modifier.size(40.dp),
+        modifier = modifier.size(LiquidGlassCircleButtonSize),
         backdrop = backdrop,
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .fillMaxSize()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -126,7 +127,7 @@ private fun SelectionCircleButton(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = tint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(LiquidGlassCircleButtonIconSize),
             )
         }
     }

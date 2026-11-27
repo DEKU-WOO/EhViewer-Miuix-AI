@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.liquid.lens
 import com.ehviewer.core.ui.liquid.vibrancy
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur
@@ -58,11 +59,15 @@ private const val DEFAULT_REFRACTION_RATIO = 0.12f
 private const val DEFAULT_CHROMATIC_ABERRATION = 0.15f
 private const val PRESSED_SCALE = 0.96f
 
-// 外轮廓玻璃高光描边：仅保留干净细腻的发丝级斜向双峰外描边（bevel = 0.dp，彻底移除向内延伸的白色镜面渐变高光）。
+/** 全应用独立圆形毛玻璃高光按钮统一规格：直径严格等于主界面搜索栏高度 H_new，图标统一 17.dp。 */
+val LiquidGlassCircleButtonSize: Dp = SearchBarDefaults.InputFieldMinHeight * 0.75f
+val LiquidGlassCircleButtonIconSize: Dp = 17.dp
+
+// 外轮廓玻璃高光描边：恢复 1.1.dp 自然宽度配合 1.5.dp 柔和抗锯齿过渡，消除圆角弧线锯齿毛边且不产生内部泛白。
 val LiquidGlassHighlightLight = EdgeStroke(
-    width = 0.7.dp,
-    bevel = 0.dp,
-    color = Color.White.copy(alpha = 0.08f),
+    width = 1.1.dp,
+    bevel = 1.5.dp,
+    color = Color.White.copy(alpha = 0.10f),
     // 左上主高光 + 右下副反射，与底部导航栏保持同一斜向光源
     primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.75f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.32f),
@@ -70,31 +75,31 @@ val LiquidGlassHighlightLight = EdgeStroke(
 )
 
 val LiquidGlassHighlightDark = EdgeStroke(
-    width = 0.7.dp,
-    bevel = 0.dp,
-    color = Color.White.copy(alpha = 0.12f),
+    width = 1.1.dp,
+    bevel = 1.5.dp,
+    color = Color.White.copy(alpha = 0.14f),
     primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 1f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.45f, intensity = 0.42f),
     peak = EdgePeak.Dual,
 )
 
 /**
- * 底部悬浮导航胶囊使用的高光规范；搜索栏、多选圆钮等需要与导航栏保持同一轮廓与描边粗细。
+ * 底部悬浮导航胶囊使用的高光规范；搜索栏、独立圆形毛玻璃按钮等与导航栏保持同一顺滑外轮廓描边。
  */
 val LiquidGlassNavHighlight = EdgeStroke(
-    width = 0.7.dp,
-    bevel = 0.dp,
-    color = Color.White.copy(alpha = 0.12f),
+    width = 1.1.dp,
+    bevel = 1.5.dp,
+    color = Color.White.copy(alpha = 0.14f),
     primary = EdgeLightSource(0.25f, 0.3f, -0.05f, intensity = 1.1f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.48f),
     peak = EdgePeak.Dual,
 )
 
-/** 弹层统一使用清晰的斜向双峰外轮廓高光描边，无内部镜面泛白。 */
+/** 弹层统一使用顺滑细腻的斜向双峰外轮廓高光描边。 */
 val LiquidGlassOverlayHighlight = EdgeStroke(
-    width = 0.7.dp,
-    bevel = 0.dp,
-    color = Color.White.copy(alpha = 0.14f),
+    width = 1.1.dp,
+    bevel = 1.5.dp,
+    color = Color.White.copy(alpha = 0.16f),
     primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 1.05f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.46f),
     peak = EdgePeak.Dual,
@@ -334,7 +339,7 @@ fun LiquidGlassIconButton(
     contentDescription: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 44.dp,
+    size: Dp = LiquidGlassCircleButtonSize,
     shape: Shape = CircleShape,
     tint: Color = MiuixTheme.colorScheme.onSurface,
 ) {
@@ -356,7 +361,7 @@ fun LiquidGlassIconButton(
             imageVector = imageVector,
             contentDescription = contentDescription,
             tint = tint,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(LiquidGlassCircleButtonIconSize),
         )
     }
 }

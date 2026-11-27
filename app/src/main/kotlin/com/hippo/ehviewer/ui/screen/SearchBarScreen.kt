@@ -1,6 +1,5 @@
 package com.hippo.ehviewer.ui.screen
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -37,6 +36,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -58,13 +60,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
@@ -74,6 +80,8 @@ import com.ehviewer.core.database.dao.SearchDao
 import com.ehviewer.core.database.model.Search
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
+import com.ehviewer.core.ui.component.LiquidGlassCircleButtonIconSize
+import com.ehviewer.core.ui.component.LiquidGlassCircleButtonSize
 import com.ehviewer.core.ui.component.LiquidGlassNavHighlight
 import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.component.LocalBackdrop
@@ -105,12 +113,10 @@ import kotlinx.coroutines.launch
 import moe.tarsin.navigate
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlurDefaults
@@ -387,77 +393,22 @@ fun SearchBarScreen(
                     // 右侧多图标与左侧放大镜的间距、触控区域完全不变，仅中间自适应输入区吸收变化
                     insideMargin = DpSize(SearchBarHorizontalPadding, 0.dp),
                     inputField = {
-                        val inputFieldModifier = Modifier
-                            .widthIn(max = SearchBarMaxWidth)
-                            .fillMaxWidth()
-
-                        val inputContent = @Composable {
-                            InputField(
-                                query = query,
-                                onQueryChange = { searchFieldState.setTextAndPlaceCursorAtEnd(it) },
-                                onSearch = {
-                                    hideSearchView()
-                                    onApplySearch()
-                                },
-                                expanded = expanded,
-                                onExpandedChange = onExpandedChange,
-                                modifier = if (!expanded) Modifier.fillMaxWidth() else inputFieldModifier,
-                                label = placeholder,
-                                color = if (expanded) MiuixTheme.colorScheme.surfaceContainer else Color.Transparent,
-                                leadingIcon = {
-                                    val iconModifier = Modifier.padding(start = SearchBarIconCenterInset)
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (expanded) {
-                                            IconButton(onClick = { hideSearchView() }, modifier = iconModifier) {
-                                                Icon(MiuixIcons.Back, contentDescription = null)
-                                            }
-                                        } else {
-                                            IconButton(onClick = { onExpandedChange(true) }, modifier = iconModifier) {
-                                                Icon(MiuixIcons.Search, contentDescription = null)
-                                            }
-                                        }
-                                        // 放大镜右缘到文字的间距 = 放大镜到胶囊左边缘的间距
-                                        Spacer(modifier = Modifier.width(SearchBarTextGap))
-                                    }
-                                },
-                                trailingIcon = {
-                                    if (expanded) {
-                                        AnimatedContent(targetState = query.isNotEmpty()) { hasText ->
-                                            val iconModifier = Modifier.padding(end = SearchBarIconCenterInset)
-                                            if (hasText) {
-                                                IconButton(onClick = { searchFieldState.clearText() }, modifier = iconModifier) {
-                                                    Icon(MiuixIcons.Close, contentDescription = null)
-                                                }
-                                            } else {
-                                                IconButton(onClick = { navigate(ImageSearchScreenDestination) }, modifier = iconModifier) {
-                                                    Icon(MiuixIcons.Image, contentDescription = null)
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        // 右侧功能按钮已移出胶囊，这里只留半圆半径的弧内留白
-                                        Spacer(modifier = Modifier.width(SearchBarHalfHeight))
-                                    }
-                                },
-                            )
-                        }
-
-                        // 左侧胶囊 + 8.dp + 右侧独立正圆按钮组，总跨度与原单条长搜索栏一致
+                        // 折叠态与展开态共用同一套高度与顶部呼吸留白，确保两者下边缘垂直基准线完全一致
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (!expanded) {
-                                CompositionLocalProvider(LocalSearchBarBackdrop provides activeBackdrop) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .widthIn(max = SearchBarMaxWidth)
-                                            // 下边缘与原高度完全一致，缩小省出的高度全部留给顶部上方呼吸空间
-                                            .padding(top = SearchBarTopBreathingSpace),
-                                        horizontalArrangement = Arrangement.spacedBy(SearchBarActionGap),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
+                            CompositionLocalProvider(LocalSearchBarBackdrop provides activeBackdrop) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .widthIn(max = SearchBarMaxWidth)
+                                        // 下边缘与原高度完全一致，缩小省出的高度全部留给顶部上方呼吸空间
+                                        .padding(top = SearchBarTopBreathingSpace),
+                                    horizontalArrangement = Arrangement.spacedBy(SearchBarActionGap),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (!expanded) {
                                         LiquidGlassSurface(
                                             shape = CircleShape,
                                             elevation = 4.dp,
@@ -511,22 +462,113 @@ fun SearchBarScreen(
                                             }
                                         }
                                         trailingIcon()
+                                    } else {
+                                        val focusRequester = remember { FocusRequester() }
+                                        LaunchedEffect(Unit) {
+                                            focusRequester.requestFocus()
+                                        }
+                                        // 1) 左侧：独立正圆形毛玻璃高光返回按钮
+                                        SearchBarCircleAction(onClick = { hideSearchView() }) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Back,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SearchBarIconSize),
+                                            )
+                                        }
+                                        // 2) 中间：独立全圆角胶囊搜索输入框（与主界面搜索栏同高同基准）
+                                        LiquidGlassSurface(
+                                            shape = CircleShape,
+                                            elevation = 4.dp,
+                                            refractionHeight = 14.dp,
+                                            refractionAmount = 14.dp,
+                                            highlight = LiquidGlassNavHighlight,
+                                            containerColor = MiuixTheme.colorScheme.surfaceContainer,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(SearchBarHeight),
+                                            backdrop = activeBackdrop,
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(
+                                                        start = SearchBarHalfHeight,
+                                                        end = SearchBarHalfHeight,
+                                                    ),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Icon(
+                                                    imageVector = MiuixIcons.Search,
+                                                    contentDescription = null,
+                                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.size(SearchBarIconSize),
+                                                )
+                                                Spacer(modifier = Modifier.width(SearchBarTextGap))
+                                                Box(
+                                                    modifier = Modifier.weight(1f),
+                                                    contentAlignment = Alignment.CenterStart,
+                                                ) {
+                                                    if (query.isEmpty()) {
+                                                        Text(
+                                                            text = placeholder,
+                                                            style = MiuixTheme.textStyles.body2.copy(fontSize = SearchBarTextSize),
+                                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                        )
+                                                    }
+                                                    BasicTextField(
+                                                        value = query,
+                                                        onValueChange = { searchFieldState.setTextAndPlaceCursorAtEnd(it) },
+                                                        singleLine = true,
+                                                        textStyle = MiuixTheme.textStyles.body2.copy(
+                                                            fontSize = SearchBarTextSize,
+                                                            color = MiuixTheme.colorScheme.onSurface,
+                                                        ),
+                                                        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+                                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                                        keyboardActions = KeyboardActions(
+                                                            onSearch = {
+                                                                hideSearchView()
+                                                                onApplySearch()
+                                                            },
+                                                        ),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .focusRequester(focusRequester),
+                                                    )
+                                                }
+                                                if (query.isNotEmpty()) {
+                                                    Spacer(modifier = Modifier.width(SearchBarTextGap))
+                                                    Icon(
+                                                        imageVector = MiuixIcons.Close,
+                                                        contentDescription = null,
+                                                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                                        modifier = Modifier
+                                                            .size(SearchBarIconSize)
+                                                            .clickable(role = Role.Button) {
+                                                                searchFieldState.clearText()
+                                                            },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        // 3) 右侧：独立正圆形毛玻璃高光「以图搜图」按钮
+                                        SearchBarCircleAction(onClick = { navigate(ImageSearchScreenDestination) }) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Image,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SearchBarIconSize),
+                                            )
+                                        }
                                     }
                                 }
-                            } else {
-                                inputContent()
                             }
                         }
                     },
                     expanded = expanded,
                     onExpandedChange = onExpandedChange,
-                    outsideEndAction = {
-                        TextButton(
-                            text = stringResource(id = android.R.string.cancel),
-                            onClick = { hideSearchView() },
-                            modifier = Modifier.padding(end = 12.dp),
-                        )
-                    },
+                    outsideEndAction = {},
                 ) {
                     activeState.Anchor()
                     LazyColumn(
@@ -659,7 +701,7 @@ fun SearchBarScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (collapseProgress > 0.2f) {
-                            // 收缩态不再让图标裸渲染在文字上，统一包装为独立正圆毛玻璃按钮
+                            // 收缩态不再让图标裸渲染在文字上，统一包装为与主界面严格同径的独立正圆毛玻璃按钮
                             CollapsedCircleAction(
                                 backdrop = activeBackdrop,
                                 onClick = { onExpandedChange(true) },
@@ -667,6 +709,7 @@ fun SearchBarScreen(
                                 Icon(
                                     imageVector = MiuixIcons.Search,
                                     contentDescription = null,
+                                    modifier = Modifier.size(SearchBarIconSize),
                                 )
                             }
                             if (filter != null) {
@@ -677,6 +720,7 @@ fun SearchBarScreen(
                                     Icon(
                                         imageVector = MiuixIcons.More,
                                         contentDescription = stringResource(R.string.more_actions),
+                                        modifier = Modifier.size(SearchBarIconSize),
                                     )
                                 }
                             }
@@ -734,24 +778,21 @@ private val SearchBarHorizontalPadding = 16.dp
 private val SearchBarMaxWidth = 720.dp
 private val FilterDialogCornerRadius = 32.dp
 
-// 展开态 InputField 左右图标内边距（IconButton 宽 40.dp）
-private val SearchBarIconCenterInset = SearchBarDefaults.InputFieldMinHeight * 0.5f - 20.dp
-
 // 顶部搜索栏缩小为原高度的 3/4（H_new = 0.75 * H_old），下边缘固定不动，省出的高度全部留给顶部上方
 private val SearchBarOriginalHeight = SearchBarDefaults.InputFieldMinHeight
-private val SearchBarHeight = SearchBarOriginalHeight * 0.75f
+private val SearchBarHeight = LiquidGlassCircleButtonSize
 private val SearchBarTopBreathingSpace = SearchBarOriginalHeight - SearchBarHeight
 
 // 按缩小后的新高度 H_new 明确搜索栏内部水平间距：左右内边距 = H_new / 2，放大镜与文字之间固定 8.dp
 private val SearchBarHalfHeight = SearchBarHeight * 0.5f
 private val SearchBarTextGap = 8.dp
 
-// 同步等比例缩小搜索栏与右侧圆形按钮内部图标尺寸及搜索框字号
-internal val SearchBarIconSize = 17.dp
+// 同步等比例缩小搜索栏与所有独立圆形按钮内部图标尺寸及搜索框字号
+internal val SearchBarIconSize = LiquidGlassCircleButtonIconSize
 private val SearchBarTextSize = 13.sp
 
 // 右侧独立正圆按钮的直径与间距：直径 = 缩小后的胶囊高度 H_new，按钮之间/与胶囊之间均 8.dp。
-private val SearchBarActionSize = SearchBarHeight
+private val SearchBarActionSize = LiquidGlassCircleButtonSize
 private val SearchBarActionGap = 8.dp
 
 /** 供 [SearchBarCircleAction] 取实时 backdrop，由搜索栏在胶囊同一层级提供。 */
@@ -789,7 +830,7 @@ fun SearchBarCircleAction(
     }
 }
 
-/** 收缩态右侧的独立正圆毛玻璃高光按钮，材质与底部导航栏一致。 */
+/** 收缩态右侧的独立正圆毛玻璃高光按钮：直径与内边距严格锁定为全局统一规格 [SearchBarActionSize]。 */
 @Composable
 private fun CollapsedCircleAction(
     backdrop: Backdrop?,
@@ -799,17 +840,20 @@ private fun CollapsedCircleAction(
     LiquidGlassSurface(
         shape = CircleShape,
         elevation = 4.dp,
-        refractionHeight = 16.dp,
-        refractionAmount = 16.dp,
+        refractionHeight = 14.dp,
+        refractionAmount = 14.dp,
         highlight = LiquidGlassNavHighlight,
         containerColor = MiuixTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(SearchBarActionSize),
         backdrop = backdrop,
     ) {
-        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-                content()
-            }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(role = Role.Button, onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
         }
     }
 }

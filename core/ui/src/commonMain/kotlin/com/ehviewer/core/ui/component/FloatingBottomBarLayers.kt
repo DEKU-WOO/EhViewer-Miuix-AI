@@ -130,7 +130,7 @@ internal fun BottomBarBaseLayer(
                         ).edgeStroke(
                             shape = pillShape,
                             stroke = { baseHighlight.value },
-                            alpha = { 0.75f },
+                            alpha = { 0.85f },
                         )
                     } else if (backdrop != null && isBlurMode) {
                         Modifier.drawBackdrop(
