@@ -71,6 +71,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
@@ -626,9 +627,15 @@ fun SearchBarScreen(
                     outsideEndAction = {},
                 ) {
                     activeState.Anchor()
+                    // 列表页首张画廊卡片上边缘 = statusBars + SearchBarOriginalHeight + 16.dp + gallery_list_margin_v；
+                    // 展开态 LazyColumn 起点位于 statusBars + SearchBarOriginalHeight，SearchFilterPanel 自带 8.dp 顶部内边距，
+                    // 补足差值使首行标签（「全部」「DOUJINSHI」「MANGA」）上边缘与列表首张卡片上边缘严格齐平。
+                    val listMarginV = dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_v)
+                    val safeBottom = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
+                    val expandedContentTopPadding = (16.dp + listMarginV - 8.dp).coerceAtLeast(0.dp)
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom).asPaddingValues(),
+                        contentPadding = PaddingValues(top = expandedContentTopPadding, bottom = safeBottom),
                     ) {
                         if (filter != null) {
                             item(key = "search_filter_header") {
