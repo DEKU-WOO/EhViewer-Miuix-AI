@@ -447,7 +447,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
         backdrop = backdrop,
         hideSearchBar = selectMode,
         trailingIcon = {
-            IconButton(onClick = { gridView = !gridView }) {
+            SearchBarCircleAction(onClick = { gridView = !gridView }) {
                 val icon = if (gridView) MiuixIcons.ListView else MiuixIcons.GridView
                 val desc = stringResource(if (gridView) R.string.settings_eh_list_mode else R.string.settings_eh_list_mode_thumb)
                 Icon(imageVector = icon, contentDescription = desc)
@@ -617,7 +617,7 @@ fun AnimatedVisibilityScope.DownloadsScreen(navigator: DestinationsNavigator) = 
                     ),
                 ),
             )
-            IconButton(
+            SearchBarCircleAction(
                 onClick = {
                     downloadMenuEntries = listOf(menuEntry)
                     downloadMenuShow = true

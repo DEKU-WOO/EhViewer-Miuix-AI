@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -51,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -403,14 +405,18 @@ fun SearchBarScreen(
                                 color = if (expanded) MiuixTheme.colorScheme.surfaceContainer else Color.Transparent,
                                 leadingIcon = {
                                     val iconModifier = Modifier.padding(start = SearchBarIconCenterInset)
-                                    if (expanded) {
-                                        IconButton(onClick = { hideSearchView() }, modifier = iconModifier) {
-                                            Icon(MiuixIcons.Back, contentDescription = null)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (expanded) {
+                                            IconButton(onClick = { hideSearchView() }, modifier = iconModifier) {
+                                                Icon(MiuixIcons.Back, contentDescription = null)
+                                            }
+                                        } else {
+                                            IconButton(onClick = { onExpandedChange(true) }, modifier = iconModifier) {
+                                                Icon(MiuixIcons.Search, contentDescription = null)
+                                            }
                                         }
-                                    } else {
-                                        IconButton(onClick = { onExpandedChange(true) }, modifier = iconModifier) {
-                                            Icon(MiuixIcons.Search, contentDescription = null)
-                                        }
+                                        // 放大镜右缘到文字的间距 = 放大镜到胶囊左边缘的间距
+                                        Spacer(modifier = Modifier.width(SearchBarTextGap))
                                     }
                                 },
                                 trailingIcon = {
@@ -428,39 +434,46 @@ fun SearchBarScreen(
                                             }
                                         }
                                     } else {
-                                        Row(
-                                            modifier = Modifier.padding(end = SearchBarIconCenterInset),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            if (filter != null) {
-                                                IconButton(onClick = { showFilterSheet = true }) {
-                                                    Icon(MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
-                                                }
-                                            }
-                                            trailingIcon()
-                                        }
+                                        // 右侧功能按钮已移出胶囊，这里只留半圆半径的弧内留白
+                                        Spacer(modifier = Modifier.width(SearchBarHalfHeight))
                                     }
                                 },
                             )
                         }
 
-                        // 限宽后把剩余空间全部交给居中容器，平板横竖屏和手机竖屏下左右边距保持对称
+                        // 左侧胶囊 + 8.dp + 右侧独立正圆按钮组，总跨度与原单条长搜索栏一致
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center,
                         ) {
                             if (!expanded) {
-                                LiquidGlassSurface(
-                                    shape = CircleShape,
-                                    elevation = 4.dp,
-                                    refractionHeight = 16.dp,
-                                    refractionAmount = 16.dp,
-                                    highlight = LiquidGlassNavHighlight,
-                                    containerColor = MiuixTheme.colorScheme.surfaceContainer,
-                                    modifier = inputFieldModifier,
-                                    backdrop = activeBackdrop,
-                                ) {
-                                    inputContent()
+                                CompositionLocalProvider(LocalSearchBarBackdrop provides activeBackdrop) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .widthIn(max = SearchBarMaxWidth),
+                                        horizontalArrangement = Arrangement.spacedBy(SearchBarActionGap),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        LiquidGlassSurface(
+                                            shape = CircleShape,
+                                            elevation = 4.dp,
+                                            refractionHeight = 16.dp,
+                                            refractionAmount = 16.dp,
+                                            highlight = LiquidGlassNavHighlight,
+                                            containerColor = MiuixTheme.colorScheme.surfaceContainer,
+                                            modifier = Modifier.weight(1f),
+                                            backdrop = activeBackdrop,
+                                        ) {
+                                            inputContent()
+                                        }
+                                        if (filter != null) {
+                                            SearchBarCircleAction(onClick = { showFilterSheet = true }) {
+                                                Icon(MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
+                                            }
+                                        }
+                                        trailingIcon()
+                                    }
                                 }
                             } else {
                                 inputContent()
@@ -686,8 +699,45 @@ private val FilterDialogCornerRadius = 32.dp
 // 让左右图标几何中心落在胶囊左右半圆圆心（距边缘 H/2）所需的额外内边距（IconButton 宽 40.dp）
 private val SearchBarIconCenterInset = SearchBarDefaults.InputFieldMinHeight * 0.5f - 20.dp
 
+// 胶囊半高 = 两端半圆半径；放大镜、文本与右侧弧内留白都以它为基准。
+private val SearchBarHalfHeight = SearchBarDefaults.InputFieldMinHeight * 0.5f
+
+// 放大镜右边缘到搜索文本的间距，与放大镜到胶囊左边缘的间距保持同一数值。
+private val SearchBarTextGap = SearchBarIconCenterInset
+
+// 右侧独立正圆按钮的直径与间距：直径 = 胶囊高度 H，按钮之间/与胶囊之间均 8.dp。
+private val SearchBarActionSize = SearchBarDefaults.InputFieldMinHeight
+private val SearchBarActionGap = 8.dp
+
+/** 供 [SearchBarCircleAction] 取实时 backdrop，由搜索栏在胶囊同一层级提供。 */
+internal val LocalSearchBarBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+
 // 顶部磨砂在覆盖整条搜索栏后继续向下延伸缓冲带，渐变终点落在首张卡片上缘下方并完全归零
 private val TopScrimExtraHeight = 8.dp
+
+/** 搜索栏右侧的独立正圆玻璃按钮：直径 = 胶囊高度，彼此以 8.dp 间隔分离。 */
+@Composable
+fun SearchBarCircleAction(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val backdrop = LocalSearchBarBackdrop.current
+    LiquidGlassSurface(
+        shape = CircleShape,
+        elevation = 4.dp,
+        refractionHeight = 16.dp,
+        refractionAmount = 16.dp,
+        highlight = LiquidGlassNavHighlight,
+        containerColor = MiuixTheme.colorScheme.surfaceContainer,
+        modifier = modifier.size(SearchBarActionSize),
+        backdrop = backdrop,
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            content()
+        }
+    }
+}
 
 /** 收缩态右侧的独立正圆毛玻璃高光按钮，材质与底部导航栏一致。 */
 @Composable

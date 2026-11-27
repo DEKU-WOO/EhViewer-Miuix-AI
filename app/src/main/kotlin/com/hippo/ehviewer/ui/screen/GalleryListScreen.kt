@@ -423,14 +423,14 @@ fun AnimatedVisibilityScope.GalleryListScreen(
         trailingIcon = {
             if (isTopList) {
                 // 榜单选择：以图标为锚点形变展开
-                IconButton(
+                SearchBarCircleAction(
                     onClick = { toplistMenuShow = true },
                     modifier = Modifier.glassPopupAnchor(toplistMenuAnchor, cornerRadius = 20.dp),
                 ) {
                     Icon(imageVector = EhIcons.Default.Bookmarks, contentDescription = stringResource(id = R.string.toplist))
                 }
             } else {
-                IconButton(
+                SearchBarCircleAction(
                     onClick = { quickSearchMenuShow = true },
                     modifier = Modifier.glassPopupAnchor(quickSearchMenuAnchor, cornerRadius = 20.dp),
                 ) {

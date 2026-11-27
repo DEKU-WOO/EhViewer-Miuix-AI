@@ -157,7 +157,7 @@ fun AnimatedVisibilityScope.HistoryScreen(navigator: DestinationsNavigator) = Sc
         backdrop = backdrop,
         hideSearchBar = selectMode,
         trailingIcon = {
-            IconButton(
+            SearchBarCircleAction(
                 onClick = {
                     launch {
                         awaitConfirmationOrCancel(

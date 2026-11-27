@@ -59,10 +59,12 @@ private const val DEFAULT_REFRACTION_RATIO = 0.12f
 private const val DEFAULT_CHROMATIC_ABERRATION = 0.15f
 private const val PRESSED_SCALE = 0.96f
 
+// 高光全部交给 miuix 原生 EdgeStroke：width 只留发丝级平描边，bevel 负责向玻璃内部柔和延伸，
+// 双光源保持左上主峰 + 右下副峰，不再手写额外渐变涂层。
 val LiquidGlassHighlightLight = EdgeStroke(
-    width = 1.dp,
-    bevel = 3.0.dp,
-    color = Color.White.copy(alpha = 0.10f),
+    width = 0.7.dp,
+    bevel = 6.dp,
+    color = Color.White.copy(alpha = 0.07f),
     // 左上主高光 + 右下副反射，与底部导航栏保持同一斜向光源
     primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 0.75f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.32f),
@@ -70,9 +72,9 @@ val LiquidGlassHighlightLight = EdgeStroke(
 )
 
 val LiquidGlassHighlightDark = EdgeStroke(
-    width = 0.9.dp,
-    bevel = 2.4.dp,
-    color = Color.White.copy(alpha = 0.16f),
+    width = 0.7.dp,
+    bevel = 6.dp,
+    color = Color.White.copy(alpha = 0.1f),
     primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 1f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.45f, intensity = 0.42f),
     peak = EdgePeak.Dual,
@@ -82,9 +84,9 @@ val LiquidGlassHighlightDark = EdgeStroke(
  * 底部悬浮导航胶囊使用的高光规范；搜索栏、多选圆钮等需要与导航栏保持同一轮廓与描边粗细。
  */
 val LiquidGlassNavHighlight = EdgeStroke(
-    width = 1.dp,
-    bevel = 2.2.dp,
-    color = Color.White.copy(alpha = 0.16f),
+    width = 0.7.dp,
+    bevel = 6.dp,
+    color = Color.White.copy(alpha = 0.1f),
     primary = EdgeLightSource(0.25f, 0.3f, -0.05f, intensity = 1.1f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.48f),
     peak = EdgePeak.Dual,
@@ -92,9 +94,9 @@ val LiquidGlassNavHighlight = EdgeStroke(
 
 /** 弹层统一使用更清晰的斜向双峰高光，仍保持细腻而非白色硬边。 */
 val LiquidGlassOverlayHighlight = EdgeStroke(
-    width = 1.dp,
-    bevel = 2.8.dp,
-    color = Color.White.copy(alpha = 0.18f),
+    width = 0.7.dp,
+    bevel = 6.dp,
+    color = Color.White.copy(alpha = 0.12f),
     primary = EdgeLightSource(0.25f, 0.3f, -0.5f, intensity = 1.05f),
     secondary = EdgeLightSource(0.8f, 0.85f, -0.5f, intensity = 0.46f),
     peak = EdgePeak.Dual,
@@ -103,8 +105,8 @@ val LiquidGlassOverlayHighlight = EdgeStroke(
 /**
  * 弹窗/菜单统一的高通透玻璃材质。
  *
- * 最后一层使用 SrcOver 直接控制表面遮罩强度：深色 62%、浅色 68%，剩余部分实时透出
- * 背后的模糊色彩；前两层保留 MIUIX 的明暗与饱和度处理，避免封面过亮时文字失去对比度。
+ * 最后一层使用 SrcOver 直接控制表面遮罩强度：深色 24%、浅色 21%，其余全部实时透出
+ * 背后的模糊色彩；前两层保留 MIUIX 的明暗与饱和度处理，靠 vibrancy + 大半径模糊维持文字对比度。
  */
 @Composable
 fun liquidGlassOverlayMaterial(dialog: Boolean = false): GlassMaterial {
@@ -114,7 +116,7 @@ fun liquidGlassOverlayMaterial(dialog: Boolean = false): GlassMaterial {
     return base.copy(
         blurRadius = 48.dp,
         third = GlassColorLayer(
-            color = surface.copy(alpha = if (isDark) 0.62f else 0.68f),
+            color = surface.copy(alpha = if (isDark) 0.24f else 0.21f),
             mode = GlassColorBlendMode.SrcOver,
         ),
     )
@@ -210,7 +212,7 @@ fun Modifier.liquidGlass(
     shape: Shape = SquircleShape(32.dp),
     blurRadius: Dp = 20.dp,
     tintColor: Color = Color.Unspecified,
-    tintAlpha: Float = 0.45f,
+    tintAlpha: Float = 0.22f,
 ): Modifier {
     // 高光随当前主题取明/暗预设，与 LiquidGlass、LiquidGlassSurface 保持一致
     val highlight = if (MiuixTheme.colorScheme.surface.luminance() < 0.5f) {
@@ -347,7 +349,7 @@ fun LiquidGlassIconButton(
                 backdrop = backdrop,
                 shape = shape,
                 tintColor = surfaceColor,
-                tintAlpha = 0.50f,
+                tintAlpha = 0.22f,
             )
             .clip(shape)
             .clickable(onClick = onClick),

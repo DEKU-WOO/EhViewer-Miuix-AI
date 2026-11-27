@@ -148,8 +148,8 @@ internal fun BottomBarBaseLayer(
                     },
                 )
                 .then(if (isLiquidGlassMode && interactiveHighlight != null) interactiveHighlight.modifier else Modifier)
-                .height(64.dp)
-                .padding(4.dp),
+                .height(NavBarHeight)
+                .padding(horizontal = NavBarInsidePadding, vertical = NavBarVerticalPadding),
             verticalAlignment = Alignment.CenterVertically,
             content = content,
         )
@@ -203,8 +203,8 @@ internal fun BottomBarActiveTabsLayer(
                         onDrawSurface = { drawRect(containerColor) },
                     )
                     .then(interactiveHighlight?.modifier ?: Modifier)
-                    .height(64.dp)
-                    .padding(4.dp),
+                    .height(NavBarHeight)
+                    .padding(horizontal = NavBarInsidePadding, vertical = NavBarVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 content = content,
             )
@@ -286,14 +286,14 @@ internal fun BottomBarIndicatorLayer(
                             alpha = dampedDragAnimation.pressProgress,
                         )
                     }
-                    .height(56.dp)
+                    .height(NavIndicatorHeight)
                     .width(tabWidthDp),
             )
         } else {
             // Blur / None 降级模式滑块
             Box(
                 modifier = Modifier
-                    .padding(horizontal = 4.dp)
+                    .padding(horizontal = NavBarInsidePadding)
                     .graphicsLayer {
                         val progressOffset = (gesturePosition?.value ?: dampedDragAnimation.value) * tabWidthPx
                         translationX = if (isLtr) progressOffset + panelOffsetState.value else -progressOffset + panelOffsetState.value
@@ -303,7 +303,7 @@ internal fun BottomBarIndicatorLayer(
                     .then(dampedDragAnimation.modifier)
                     .clip(pillShape)
                     .background(colors.indicatorColor.copy(alpha = 0.15f), pillShape)
-                    .height(56.dp)
+                    .height(NavIndicatorHeight)
                     .width(tabWidthDp),
                 contentAlignment = Alignment.CenterStart,
             ) {
@@ -312,8 +312,8 @@ internal fun BottomBarIndicatorLayer(
                         modifier = Modifier
                             .clearAndSetSemantics {}
                             .wrapContentWidth(align = Alignment.Start, unbounded = true)
-                            .requiredWidth(with(density) { (totalWidthPx - 8.dp.toPx()).toDp() })
-                            .height(56.dp)
+                            .requiredWidth(with(density) { (totalWidthPx - NavBarInsidePadding.toPx() * 2).toDp() })
+                            .height(NavIndicatorHeight)
                             .graphicsLayer {
                                 val progressOffset = (gesturePosition?.value ?: dampedDragAnimation.value) * tabWidthPx
                                 translationX = if (isLtr) -progressOffset else progressOffset

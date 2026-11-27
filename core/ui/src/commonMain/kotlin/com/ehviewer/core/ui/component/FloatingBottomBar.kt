@@ -32,6 +32,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -81,7 +82,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 // 单个 tab 的理想宽度（dp）：胶囊总宽 = tabsCount × 该值 + 左右各 4dp 内边距。
 // 可用宽度不足时整体等比压缩，而不是以固定最小宽度始终撑满。
-private const val FLOATING_BAR_ITEM_WIDTH_DP = 58
+private const val FLOATING_BAR_ITEM_WIDTH_DP = 62
+
+/** 悬浮导航胶囊高度：压到 56.dp，两端半圆半径 28.dp，8 项全开时高亮圈仍保持舒展的胶囊比例。 */
+internal val NavBarHeight = 56.dp
+
+/** 选中高亮滑块高度 = 胶囊高度 − 上下各 4.dp 内边距。 */
+internal val NavIndicatorHeight = 48.dp
+
+/** 胶囊内部水平留白：让首尾图标尽量贴近左右半圆圆心（8 项全开时约为 R）。 */
+internal val NavBarInsidePadding = 8.dp
+
+/** 胶囊内部上下留白：与选中高亮滑块的缩进保持一致。 */
+internal val NavBarVerticalPadding = 4.dp
 
 val LocalTabGesturePosition = staticCompositionLocalOf<State<Float?>?> { null }
 
@@ -210,7 +223,12 @@ fun FloatingBottomBar(
     val gesturePosition = LocalTabGesturePosition.current
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass && backdrop != null && isRuntimeShaderSupported()
     val isBlurMode = mode == FloatingBottomBarMode.Blur && backdrop != null
-    val containerColor = if (isLiquidGlassMode) colors.containerColor.copy(alpha = 0.4f) else colors.containerColor
+    val containerColor = if (isLiquidGlassMode) {
+        // 高通透：深色 24% / 浅色 20%，其余权重交给后台实时模糊与 vibrancy
+        colors.containerColor.copy(alpha = if (isDark) 0.24f else 0.20f)
+    } else {
+        colors.containerColor
+    }
 
     val tabsBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
@@ -245,6 +263,12 @@ fun FloatingBottomBar(
     val touchSlopPx = with(density) { 8.dp.toPx() }
     var currentDragValue by remember { mutableFloatStateOf(selectedIndex().toFloat()) }
 
+    // 拖动刻度反馈：高亮胶囊中心每进入一个图标区域触发一次原生短震
+    val hapticFeedback = LocalHapticFeedback.current
+    var lastTickIndex by remember { mutableIntStateOf(selectedIndex()) }
+    val iconHalfWidthPx = with(density) { 12.dp.toPx() }
+    val navPaddingPx = with(density) { NavBarInsidePadding.toPx() }
+
     val dampedDragAnimation = remember(animationScope, tabsCount, density, isLtr) {
         DampedDragAnimation(
             animationScope = animationScope,
@@ -259,7 +283,7 @@ fun FloatingBottomBar(
 
                 val currentValue = anim.value
                 val indicatorX = currentValue * tabWidthPx
-                val padding = with(density) { 4.dp.toPx() }
+                val padding = navPaddingPx
                 val globalTouchX = if (isLtr) {
                     padding + indicatorX + offset.x
                 } else {
@@ -270,6 +294,7 @@ fun FloatingBottomBar(
             onDragStarted = {
                 totalDragPx = 0f
                 currentDragValue = value
+                lastTickIndex = value.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
             },
             onDragStopped = {
                 val dropIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
@@ -280,7 +305,14 @@ fun FloatingBottomBar(
                 animationScope.launch {
                     offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
                 }
-                if (isSwitched || isTapOnSameTab) {
+                if (isSwitched) {
+                    // 落点与拖动中最后一次刻度震动一致时不重复叠加震动
+                    if (dropIndex != lastTickIndex) {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        lastTickIndex = dropIndex
+                    }
+                    updatedOnSelected(dropIndex)
+                } else if (isTapOnSameTab) {
                     updatedOnSelected(dropIndex)
                 }
             },
@@ -292,6 +324,28 @@ fun FloatingBottomBar(
                     updateValue(currentDragValue)
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
+                    }
+                    // 胶囊中心横坐标：向右拖越过图标左边缘（即进入图标区域）时触发，
+                    // 向左拖则越过右边缘进入，天然满足「只震一次、离开不重复、反向再触发」
+                    val pillCenterX = if (isLtr) {
+                        navPaddingPx + (currentDragValue + 0.5f) * tabWidthPx
+                    } else {
+                        totalWidthPx - navPaddingPx - (currentDragValue + 0.5f) * tabWidthPx
+                    }
+                    val hitIndex = (0 until tabsCount).indexOfFirst { index ->
+                        val centerX = if (isLtr) {
+                            navPaddingPx + (index + 0.5f) * tabWidthPx
+                        } else {
+                            totalWidthPx - navPaddingPx - (index + 0.5f) * tabWidthPx
+                        }
+                        abs(pillCenterX - centerX) <= iconHalfWidthPx
+                    }
+                    if (hitIndex == -1) {
+                        // 落在图标间隙：允许下一次重新进入时再次触发
+                        lastTickIndex = -1
+                    } else if (hitIndex != lastTickIndex) {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        lastTickIndex = hitIndex
                     }
                 }
             },
@@ -372,7 +426,7 @@ fun FloatingBottomBar(
             interactiveHighlight = interactiveHighlight,
             onSizeChanged = { coords ->
                 totalWidthPx = coords.width.toFloat()
-                val contentWidthPx = totalWidthPx - with(density) { 8.dp.toPx() }
+                val contentWidthPx = totalWidthPx - with(density) { NavBarInsidePadding.toPx() * 2 }
                 tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
             },
             content = content,
@@ -437,7 +491,7 @@ fun IosLiquidGlassNavigationBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = bottomPaddingValue, start = 24.dp, end = 24.dp),
+            .padding(bottom = bottomPaddingValue, start = 10.dp, end = 10.dp),
         contentAlignment = Alignment.BottomCenter,
     ) {
         BoxWithConstraints(contentAlignment = Alignment.Center) {
@@ -447,7 +501,7 @@ fun IosLiquidGlassNavigationBar(
             FloatingBottomBar(
                 selectedIndex = { selectedIndex },
                 onSelected = { index ->
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    // 震动由点击处或拖动刻度负责，这里不再叠加，避免松手时双震
                     onItemClickUpdated(index)
                 },
                 backdrop = backdrop,

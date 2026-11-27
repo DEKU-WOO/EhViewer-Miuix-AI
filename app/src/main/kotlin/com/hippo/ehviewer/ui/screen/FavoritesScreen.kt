@@ -222,7 +222,7 @@ fun AnimatedVisibilityScope.FavouritesScreen(navigator: DestinationsNavigator, v
         backdrop = backdrop,
         hideSearchBar = selectMode,
         trailingIcon = {
-            IconButton(
+            SearchBarCircleAction(
                 onClick = { favMenuShow = true },
                 modifier = Modifier.glassPopupAnchor(favMenuAnchor, cornerRadius = 20.dp),
             ) {
