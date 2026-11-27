@@ -29,7 +29,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -355,7 +355,7 @@ fun SearchBarScreen(
     CompositionLocalProvider(LocalBackdrop provides activeBackdrop) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val density = LocalDensity.current
-            val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
             val subHeaderHeight = if (subHeader != null) 40.dp else 0.dp
             val compactBarHeight = 48.dp
             val fullBarHeight = SearchBarDefaults.InputFieldMinHeight + 16.dp + subHeaderHeight
@@ -423,7 +423,7 @@ fun SearchBarScreen(
                             }
                         }
                         Column {
-                            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBarsIgnoringVisibility))
                             // Placeholder, fill immutable SearchBar padding
                             Spacer(modifier = Modifier.height(fullBarHeight))
                         }
@@ -470,7 +470,7 @@ fun SearchBarScreen(
                 SearchBar(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
                         .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
                         .thenIf(!expanded) {
                             offset { IntOffset(0, searchBarOffsetY()) }
@@ -748,7 +748,7 @@ fun SearchBarScreen(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
                         // 横屏时缺口/导航栏 insets 在左右，分类条必须与搜索栏用同一组水平 insets
                         .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
                         .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
@@ -774,7 +774,7 @@ fun SearchBarScreen(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
                         .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
                         .fillMaxWidth()
                         .padding(horizontal = SearchBarHorizontalPadding),

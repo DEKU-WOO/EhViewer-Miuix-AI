@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -513,7 +513,7 @@ private fun GalleryDetailTopAppBar(
             .background(color)
             .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
             .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
-            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top))
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
             .clipToBounds()
             .pointerInput(Unit) {
                 detectTapGestures { /* Consume click */ }

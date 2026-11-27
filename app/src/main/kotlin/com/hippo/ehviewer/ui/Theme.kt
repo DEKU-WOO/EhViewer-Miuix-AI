@@ -5,6 +5,14 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,8 +23,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import com.ehviewer.core.ui.util.ProvideVectorPainterCache
+import com.ehviewer.core.ui.util.SHARED_THUMB_DURATION_MS
+import com.ehviewer.core.ui.util.SharedThumbEasing
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
+import com.hippo.ehviewer.ui.destinations.GalleryDetailScreenDestination
 import com.hippo.ehviewer.ui.theme.EhTheme
 import com.hippo.ehviewer.ui.theme.resolveUseDarkTheme
 import com.hippo.ehviewer.ui.tools.DialogState
@@ -44,15 +55,63 @@ inline fun ComponentActivity.setMiuixContent(crossinline content: @Composable Di
 
 private typealias Ty = AnimatedContentTransitionScope<NavBackStackEntry>
 
+private val DetailTransitionFloatSpec = tween<Float>(
+    durationMillis = SHARED_THUMB_DURATION_MS,
+    easing = SharedThumbEasing,
+)
+
 @Composable
 fun rememberEhNavAnim(): NavHostAnimatedDestinationStyle {
     val slideDistance = rememberSlideDistance()
     return remember(slideDistance) {
         object : NavHostAnimatedDestinationStyle() {
-            override val enterTransition: Ty.() -> EnterTransition = { materialSharedAxisXIn(true, slideDistance) }
-            override val exitTransition: Ty.() -> ExitTransition = { materialSharedAxisXOut(true, slideDistance) }
-            override val popEnterTransition: Ty.() -> EnterTransition = { materialSharedAxisXIn(false, slideDistance) }
-            override val popExitTransition: Ty.() -> ExitTransition = { materialSharedAxisXOut(false, slideDistance) }
+            override val enterTransition: Ty.() -> EnterTransition = {
+                if (targetState.destination.route == GalleryDetailScreenDestination.route) {
+                    fadeIn(animationSpec = DetailTransitionFloatSpec) +
+                        scaleIn(initialScale = 0.94f, animationSpec = DetailTransitionFloatSpec) +
+                        slideInHorizontally(
+                            animationSpec = tween(
+                                durationMillis = SHARED_THUMB_DURATION_MS,
+                                easing = SharedThumbEasing,
+                            ),
+                        ) { (it * 0.06f).toInt() }
+                } else {
+                    materialSharedAxisXIn(true, slideDistance)
+                }
+            }
+
+            override val exitTransition: Ty.() -> ExitTransition = {
+                if (targetState.destination.route == GalleryDetailScreenDestination.route) {
+                    fadeOut(animationSpec = DetailTransitionFloatSpec) +
+                        scaleOut(targetScale = 0.96f, animationSpec = DetailTransitionFloatSpec)
+                } else {
+                    materialSharedAxisXOut(true, slideDistance)
+                }
+            }
+
+            override val popEnterTransition: Ty.() -> EnterTransition = {
+                if (initialState.destination.route == GalleryDetailScreenDestination.route) {
+                    fadeIn(animationSpec = DetailTransitionFloatSpec) +
+                        scaleIn(initialScale = 0.96f, animationSpec = DetailTransitionFloatSpec)
+                } else {
+                    materialSharedAxisXIn(false, slideDistance)
+                }
+            }
+
+            override val popExitTransition: Ty.() -> ExitTransition = {
+                if (initialState.destination.route == GalleryDetailScreenDestination.route) {
+                    fadeOut(animationSpec = DetailTransitionFloatSpec) +
+                        scaleOut(targetScale = 0.94f, animationSpec = DetailTransitionFloatSpec) +
+                        slideOutHorizontally(
+                            animationSpec = tween(
+                                durationMillis = SHARED_THUMB_DURATION_MS,
+                                easing = SharedThumbEasing,
+                            ),
+                        ) { (it * 0.06f).toInt() }
+                } else {
+                    materialSharedAxisXOut(false, slideDistance)
+                }
+            }
         }
     }
 }

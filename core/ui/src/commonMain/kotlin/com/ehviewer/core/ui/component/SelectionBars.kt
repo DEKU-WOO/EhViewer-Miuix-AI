@@ -21,7 +21,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,8 +61,13 @@ fun SelectionTopBar(
     modifier: Modifier = Modifier,
     backdrop: Backdrop? = null,
 ) {
+    var lockedStatusBarTop by remember { mutableStateOf(0.dp) }
+    val currentStatusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    if (currentStatusBarTop > 0.dp) {
+        lockedStatusBarTop = currentStatusBarTop
+    }
     Column(modifier = modifier.fillMaxWidth()) {
-        Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Spacer(modifier = Modifier.height(maxOf(currentStatusBarTop, lockedStatusBarTop)))
         Box(
             modifier = Modifier
                 .fillMaxWidth()

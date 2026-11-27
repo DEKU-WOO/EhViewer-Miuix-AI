@@ -1,9 +1,12 @@
 package com.ehviewer.core.ui.util
 
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
@@ -19,6 +22,21 @@ import androidx.compose.ui.graphics.Shape
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.fetchAndIncrement
 
+val SharedThumbEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+const val SHARED_THUMB_DURATION_MS = 400
+
+private val DefaultSharedThumbBoundsTransform = BoundsTransform { _, _ ->
+    tween(durationMillis = SHARED_THUMB_DURATION_MS, easing = SharedThumbEasing)
+}
+
+private val DefaultSharedThumbEnter: EnterTransition = fadeIn(
+    animationSpec = tween(durationMillis = SHARED_THUMB_DURATION_MS, easing = SharedThumbEasing),
+)
+
+private val DefaultSharedThumbExit: ExitTransition = fadeOut(
+    animationSpec = tween(durationMillis = SHARED_THUMB_DURATION_MS, easing = SharedThumbEasing),
+)
+
 val NoopTransitionsVisibilityScope = TransitionsVisibilityScope(emptySet())
 
 @JvmInline
@@ -27,27 +45,33 @@ value class TransitionsVisibilityScope(val scopes: Set<AnimatedVisibilityScope>)
 
 @Composable
 context(visScope: TransitionsVisibilityScope)
-inline fun <T> togetherWith(scope: AnimatedVisibilityScope, block: @Composable TransitionsVisibilityScope.() -> T) = block(remember(visScope.scopes, scope) { TransitionsVisibilityScope(visScope.scopes + scope) })
+inline fun <T> togetherWith(scope: AnimatedVisibilityScope, block: @Composable TransitionsVisibilityScope.() -> T) =
+    block(remember(visScope.scopes, scope) { TransitionsVisibilityScope(visScope.scopes + scope) })
 
 @Composable
 context(shareScope: SharedTransitionScope, visScope: TransitionsVisibilityScope, generator: SETNodeGenerator)
 fun Modifier.sharedBounds(
     key: String,
-    enter: EnterTransition = fadeIn(),
-    exit: ExitTransition = fadeOut(),
-) = remember(key) { generator.summon(key) }.let { node ->
-    DisposableEffect(key) {
+    enter: EnterTransition = DefaultSharedThumbEnter,
+    exit: ExitTransition = DefaultSharedThumbExit,
+    boundsTransform: BoundsTransform = DefaultSharedThumbBoundsTransform,
+): Modifier {
+    // 门控离屏预组合 Tab，杜绝 HorizontalPager 相邻离屏页同 gid 卡片抢占 SETNode 或注册重复 sharedBounds key
+    if (!LocalIsPageVisible.current) return this
+    val node = remember(key) { generator.summon(key) }
+    DisposableEffect(key, node) {
         onDispose {
             generator.dispose(node)
         }
     }
-    visScope.scopes.fold(this) { modifier, scope ->
+    return visScope.scopes.fold(this) { modifier, scope ->
         with(shareScope) {
             modifier.sharedBounds(
-                rememberSharedContentState("${node.syntheticKey} + ${scope.transition.label}"),
-                scope,
-                enter,
-                exit,
+                sharedContentState = rememberSharedContentState("${node.syntheticKey} + ${scope.transition.label}"),
+                animatedVisibilityScope = scope,
+                enter = enter,
+                exit = exit,
+                boundsTransform = boundsTransform,
             )
         }
     }
@@ -82,7 +106,9 @@ class SETNodeGenerator {
     private val opposites = mutableListOf<SETNodeGenerator>()
 
     fun summon(contentKey: String): SETNode {
-        val node = opposites.firstNotNullOfOrNull { it.tracker[contentKey] } ?: SETNode(contentKey = contentKey, uniqueID = "${atomicIncId.fetchAndIncrement()}")
+        val node = opposites.firstNotNullOfOrNull { it.tracker[contentKey] }
+            ?: tracker[contentKey]
+            ?: SETNode(contentKey = contentKey, uniqueID = "${atomicIncId.fetchAndIncrement()}")
         tracker[contentKey] = node
         return node
     }

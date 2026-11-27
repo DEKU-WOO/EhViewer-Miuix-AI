@@ -110,7 +110,9 @@ fun DownloadCard(
         val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
         val downloadState by DownloadManager.collectDownloadState(info.gid)
         val isFinish = downloadState == DownloadInfo.STATE_FINISH
-        val isActive = downloadState == DownloadInfo.STATE_DOWNLOAD || downloadState == DownloadInfo.STATE_WAIT
+        val isDownloading = downloadState == DownloadInfo.STATE_DOWNLOAD
+        val isWaiting = downloadState == DownloadInfo.STATE_WAIT
+        val isActive = isDownloading || isWaiting
 
         var total by remember(info.gid) { mutableIntStateOf(info.total) }
         var finished by remember(info.gid) { mutableIntStateOf(info.finished) }
@@ -207,18 +209,18 @@ fun DownloadCard(
                             verticalAlignment = Alignment.Bottom,
                         ) {
                             Text(
-                                text = if (isActive) {
-                                    FileUtils.humanReadableByteCount(speed.coerceAtLeast(0)) + "/s"
-                                } else {
-                                    "已暂停"
+                                text = when {
+                                    isDownloading -> FileUtils.humanReadableByteCount(speed.coerceAtLeast(0)) + "/s"
+                                    isWaiting -> "排队中"
+                                    else -> "已暂停"
                                 },
                                 maxLines = 1,
                                 softWrap = false,
                                 style = metaStyle.copy(
-                                    fontSize = if (isActive) 10.5.sp else 10.sp,
+                                    fontSize = if (isDownloading) 10.5.sp else 10.sp,
                                     lineHeight = 13.sp,
                                 ),
-                                color = if (isActive) {
+                                color = if (isDownloading) {
                                     MiuixTheme.colorScheme.onSurfaceVariantSummary
                                 } else {
                                     MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.72f)

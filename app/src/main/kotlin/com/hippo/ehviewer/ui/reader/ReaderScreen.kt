@@ -2,6 +2,7 @@ package com.hippo.ehviewer.ui.reader
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -134,6 +135,7 @@ private fun Background(
 @Destination<RootGraph>
 @Composable
 fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: DestinationsNavigator) = Screen(navigator) {
+    val isExiting = transition.targetState == EnterExitState.PostExit
     val readerBackground by collectReaderBackgroundAsState()
     val uiController = rememberSystemUiController()
     DisposableEffect(uiController) {
@@ -144,6 +146,12 @@ fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: Dest
         }
     }
 
+    LaunchedEffect(isExiting) {
+        if (isExiting) {
+            uiController.isSystemBarsVisible = true
+            uiController.showTransientSystemBarsBySwipe = false
+        }
+    }
     var retryTrigger by remember { mutableIntStateOf(0) }
     Await(
         block = asyncInVM(args to retryTrigger) { alive ->
@@ -199,7 +207,7 @@ fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: Dest
                 val loader = result.value
                 val info = (args as? ReaderScreenArgs.Gallery)?.info
                 key(loader) {
-                    ReaderScreen(loader, info)
+                    ReaderScreen(loader, info, isExiting)
                 }
             }
         }
@@ -208,7 +216,7 @@ fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: Dest
 
 @Composable
 context(activity: MainActivity, _: SnackbarHostState, _: DialogState, _: CoroutineScope, nav: DestinationsNavigator)
-fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
+fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Boolean = false) {
     LaunchedEffect(Unit) {
         val orientation = activity.requestedOrientation
         Settings.orientationMode.valueFlow()
@@ -267,10 +275,15 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
             }
             syncState.Sync(isWebtoon) { appbarVisible = false }
             val readerBackground by collectReaderBackgroundAsState()
-            LaunchedEffect(readerBackground) {
-                snapshotFlow { appbarVisible }.collect {
-                    uiController.isSystemBarsVisible = it || !fullscreen
-                    uiController.statusBarDarkContentEnabled = readerBackground.isLight
+            LaunchedEffect(readerBackground, isExiting) {
+                if (isExiting) {
+                    uiController.isSystemBarsVisible = true
+                    uiController.showTransientSystemBarsBySwipe = false
+                } else {
+                    snapshotFlow { appbarVisible }.collect {
+                        uiController.isSystemBarsVisible = it || !fullscreen
+                        uiController.statusBarDarkContentEnabled = readerBackground.isLight
+                    }
                 }
             }
             var showNavigationOverlay by remember {

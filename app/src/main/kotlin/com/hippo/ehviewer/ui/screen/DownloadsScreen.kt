@@ -32,7 +32,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.items
@@ -662,7 +662,7 @@ fun DownloadsTabContent(
         val marginV = dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_v)
         // 从隐藏状态栏的全屏阅读器返回时，Scaffold 首帧可能沿用旧 inset 导致顶部内边距变矮；
         // 这里按「状态栏 + 搜索栏 + 8.dp」兜底，保证首张卡片始终在搜索栏下方
-        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
         val expectedTop = statusBarTop + SearchBarDefaults.InputFieldMinHeight + 16.dp + 8.dp
         val layoutDirection = LocalLayoutDirection.current
         val realPadding = PaddingValues(
