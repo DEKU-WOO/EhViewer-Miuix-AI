@@ -2,7 +2,10 @@ package com.hippo.ehviewer.ui.main
 
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -13,8 +16,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,7 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,14 +52,19 @@ import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.util.FileUtils
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Pause
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+private val DownloadActionBadgeSize = 32.dp
+private val DownloadActionIconSize = 16.dp
+private val DownloadProgressBarHeight = 4.dp
+private val DownloadFinishBadgeBg = Color(0xFF34C759).copy(alpha = 0.15f)
+private val DownloadFinishIconLight = Color(0xFF28A745)
+private val DownloadFinishIconDark = Color(0xFF34C759)
 
 @Composable
 context(_: SharedTransitionScope, _: TransitionsVisibilityScope)
@@ -95,9 +107,22 @@ fun DownloadCard(
                 thumb(info)
             }
         }
-        val stateFailed = stringResource(R.string.download_state_failed)
-        val stateFailed2 = stringResource(R.string.download_state_failed_2, info.legacy)
+        val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
         val downloadState by DownloadManager.collectDownloadState(info.gid)
+        val isFinish = downloadState == DownloadInfo.STATE_FINISH
+        val isActive = downloadState == DownloadInfo.STATE_DOWNLOAD || downloadState == DownloadInfo.STATE_WAIT
+
+        var total by remember(info.gid) { mutableIntStateOf(info.total) }
+        var finished by remember(info.gid) { mutableIntStateOf(info.finished) }
+        var speed by remember(info.gid) { mutableLongStateOf(info.speed) }
+        if (isActive) {
+            DownloadManager.updatedDownloadInfo(info) {
+                total = this.total
+                finished = this.finished
+                speed = this.speed
+            }
+        }
+
         Column(modifier = Modifier.fillMaxHeight().padding(start = 8.dp, top = 4.dp, end = 6.dp, bottom = 4.dp)) {
             // 与在线画廊卡片保持同一紧凑标题规范（14.sp / 18.sp 行高 + 最多 2 行）
             GalleryTitleText(
@@ -105,29 +130,24 @@ fun DownloadCard(
                 maxLines = 2,
                 style = galleryListCardTitleStyle(),
             )
-            // 标题区与下方元信息区保持清晰分层间距（明显大于标题内部行距）
+            // 标题区与下方元信息区保持清晰分层间距
             Spacer(modifier = Modifier.height(6.dp))
             Spacer(modifier = Modifier.weight(1f))
             val metaStyle = MiuixTheme.textStyles.footnote1.copy(fontSize = 11.5.sp, lineHeight = 14.sp)
-            if (downloadState != DownloadInfo.STATE_DOWNLOAD) {
-                val stateText = when (downloadState) {
-                    DownloadInfo.STATE_NONE -> stringResource(R.string.download_state_none)
-                    DownloadInfo.STATE_WAIT -> stringResource(R.string.download_state_wait)
-                    DownloadInfo.STATE_FAILED -> if (info.legacy <= 0) stateFailed else stateFailed2
-                    DownloadInfo.STATE_FINISH -> {
-                        if (showProgress) {
-                            val readProgress by remember(info.gid) { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0)
-                            if (readProgress > 0) "${readProgress + 1}/${info.pages}P" else "${info.pages}P"
-                        } else {
-                            "${info.pages}P"
-                        }
-                    }
-                    else -> null // The item has been removed and this will be disposed soon
+
+            if (isFinish) {
+                val pagesText = if (showProgress) {
+                    val readProgress by remember(info.gid) { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0)
+                    if (readProgress > 0) "${readProgress + 1}/${info.pages}P" else "${info.pages}P"
+                } else {
+                    "${info.pages}P"
                 }
-                Row {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         text = info.uploader.orEmpty(),
-                        // 单独占满剩余宽度；不要再叠加 Spacer(weight(1f))，否则上传者名会被提前挤成省略号。
                         modifier = Modifier.alignByBaseline().weight(1f).alpha(if (info.disowned) 0.5f else 1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -135,66 +155,177 @@ fun DownloadCard(
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                     Text(
-                        text = stateText.orEmpty(),
+                        text = pagesText,
                         modifier = Modifier.alignByBaseline(),
+                        maxLines = 1,
+                        softWrap = false,
                         style = metaStyle,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
             } else {
-                var total by remember { mutableIntStateOf(info.total) }
-                var finished by remember { mutableIntStateOf(info.finished) }
-                var speed by remember { mutableLongStateOf(info.speed) }
-                DownloadManager.updatedDownloadInfo(info) {
-                    total = this.total
-                    finished = this.finished
-                    speed = this.speed
-                }
-                if (total <= 0 || finished < 0) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                // 下载中与暂停/未完成态共用同一套半幅进度条布局：
+                // 左侧保留上传者名，右侧 54% 区域承载「速度/已暂停 + 进度页数」与半幅圆角进度条，右缘与已完成页数严格对齐
+                val displayTotal = if (total > 0) total else info.pages.coerceAtLeast(0)
+                val displayFinished = finished.coerceIn(0, displayTotal.coerceAtLeast(0))
+                val progressFraction = if (displayTotal > 0) {
+                    (displayFinished.toFloat() / displayTotal.toFloat()).coerceIn(0f, 1f)
                 } else {
-                    Row {
-                        Text(text = "$finished/${total}P", style = metaStyle)
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text(text = FileUtils.humanReadableByteCount(speed.coerceAtLeast(0)) + "/s", style = metaStyle)
-                    }
-                    LinearProgressIndicator(
-                        progress = (finished.toFloat() / total.toFloat()).coerceIn(0f, 1f),
-                        modifier = Modifier.fillMaxWidth(),
+                    0f
+                }
+                val trackColor = if (isActive) {
+                    MiuixTheme.colorScheme.primary.copy(alpha = 0.18f)
+                } else {
+                    MiuixTheme.colorScheme.onSurface.copy(alpha = 0.14f)
+                }
+                val fillColor = if (isActive) {
+                    MiuixTheme.colorScheme.primary
+                } else {
+                    MiuixTheme.colorScheme.onSurface.copy(alpha = 0.48f)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Text(
+                        text = info.uploader.orEmpty(),
+                        modifier = Modifier
+                            .weight(0.46f)
+                            .padding(end = 8.dp)
+                            .alpha(if (info.disowned) 0.5f else 1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = metaStyle,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
+                    Column(
+                        modifier = Modifier.weight(0.54f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            Text(
+                                text = if (isActive) {
+                                    FileUtils.humanReadableByteCount(speed.coerceAtLeast(0)) + "/s"
+                                } else {
+                                    "已暂停"
+                                },
+                                maxLines = 1,
+                                softWrap = false,
+                                style = metaStyle.copy(
+                                    fontSize = if (isActive) 10.5.sp else 10.sp,
+                                    lineHeight = 13.sp,
+                                ),
+                                color = if (isActive) {
+                                    MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                } else {
+                                    MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.72f)
+                                },
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Text(
+                                text = "$displayFinished/${displayTotal}P",
+                                maxLines = 1,
+                                softWrap = false,
+                                style = metaStyle,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(DownloadProgressBarHeight)
+                                .clip(CircleShape)
+                                .background(trackColor),
+                        ) {
+                            if (progressFraction > 0f) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(progressFraction)
+                                        .clip(CircleShape)
+                                        .background(fillColor),
+                                )
+                            }
+                        }
+                    }
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
                 Column {
-                    // Place the rating near the uploader text as there's more visual space
                     GalleryListCardRating(rating = info.rating, modifier = Modifier.padding(vertical = 1.dp))
                     val categoryColor = EhUtils.getCategoryColor(info.category)
                     val categoryText = EhUtils.getCategory(info.category).uppercase()
                     Text(
                         text = categoryText,
-                        modifier = Modifier.clip(SquircleShape(6.dp)).background(categoryColor).padding(vertical = 1.5.dp, horizontal = 6.dp),
+                        modifier = Modifier
+                            .clip(SquircleShape(6.dp))
+                            .background(categoryColor)
+                            .padding(vertical = 1.5.dp, horizontal = 6.dp),
                         color = EhUtils.getCategoryTextColor(categoryColor),
                         style = MiuixTheme.textStyles.footnote2.copy(lineHeight = 14.sp),
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                val running = downloadState == DownloadInfo.STATE_WAIT || downloadState == DownloadInfo.STATE_DOWNLOAD
-                val icon = when (downloadState) {
-                    DownloadInfo.STATE_WAIT, DownloadInfo.STATE_DOWNLOAD -> MiuixIcons.Pause
-                    DownloadInfo.STATE_FINISH -> MiuixIcons.Ok
-                    else -> MiuixIcons.Play
-                }
-                val actionDesc = when (downloadState) {
-                    DownloadInfo.STATE_WAIT, DownloadInfo.STATE_DOWNLOAD -> stringResource(id = R.string.download_pause)
-                    DownloadInfo.STATE_FINISH -> stringResource(id = R.string.download_state_finish)
-                    else -> stringResource(id = R.string.download_start)
-                }
-                IconButton(
-                    onClick = if (running) onStop else onStart,
-                    modifier = Modifier.offset(4.dp),
-                    enabled = !selectMode,
-                ) {
-                    Icon(imageVector = icon, contentDescription = actionDesc)
+                // 右下角统一 32.dp 正圆形徽章/操作按钮：开始(▷) / 暂停(‖) / 已完成(✓)
+                when {
+                    isFinish -> {
+                        Box(
+                            modifier = Modifier
+                                .size(DownloadActionBadgeSize)
+                                .clip(CircleShape)
+                                .background(DownloadFinishBadgeBg),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Ok,
+                                contentDescription = stringResource(id = R.string.download_state_finish),
+                                tint = if (isDark) DownloadFinishIconDark else DownloadFinishIconLight,
+                                modifier = Modifier.size(DownloadActionIconSize),
+                            )
+                        }
+                    }
+                    isActive -> {
+                        Box(
+                            modifier = Modifier
+                                .size(DownloadActionBadgeSize)
+                                .clip(CircleShape)
+                                .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .clickable(enabled = !selectMode, role = Role.Button, onClick = onStop),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Pause,
+                                contentDescription = stringResource(id = R.string.download_pause),
+                                tint = MiuixTheme.colorScheme.primary,
+                                modifier = Modifier.size(DownloadActionIconSize),
+                            )
+                        }
+                    }
+                    else -> {
+                        Box(
+                            modifier = Modifier
+                                .size(DownloadActionBadgeSize)
+                                .clip(CircleShape)
+                                .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.10f))
+                                .clickable(enabled = !selectMode, role = Role.Button, onClick = onStart),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Play,
+                                contentDescription = stringResource(id = R.string.download_start),
+                                tint = MiuixTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(DownloadActionIconSize),
+                            )
+                        }
+                    }
                 }
             }
         }
