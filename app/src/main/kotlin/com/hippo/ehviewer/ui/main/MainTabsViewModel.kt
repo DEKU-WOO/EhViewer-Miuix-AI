@@ -32,31 +32,42 @@ import com.hippo.ehviewer.client.data.FavListUrlBuilder
 import com.hippo.ehviewer.client.data.ListUrlBuilder
 import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_NORMAL
 import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_SUBSCRIPTION
+import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_TAG
 import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_TOPLIST
+import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_UPLOADER
 import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_WHATS_HOT
 import com.hippo.ehviewer.ui.MainNavItem
 import com.hippo.ehviewer.ui.screen.TOPLIST_PAGES
+import com.hippo.ehviewer.ui.screen.wrapTagKeyword
 import com.hippo.ehviewer.ui.tools.foldToLoadResult
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import moe.tarsin.coroutines.runSuspendCatching
 
+private fun initialSearchFieldTextFor(builder: ListUrlBuilder): String = builder.keyword?.let { kw ->
+    when (builder.mode) {
+        MODE_UPLOADER -> "uploader:\"$kw\""
+        MODE_TAG -> wrapTagKeyword(kw)
+        MODE_TOPLIST -> ""
+        else -> kw
+    }
+}.orEmpty()
+
 /**
  * 单个画廊网络 Tab（主页 / 订阅 / 热门 / 排行）的常驻会话：
- * 托管 PagingData 内存流、本地磁盘快照种子、列表滚动位置与搜索栏折叠偏移，切页或进出二级页零重载。
+ * 托管 PagingData 内存流、本地磁盘快照种子（含上次离开时的搜索 `ListUrlBuilder`）、列表滚动位置与搜索栏折叠偏移。
  */
 class GalleryTabSession(
     val slotKey: String,
@@ -64,30 +75,33 @@ class GalleryTabSession(
     scope: CoroutineScope,
 ) {
     private val mutex = Mutex()
-    val urlBuilder = mutableStateOf(initialBuilder)
+
+    private val initialSeed: SeedPage? = TabDiskSnapshotStore.readSnapshot(slotKey)
+    private val restoredInitialBuilder: ListUrlBuilder = run {
+        val saved = initialSeed?.listUrlBuilder
+        when {
+            saved == null -> initialBuilder
+            initialBuilder.mode == MODE_TOPLIST -> {
+                if (saved.mode == MODE_TOPLIST && saved.keyword == Settings.recentToplist) {
+                    saved.copy()
+                } else {
+                    initialBuilder
+                }
+            }
+            else -> saved.copy()
+        }
+    }
+
+    val urlBuilder = mutableStateOf(restoredInitialBuilder)
     val listState = LazyGridState()
     val gridState = LazyStaggeredGridState()
     val searchBarOffsetY = mutableIntStateOf(0)
-    val searchFieldState = TextFieldState()
+    val searchFieldState = TextFieldState(initialText = initialSearchFieldTextFor(restoredInitialBuilder))
 
-    private val seedRef = AtomicReference<SeedPage?>(null)
-    private val allowSeed = AtomicBoolean(true)
-    val isHydratingSeed = mutableStateOf(TabDiskSnapshotStore.hasSnapshot(slotKey))
+    private val seedRef = AtomicReference<SeedPage?>(initialSeed)
+    private val allowSeed = AtomicBoolean(initialSeed != null)
+    val isHydratingSeed = mutableStateOf(initialSeed != null)
     private var currentPagingSource: PagingSource<String, BaseGalleryInfo>? = null
-
-    init {
-        // 后台线程预热磁盘快照，若首帧同步读取尚未命中则在 PagingSource.load(IO) 中兜底读取
-        scope.launch(Dispatchers.IO) {
-            if (seedRef.get() == null && allowSeed.get()) {
-                val seed = TabDiskSnapshotStore.readSnapshot(slotKey)
-                if (seed != null) {
-                    seedRef.compareAndSet(null, seed)
-                } else {
-                    isHydratingSeed.value = false
-                }
-            }
-        }
-    }
 
     /** 用户主动下拉刷新、提交搜索、切换榜单或切换快速搜索时调用：跳过本地快照强制拉取最新网络第 1 页并覆写快照。 */
     fun markExplicitNetworkRefresh() {
@@ -118,6 +132,7 @@ class GalleryTabSession(
 
                 if (builder.mode == MODE_TOPLIST) {
                     val key: Int
+                    val page1Snapshot: ListUrlBuilder?
                     val url = mutex.withLock {
                         with(builder) {
                             if (isInitialRefresh) {
@@ -126,6 +141,7 @@ class GalleryTabSession(
                                 params.key?.let { page = it.toInt() }
                             }
                             key = page
+                            page1Snapshot = if (isInitialRefresh) copy() else null
                             build()
                         }
                     }
@@ -146,12 +162,19 @@ class GalleryTabSession(
                         if (isInitialRefresh && result.galleryInfoList.isNotEmpty()) {
                             TabDiskSnapshotStore.writeSnapshotAsync(
                                 slotKey = slotKey,
-                                seed = SeedPage(url, prev, next, result.galleryInfoList),
+                                seed = SeedPage(
+                                    urlSignature = url,
+                                    prevKey = prev,
+                                    nextKey = next,
+                                    items = result.galleryInfoList,
+                                    listUrlBuilder = page1Snapshot,
+                                ),
                             )
                         }
                         LoadResult.Page(result.galleryInfoList, prev, next)
                     }
                 } else {
+                    val page1Snapshot: ListUrlBuilder?
                     val url = mutex.withLock {
                         with(builder) {
                             when (params) {
@@ -159,6 +182,7 @@ class GalleryTabSession(
                                 is LoadParams.Append -> setIndex(params.key, isNext = true)
                                 is LoadParams.Refresh -> params.key?.let { setIndex(it, false) }
                             }
+                            page1Snapshot = if (isInitialRefresh) copy() else null
                             build()
                         }
                     }
@@ -177,7 +201,13 @@ class GalleryTabSession(
                         if (isInitialRefresh && result.galleryInfoList.isNotEmpty()) {
                             TabDiskSnapshotStore.writeSnapshotAsync(
                                 slotKey = slotKey,
-                                seed = SeedPage(url, result.prev, result.next, result.galleryInfoList),
+                                seed = SeedPage(
+                                    urlSignature = url,
+                                    prevKey = result.prev,
+                                    nextKey = result.next,
+                                    items = result.galleryInfoList,
+                                    listUrlBuilder = page1Snapshot,
+                                ),
                             )
                         }
                         LoadResult.Page(result.galleryInfoList, result.prev, result.next)
@@ -189,37 +219,39 @@ class GalleryTabSession(
 }
 
 /**
- * 收藏页常驻会话：本地收藏走 Room 零网络查询，云端收藏同样接入本地磁盘快照池。
+ * 收藏页常驻会话：本地收藏走 Room 零网络查询，云端收藏同步持久化并恢复 `FavListUrlBuilder` 与第 1 页快照。
  */
 class FavoritesTabSession(scope: CoroutineScope) {
     private val slotKey = "favorites"
     private val mutex = Mutex()
 
-    val urlBuilder = mutableStateOf(FavListUrlBuilder(favCat = Settings.recentFavCat))
+    private val defaultFavBuilder = FavListUrlBuilder(favCat = Settings.recentFavCat)
+    private val initialSeed: SeedPage? = if (defaultFavBuilder.isLocal) {
+        null
+    } else {
+        TabDiskSnapshotStore.readSnapshot(slotKey)
+    }
+    private val restoredFavBuilder: FavListUrlBuilder = run {
+        val saved = initialSeed?.favUrlBuilder
+        if (!defaultFavBuilder.isLocal && saved != null && saved.favCat == defaultFavBuilder.favCat) {
+            saved.copy()
+        } else {
+            defaultFavBuilder
+        }
+    }
+
+    val urlBuilder = mutableStateOf(restoredFavBuilder)
     val listState = LazyGridState()
     val gridState = LazyStaggeredGridState()
     val searchBarOffsetY = mutableIntStateOf(0)
-    val searchFieldState = TextFieldState()
+    val searchFieldState = TextFieldState(initialText = restoredFavBuilder.keyword.orEmpty())
 
     val localFavCount = EhDB.localFavCount
 
-    private val seedRef = AtomicReference<SeedPage?>(null)
-    private val allowSeed = AtomicBoolean(true)
-    val isHydratingSeed = mutableStateOf(!urlBuilder.value.isLocal && TabDiskSnapshotStore.hasSnapshot(slotKey))
+    private val seedRef = AtomicReference<SeedPage?>(initialSeed)
+    private val allowSeed = AtomicBoolean(initialSeed != null)
+    val isHydratingSeed = mutableStateOf(initialSeed != null)
     private var currentCloudPagingSource: PagingSource<String, BaseGalleryInfo>? = null
-
-    init {
-        scope.launch(Dispatchers.IO) {
-            if (!urlBuilder.value.isLocal && seedRef.get() == null && allowSeed.get()) {
-                val seed = TabDiskSnapshotStore.readSnapshot(slotKey)
-                if (seed != null) {
-                    seedRef.compareAndSet(null, seed)
-                } else {
-                    isHydratingSeed.value = false
-                }
-            }
-        }
-    }
 
     fun markExplicitNetworkRefresh() {
         allowSeed.set(false)
@@ -255,13 +287,15 @@ class FavoritesTabSession(scope: CoroutineScope) {
 
                     override suspend fun load(params: LoadParams<String>) = withIOContext {
                         val isInitialRefresh = params is LoadParams.Refresh && params.key == null
+                        val page1Snapshot: FavListUrlBuilder?
                         val url = mutex.withLock {
                             with(urlBuilder.value) {
                                 when (params) {
                                     is LoadParams.Prepend -> setIndex(params.key, isNext = false)
                                     is LoadParams.Append -> setIndex(params.key, isNext = true)
-                                    is LoadParams.Refresh -> setIndex(params.key, isNext = false)
+                                    is LoadParams.Refresh -> params.key?.let { setIndex(it, false) }
                                 }
+                                page1Snapshot = if (isInitialRefresh) copy() else null
                                 build()
                             }
                         }
@@ -283,7 +317,13 @@ class FavoritesTabSession(scope: CoroutineScope) {
                             if (isInitialRefresh && result.galleryInfoList.isNotEmpty()) {
                                 TabDiskSnapshotStore.writeSnapshotAsync(
                                     slotKey = slotKey,
-                                    seed = SeedPage(url, result.prev, result.next, result.galleryInfoList),
+                                    seed = SeedPage(
+                                        urlSignature = url,
+                                        prevKey = result.prev,
+                                        nextKey = result.next,
+                                        items = result.galleryInfoList,
+                                        favUrlBuilder = page1Snapshot,
+                                    ),
                                 )
                             }
                             LoadResult.Page(result.galleryInfoList, result.prev, result.next)
@@ -331,6 +371,7 @@ class SettingsTabSession {
 }
 
 data class TabSwitchCommand(
+    val seq: Long,
     val targetItem: MainNavItem,
     val animate: Boolean,
 )
@@ -359,11 +400,10 @@ class MainTabsViewModel : ViewModel() {
     private val _tabGesturePosition = mutableStateOf<Float?>(null)
     val tabGesturePositionState: State<Float?> = _tabGesturePosition
 
-    private val _switchCommands = MutableSharedFlow<TabSwitchCommand>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-    val switchCommands = _switchCommands.asSharedFlow()
+    private val commandSeq = AtomicLong(0L)
+    private val _switchCommand = MutableStateFlow<TabSwitchCommand?>(null)
+    val switchCommand: StateFlow<TabSwitchCommand?> = _switchCommand.asStateFlow()
+    var lastHandledCommandSeq: Long = 0L
 
     init {
         TabDiskSnapshotStore.invalidateEvents
@@ -406,14 +446,15 @@ class MainTabsViewModel : ViewModel() {
         _tabGesturePosition.value = null
     }
 
-    /** 外置底栏 / 侧边导航栏点击或拖拽松手切换 Tab（在 MainTabsScreen 内触发相邻滑动或 280ms 跨页直达平推）。 */
+    /** 外置底栏 / 侧边导航栏点击或拖拽松手切换 Tab（在 MainTabsScreen 内触发相邻滑动或 280ms 静态图层紧贴平推）。 */
     fun requestSwitchToItem(item: MainNavItem, visibleTabs: List<MainNavItem>, animate: Boolean = true) {
         val targetIndex = visibleTabs.indexOf(item)
         if (targetIndex < 0) return
         currentNavItem = item
         selectedTabIndex = targetIndex
         _tabGesturePosition.value = null
-        _switchCommands.tryEmit(TabSwitchCommand(item, animate = animate))
+        val seq = commandSeq.incrementAndGet()
+        _switchCommand.value = TabSwitchCommand(seq = seq, targetItem = item, animate = animate)
     }
 
     /** 从登录页或二级页面返回前同步设定目标 Tab（无过渡直达）。 */

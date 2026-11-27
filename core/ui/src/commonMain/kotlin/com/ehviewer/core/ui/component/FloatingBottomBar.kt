@@ -264,6 +264,8 @@ fun FloatingBottomBar(
     var currentDragValue by remember { mutableFloatStateOf(selectedIndex().toFloat()) }
 
     // 拖动刻度反馈：高亮胶囊中心每进入一个图标区域触发一次原生短震
+    val maxTabIndex = (tabsCount - 1).coerceAtLeast(0)
+    if (tabsCount <= 0) return
     val hapticFeedback = LocalHapticFeedback.current
     var lastTickIndex by remember { mutableIntStateOf(selectedIndex()) }
     val iconHalfWidthPx = with(density) { 12.dp.toPx() }
@@ -272,8 +274,8 @@ fun FloatingBottomBar(
     val dampedDragAnimation = remember(animationScope, tabsCount, density, isLtr) {
         DampedDragAnimation(
             animationScope = animationScope,
-            initialValue = selectedIndex().toFloat(),
-            valueRange = 0f..(tabsCount - 1).toFloat(),
+            initialValue = selectedIndex().coerceIn(0, maxTabIndex).toFloat(),
+            valueRange = 0f..maxTabIndex.toFloat(),
             visibilityThreshold = 0.001f,
             initialScale = 1f,
             pressedScale = 78f / 56f,
@@ -294,10 +296,10 @@ fun FloatingBottomBar(
             onDragStarted = {
                 totalDragPx = 0f
                 currentDragValue = value
-                lastTickIndex = value.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                lastTickIndex = value.fastRoundToInt().fastCoerceIn(0, maxTabIndex)
             },
             onDragStopped = {
-                val dropIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
+                val dropIndex = targetValue.fastRoundToInt().fastCoerceIn(0, maxTabIndex)
                 val isTapOnSameTab = (dropIndex == currentSelectedIndex()) && (totalDragPx < touchSlopPx)
                 val isSwitched = dropIndex != currentSelectedIndex()
 
@@ -320,7 +322,7 @@ fun FloatingBottomBar(
                 totalDragPx += abs(dragAmount.x)
                 if (tabWidthPx > 0f) {
                     currentDragValue = (currentDragValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)
-                        .fastCoerceIn(0f, (tabsCount - 1).toFloat())
+                        .fastCoerceIn(0f, maxTabIndex.toFloat())
                     updateValue(currentDragValue)
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
@@ -354,7 +356,7 @@ fun FloatingBottomBar(
 
     LaunchedEffect(dampedDragAnimation) {
         snapshotFlow { currentSelectedIndex() }.collectLatest { index ->
-            val coercedIndex = index.coerceIn(0, tabsCount - 1)
+            val coercedIndex = index.coerceIn(0, maxTabIndex)
             if (abs(dampedDragAnimation.value - coercedIndex.toFloat()) > 0.001f) {
                 dampedDragAnimation.animateToValue(coercedIndex.toFloat())
             }
@@ -481,6 +483,7 @@ fun IosLiquidGlassNavigationBar(
     colors: FloatingBottomBarColors = FloatingBottomBarDefaults.colors(),
     badge: (Int) -> (@Composable () -> Unit)? = { null },
 ) {
+    if (items.isEmpty()) return
     val hapticFeedback = LocalHapticFeedback.current
     val onItemClickUpdated by rememberUpdatedState(onItemClick)
     val directSelector = remember { FloatingBottomBarDirectSelector() }

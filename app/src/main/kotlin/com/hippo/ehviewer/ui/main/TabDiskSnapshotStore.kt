@@ -1,6 +1,8 @@
 package com.hippo.ehviewer.ui.main
 
 import com.ehviewer.core.model.BaseGalleryInfo
+import com.hippo.ehviewer.client.data.FavListUrlBuilder
+import com.hippo.ehviewer.client.data.ListUrlBuilder
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +88,8 @@ data class PersistedTabSeedPayload(
     val prevKey: String? = null,
     val nextKey: String? = null,
     val items: List<PersistedGallerySnapshotItem>,
+    val listUrlBuilder: ListUrlBuilder? = null,
+    val favUrlBuilder: FavListUrlBuilder? = null,
     val savedAtMillis: Long = 0L,
 )
 
@@ -94,12 +98,15 @@ data class SeedPage(
     val prevKey: String?,
     val nextKey: String?,
     val items: List<BaseGalleryInfo>,
+    val listUrlBuilder: ListUrlBuilder? = null,
+    val favUrlBuilder: FavListUrlBuilder? = null,
 )
 
 /**
- * 半永久本地磁盘快照池（每个网络 Tab 定长覆写单文件，仅存最近一次第 1 页元数据与分页游标）。
+ * 半永久本地磁盘快照池（每个网络 Tab 定长覆写单文件，存最近一次第 1 页元数据、分页游标及生效的 URL 构建器参数）。
  *
- * - 冷启动时同步/预热读取为 [SeedPage]，实现零转圈、零请求秒开上次离开时的列表；
+ * - 冷启动时同步恢复上次离开时的 `ListUrlBuilder` / `FavListUrlBuilder`（含主页与订阅页的搜索词与高级筛选参数），
+ *   确保 `urlSignature == urlBuilder.build()` 100% 命中，实现零转圈、零请求秒开；
  * - 读取全量包裹 `runCatching`，损坏或版本不兼容时静默删除并回退网络拉取，绝不闪退；
  * - 切换表里站（E-Hentai / ExHentai）或退出账号时调用 [clearAll] 清空全部本地快照。
  */
@@ -134,6 +141,8 @@ object TabDiskSnapshotStore {
             prevKey = payload.prevKey,
             nextKey = payload.nextKey,
             items = payload.items.map { it.toBaseGalleryInfo() },
+            listUrlBuilder = payload.listUrlBuilder,
+            favUrlBuilder = payload.favUrlBuilder,
         )
     }.onFailure {
         runCatching { slotFile(slotKey).delete() }
@@ -146,6 +155,8 @@ object TabDiskSnapshotStore {
             prevKey = seed.prevKey,
             nextKey = seed.nextKey,
             items = seed.items.map { it.toSnapshotItem() },
+            listUrlBuilder = seed.listUrlBuilder,
+            favUrlBuilder = seed.favUrlBuilder,
             savedAtMillis = System.currentTimeMillis(),
         )
         ioScope.launch {

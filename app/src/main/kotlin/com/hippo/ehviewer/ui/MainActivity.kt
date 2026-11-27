@@ -292,7 +292,7 @@ class MainActivity : AppCompatActivity() {
             val isStandalonePrimary = navItems.any { it.first.route == currentDestination?.route }
             val isPrimaryDestination = isOnMainTabs || isStandalonePrimary
 
-            fun selectMainNavItem(item: MainNavItem) {
+            val selectMainNavItem: (MainNavItem) -> Unit = { item ->
                 if (item in visibleNavItems) {
                     if (navController.currentDestination?.route == MainTabsScreenDestination.route) {
                         tabsViewModel.requestSwitchToItem(item, visibleNavItems, animate = true)
@@ -318,7 +318,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            val latestSelectMainNavItem by rememberUpdatedState(::selectMainNavItem)
+            val latestSelectMainNavItem by rememberUpdatedState(selectMainNavItem)
 
             suspend fun DialogState.checkDownloadLocation() {
                 val valid = withIOContext { downloadLocation.isDirectory }
@@ -631,7 +631,7 @@ class MainActivity : AppCompatActivity() {
                                                 (primaryNavItems.size - 1).coerceAtLeast(0),
                                             ),
                                             onItemClick = { index ->
-                                                visibleNavItems.getOrNull(index)?.let(::selectMainNavItem)
+                                                visibleNavItems.getOrNull(index)?.let { selectMainNavItem(it) }
                                             },
                                             backdrop = contentBackdrop,
                                             modifier = Modifier.fillMaxWidth(),

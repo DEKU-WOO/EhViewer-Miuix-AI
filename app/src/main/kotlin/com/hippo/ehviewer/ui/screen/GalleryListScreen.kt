@@ -258,9 +258,6 @@ private fun GalleryListBody(
     DrawerHandle(isPageVisible && !selectMode && !searchBarExpanded)
 
     LaunchedEffect(urlBuilder) {
-        if (session != null && urlBuilder.category != EhUtils.NONE) {
-            SearchFilterStore.category = urlBuilder.category
-        }
         val keyword = urlBuilder.keyword?.let { keyword ->
             when (urlBuilder.mode) {
                 MODE_UPLOADER -> "uploader:\"$keyword\""

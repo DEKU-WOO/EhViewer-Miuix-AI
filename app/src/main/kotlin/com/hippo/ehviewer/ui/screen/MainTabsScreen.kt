@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,16 +15,22 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ehviewer.core.ui.util.LocalIsPageInViewport
@@ -45,10 +52,11 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.math.abs
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
+import moe.tarsin.coroutines.runSuspendCatching
 
-private data class CrossTransitionState(
-    val fromPage: Int,
-    val toPage: Int,
+private class OutgoingSlideSnapshot(
+    val bitmap: ImageBitmap,
     val direction: Int,
 )
 
@@ -57,9 +65,10 @@ private const val TAB_TRANSITION_DURATION_MS = 280
 
 /**
  * 根级主导航平滑分页容器：
- * - 基于 [HorizontalPager]（`beyondViewportPageCount = 1`）承载用户配置的所有可见主 Tab，支持 1:1 跟手滑动切页；
- * - 跨多页点击底栏或拖拽直达（`|to - from| >= 2`）时切换为 [CrossTransitionState] 上层双槽紧贴平推，不经过中间页；
- * - 跨页平推激活期间，底层 `HorizontalPager` 的起止槽位严格退让为空 `Box`，确保 `movableContentOf` 任意单帧唯一挂载。
+ * - 基于 [HorizontalPager]（`beyondViewportPageCount = 1`）原地承载所有可见主 Tab，100% 不改变 Compose 节点树层级；
+ * - 相邻切页（`|to - from| == 1`）走原生平滑滚动；
+ * - 跨多页切页（`|to - from| >= 2`）采用 `rememberGraphicsLayer()` 静态截屏 + `scrollToPage` 瞬时落位 + 280ms 双图层紧贴平推，
+ *   彻底杜绝 `movableContentOf` 跨 `SubcomposeLayout` 挪动导致的崩溃，截屏异常或未就绪时自动安全降级直达。
  */
 @Destination<RootGraph>
 @Composable
@@ -84,11 +93,185 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
         pageCount = { visibleTabs.size },
     )
 
-    val saveableStateHolder = rememberSaveableStateHolder()
-    val tabSlots = remember(navigator, tabsViewModel, saveableStateHolder) {
-        MainNavItem.entries.associateWith { item ->
-            movableContentOf {
-                saveableStateHolder.SaveableStateProvider(key = item.name) {
+    val stageGraphicsLayer = rememberGraphicsLayer()
+    var stageWidthPx by remember { mutableFloatStateOf(0f) }
+    var outgoingSnapshot by remember { mutableStateOf<OutgoingSlideSnapshot?>(null) }
+    var isProgrammaticSwitch by remember { mutableStateOf(false) }
+    val crossProgress = remember { Animatable(0f) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            outgoingSnapshot = null
+            isProgrammaticSwitch = false
+            tabsViewModel.updateGesturePosition(null)
+        }
+    }
+
+    // 动态调整导航顺序或显隐返回时，锚定原激活项位置不乱跳
+    LaunchedEffect(visibleTabs) {
+        if (visibleTabs.isEmpty()) return@LaunchedEffect
+        val activeItem = tabsViewModel.currentNavItem
+        val targetIdx = if (activeItem != null && activeItem in visibleTabs) {
+            visibleTabs.indexOf(activeItem)
+        } else {
+            pagerState.currentPage.coerceIn(0, visibleTabs.lastIndex)
+        }
+        if (pagerState.currentPage != targetIdx) {
+            outgoingSnapshot = null
+            runSuspendCatching { pagerState.scrollToPage(targetIdx) }
+        }
+        tabsViewModel.onPageSettled(targetIdx, visibleTabs)
+    }
+
+    // 响应外置悬浮底栏 / 侧栏的切页指令：相邻页平滑滚动，跨多页（>=2）走静态图层 + scrollToPage 280ms 紧贴平推
+    LaunchedEffect(tabsViewModel) {
+        tabsViewModel.switchCommand.filterNotNull().collectLatest { command ->
+            if (command.seq <= tabsViewModel.lastHandledCommandSeq) return@collectLatest
+            tabsViewModel.lastHandledCommandSeq = command.seq
+
+            val currentTabs = latestVisibleTabs
+            val totalPages = pagerState.pageCount
+            val targetPage = currentTabs.indexOf(command.targetItem)
+            if (totalPages <= 0 || targetPage !in 0 until totalPages) return@collectLatest
+
+            val fromPage = pagerState.currentPage.coerceIn(0, totalPages - 1)
+            val residualOffset = abs(pagerState.currentPageOffsetFraction)
+            BottomBarScrollState.reset()
+
+            if (targetPage == fromPage && residualOffset <= 0.001f && outgoingSnapshot == null) {
+                isProgrammaticSwitch = false
+                tabsViewModel.onPageSettled(targetPage, currentTabs)
+                return@collectLatest
+            }
+
+            isProgrammaticSwitch = true
+            try {
+                if (!command.animate) {
+                    outgoingSnapshot = null
+                    runSuspendCatching { pagerState.scrollToPage(targetPage) }
+                    tabsViewModel.onPageSettled(targetPage, currentTabs)
+                } else if (abs(targetPage - fromPage) <= 1 && outgoingSnapshot == null) {
+                    runSuspendCatching {
+                        pagerState.animateScrollToPage(
+                            page = targetPage,
+                            animationSpec = tween(
+                                durationMillis = TAB_TRANSITION_DURATION_MS,
+                                easing = CrossPageEasing,
+                            ),
+                        )
+                    }
+                    tabsViewModel.onPageSettled(targetPage, currentTabs)
+                } else {
+                    val dir = if (targetPage >= fromPage) 1 else -1
+                    val captured = if (
+                        stageWidthPx > 1f &&
+                        stageGraphicsLayer.size.width > 0 &&
+                        stageGraphicsLayer.size.height > 0
+                    ) {
+                        runSuspendCatching { stageGraphicsLayer.toImageBitmap() }
+                            .getOrNull()
+                            ?.takeIf { it.width > 0 && it.height > 0 }
+                    } else {
+                        null
+                    }
+
+                    if (captured == null) {
+                        outgoingSnapshot = null
+                        runSuspendCatching { pagerState.scrollToPage(targetPage) }
+                        tabsViewModel.onPageSettled(targetPage, currentTabs)
+                    } else {
+                        crossProgress.snapTo(0f)
+                        outgoingSnapshot = OutgoingSlideSnapshot(
+                            bitmap = captured,
+                            direction = dir,
+                        )
+                        runSuspendCatching { pagerState.scrollToPage(targetPage) }
+                        crossProgress.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tween(
+                                durationMillis = TAB_TRANSITION_DURATION_MS,
+                                easing = CrossPageEasing,
+                            ),
+                        )
+                        outgoingSnapshot = null
+                        tabsViewModel.onPageSettled(targetPage, currentTabs)
+                    }
+                }
+            } finally {
+                outgoingSnapshot = null
+                isProgrammaticSwitch = false
+            }
+        }
+    }
+
+    // 手指直接左右滑动 Pager 时，实时驱动外置底栏液态玻璃透镜 1:1 跟手位移
+    LaunchedEffect(pagerState) {
+        snapshotFlow {
+            Triple(
+                pagerState.isScrollInProgress,
+                pagerState.currentPage,
+                pagerState.currentPageOffsetFraction,
+            )
+        }.collect { (scrolling, currentPage, offsetFraction) ->
+            val currentTabs = latestVisibleTabs
+            if (currentTabs.isEmpty()) return@collect
+            if (!isProgrammaticSwitch && outgoingSnapshot == null) {
+                if (scrolling) {
+                    val continuous = (currentPage + offsetFraction)
+                        .coerceIn(0f, (currentTabs.size - 1).coerceAtLeast(0).toFloat())
+                    tabsViewModel.updateGesturePosition(continuous)
+                } else {
+                    val settled = pagerState.settledPage.coerceIn(0, (currentTabs.size - 1).coerceAtLeast(0))
+                    if (tabsViewModel.selectedTabIndex != settled || tabsViewModel.tabGesturePositionState.value != null) {
+                        BottomBarScrollState.reset()
+                    }
+                    tabsViewModel.onPageSettled(settled, currentTabs)
+                }
+            }
+        }
+    }
+
+    val activeSlide = outgoingSnapshot
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .clipToBounds()
+            .onSizeChanged { stageWidthPx = it.width.toFloat() }
+            .drawWithContent {
+                stageGraphicsLayer.record {
+                    this@drawWithContent.drawContent()
+                }
+                drawLayer(stageGraphicsLayer)
+            },
+    ) {
+        val containerWidthPx = constraints.maxWidth.toFloat()
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = if (activeSlide != null) {
+                        activeSlide.direction * (1f - crossProgress.value) * containerWidthPx
+                    } else {
+                        0f
+                    }
+                },
+            beyondViewportPageCount = 1,
+            userScrollEnabled = !SelectionModeController.active &&
+                !SearchExpandController.expanded &&
+                activeSlide == null,
+            key = { page -> visibleTabs.getOrNull(page)?.name ?: "page_$page" },
+        ) { page ->
+            val item = visibleTabs.getOrNull(page) ?: return@HorizontalPager
+            val continuousPage = pagerState.currentPage + pagerState.currentPageOffsetFraction
+            val isSettledVisible = activeSlide == null && page == pagerState.settledPage
+            val isInViewport = activeSlide != null || abs(continuousPage - page) < 0.995f
+            key(item) {
+                CompositionLocalProvider(
+                    LocalIsPageVisible provides isSettledVisible,
+                    LocalIsPageInViewport provides isInViewport,
+                ) {
                     Screen(navigator) {
                         when (item) {
                             MainNavItem.Home,
@@ -120,196 +303,18 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
                 }
             }
         }
-    }
 
-    var crossTransition by remember { mutableStateOf<CrossTransitionState?>(null) }
-    var isProgrammaticSwitch by remember { mutableStateOf(false) }
-    val crossProgress = remember { Animatable(0f) }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            crossTransition = null
-            isProgrammaticSwitch = false
-            tabsViewModel.updateGesturePosition(null)
-        }
-    }
-
-    // 动态调整导航顺序或显隐返回时，锚定原激活项位置不乱跳
-    LaunchedEffect(visibleTabs) {
-        if (visibleTabs.isEmpty()) return@LaunchedEffect
-        val activeItem = tabsViewModel.currentNavItem
-        val targetIdx = if (activeItem != null && activeItem in visibleTabs) {
-            visibleTabs.indexOf(activeItem)
-        } else {
-            pagerState.currentPage.coerceIn(0, visibleTabs.lastIndex)
-        }
-        if (pagerState.currentPage != targetIdx) {
-            crossTransition = null
-            pagerState.scrollToPage(targetIdx)
-        }
-        tabsViewModel.onPageSettled(targetIdx, visibleTabs)
-    }
-
-    // 响应外置悬浮底栏 / 侧栏的切页指令：相邻页平滑滚动，跨多页（>=2）走 280ms 紧贴直达平推
-    LaunchedEffect(tabsViewModel) {
-        tabsViewModel.switchCommands.collectLatest { command ->
-            val currentTabs = latestVisibleTabs
-            val targetPage = currentTabs.indexOf(command.targetItem)
-            if (targetPage < 0) return@collectLatest
-
-            val interruptedCross = crossTransition
-            if (interruptedCross != null) {
-                val snapped = interruptedCross.toPage.coerceIn(0, (currentTabs.size - 1).coerceAtLeast(0))
-                pagerState.scrollToPage(snapped)
-                crossTransition = null
-            }
-
-            val fromPage = pagerState.currentPage.coerceIn(0, (currentTabs.size - 1).coerceAtLeast(0))
-            BottomBarScrollState.reset()
-
-            if (targetPage == fromPage) {
-                isProgrammaticSwitch = false
-                tabsViewModel.onPageSettled(targetPage, currentTabs)
-                return@collectLatest
-            }
-
-            isProgrammaticSwitch = true
-            try {
-                if (!command.animate) {
-                    crossTransition = null
-                    pagerState.scrollToPage(targetPage)
-                    tabsViewModel.onPageSettled(targetPage, currentTabs)
-                } else if (abs(targetPage - fromPage) == 1) {
-                    crossTransition = null
-                    pagerState.animateScrollToPage(
-                        page = targetPage,
-                        animationSpec = tween(
-                            durationMillis = TAB_TRANSITION_DURATION_MS,
-                            easing = CrossPageEasing,
-                        ),
-                    )
-                    tabsViewModel.onPageSettled(targetPage, currentTabs)
-                } else {
-                    val dir = if (targetPage > fromPage) 1 else -1
-                    crossProgress.snapTo(0f)
-                    crossTransition = CrossTransitionState(
-                        fromPage = fromPage,
-                        toPage = targetPage,
-                        direction = dir,
-                    )
-                    crossProgress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(
-                            durationMillis = TAB_TRANSITION_DURATION_MS,
-                            easing = CrossPageEasing,
-                        ),
-                    )
-                    pagerState.scrollToPage(targetPage)
-                    crossTransition = null
-                    tabsViewModel.onPageSettled(targetPage, currentTabs)
-                }
-            } finally {
-                isProgrammaticSwitch = false
-            }
-        }
-    }
-
-    // 手指直接左右滑动 Pager 时，实时驱动外置底栏液态玻璃透镜 1:1 跟手位移
-    LaunchedEffect(pagerState) {
-        snapshotFlow {
-            Triple(
-                pagerState.isScrollInProgress,
-                pagerState.currentPage,
-                pagerState.currentPageOffsetFraction,
+        if (activeSlide != null) {
+            Image(
+                bitmap = activeSlide.bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationX = -activeSlide.direction * crossProgress.value * containerWidthPx
+                    },
             )
-        }.collect { (scrolling, currentPage, offsetFraction) ->
-            val currentTabs = latestVisibleTabs
-            if (currentTabs.isEmpty()) return@collect
-            if (!isProgrammaticSwitch && crossTransition == null) {
-                if (scrolling) {
-                    val continuous = (currentPage + offsetFraction)
-                        .coerceIn(0f, (currentTabs.size - 1).coerceAtLeast(0).toFloat())
-                    tabsViewModel.updateGesturePosition(continuous)
-                } else {
-                    val settled = pagerState.settledPage.coerceIn(0, (currentTabs.size - 1).coerceAtLeast(0))
-                    if (tabsViewModel.selectedTabIndex != settled || tabsViewModel.tabGesturePositionState.value != null) {
-                        BottomBarScrollState.reset()
-                    }
-                    tabsViewModel.onPageSettled(settled, currentTabs)
-                }
-            }
-        }
-    }
-
-    val activeCross = crossTransition
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val containerWidthPx = constraints.maxWidth.toFloat()
-
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-            beyondViewportPageCount = 1,
-            userScrollEnabled = !SelectionModeController.active &&
-                !SearchExpandController.expanded &&
-                activeCross == null,
-            key = { page -> visibleTabs[page].name },
-        ) { page ->
-            if (activeCross != null && (page == activeCross.fromPage || page == activeCross.toPage)) {
-                // 严格避免同帧双重挂载：跨页平推期间起止页完全让出 movableContentOf 所有权
-                Box(modifier = Modifier.fillMaxSize())
-            } else {
-                val item = visibleTabs[page]
-                val continuousPage = pagerState.currentPage + pagerState.currentPageOffsetFraction
-                val isSettledVisible = activeCross == null && page == pagerState.settledPage
-                val isInViewport = activeCross == null && abs(continuousPage - page) < 0.995f
-                CompositionLocalProvider(
-                    LocalIsPageVisible provides isSettledVisible,
-                    LocalIsPageInViewport provides isInViewport,
-                ) {
-                    tabSlots.getValue(item)()
-                }
-            }
-        }
-
-        if (activeCross != null && activeCross.fromPage != activeCross.toPage) {
-            val fromItem = visibleTabs.getOrNull(activeCross.fromPage)
-            val toItem = visibleTabs.getOrNull(activeCross.toPage)
-            if (fromItem != null && toItem != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clipToBounds(),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = -activeCross.direction * crossProgress.value * containerWidthPx
-                            },
-                    ) {
-                        CompositionLocalProvider(
-                            LocalIsPageVisible provides false,
-                            LocalIsPageInViewport provides true,
-                        ) {
-                            tabSlots.getValue(fromItem)()
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = activeCross.direction * (1f - crossProgress.value) * containerWidthPx
-                            },
-                    ) {
-                        CompositionLocalProvider(
-                            LocalIsPageVisible provides false,
-                            LocalIsPageInViewport provides true,
-                        ) {
-                            tabSlots.getValue(toItem)()
-                        }
-                    }
-                }
-            }
         }
     }
 }
