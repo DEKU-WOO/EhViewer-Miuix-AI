@@ -74,8 +74,8 @@ fun collectListThumbSizeAsState(): State<Dp> {
     val density = LocalDensity.current
     return Settings.listThumbSize.collectAsState {
         with(density) {
-            // 全局画廊列表卡片高度缩减为原高度的 80%（0.8f 倍），左侧封面按比例同步缩小
-            ((it.toDp() * 9).coerceAtLeast(120.dp) * 0.8f).coerceAtLeast(96.dp)
+            // 全局画廊列表卡片高度设为原始默认高度的 88%（0.88f 倍），左侧封面按比例同步缩放
+            ((it.toDp() * 9).coerceAtLeast(120.dp) * 0.88f).coerceAtLeast(106.dp)
         }
     }
 }

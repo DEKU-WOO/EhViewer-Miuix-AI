@@ -89,28 +89,29 @@ fun GalleryInfoListItem(
         Column(modifier = Modifier.padding(start = 8.dp, top = 4.dp, end = 6.dp, bottom = 4.dp)) {
             GalleryTitleText(
                 info = info,
-                maxLines = 3,
+                maxLines = 2,
                 style = galleryListCardTitleStyle(),
             )
-            // 标题区与下方元信息区保持清晰分层间距（明显大于标题内部行距）
+            // 标题区与下方元信息区保持清晰分层间距
             Spacer(modifier = Modifier.height(6.dp))
             Spacer(modifier = Modifier.weight(1f))
             val metaStyle = MiuixTheme.textStyles.footnote1.copy(fontSize = 11.5.sp, lineHeight = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = info.uploader.orEmpty(),
-                    modifier = Modifier.alignByBaseline().weight(1f, fill = false).alpha(if (info.disowned) 0.5f else 1f),
+                    // 仅对左侧上传者名施加 weight(1f)，确保右侧「红心 + 收藏夹名称」优先按完整宽度横向展示不被截断
+                    modifier = Modifier.alignByBaseline().weight(1f).alpha(if (info.disowned) 0.5f else 1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = metaStyle,
                 )
-                Spacer(modifier = Modifier.weight(1f))
                 if (isInFavScene) {
                     info.favoriteNote?.let {
                         Text(
                             text = it,
                             modifier = Modifier.alignByBaseline(),
                             maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Ellipsis,
                             fontStyle = FontStyle.Italic,
                             style = metaStyle,
@@ -130,7 +131,7 @@ fun GalleryInfoListItem(
                                 text = it,
                                 modifier = Modifier.alignByBaseline(),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
                                 style = metaStyle,
                             )
                         }
@@ -386,11 +387,11 @@ fun GalleryTitleText(
     )
 }
 
-/** 画廊列表卡片统一标题样式：适配 80% 卡片高度，字号收至 13.5.sp 配合紧凑 16.5.sp 行高，完整保留 3 行上限。 */
+/** 画廊列表卡片统一标题样式：适配 88% 卡片高度，字号 14.sp 配合紧凑 18.sp 行高，最多显示 2 行。 */
 @Composable
 internal fun galleryListCardTitleStyle(): TextStyle = MiuixTheme.textStyles.body1.copy(
-    fontSize = 13.5.sp,
-    lineHeight = 16.5.sp,
+    fontSize = 14.sp,
+    lineHeight = 18.sp,
 )
 
 private const val MIN_RATIO = 0.5F

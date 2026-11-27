@@ -99,10 +99,10 @@ fun DownloadCard(
         val stateFailed2 = stringResource(R.string.download_state_failed_2, info.legacy)
         val downloadState by DownloadManager.collectDownloadState(info.gid)
         Column(modifier = Modifier.fillMaxHeight().padding(start = 8.dp, top = 4.dp, end = 6.dp, bottom = 4.dp)) {
-            // 与在线画廊卡片保持同一紧凑标题规范（13.5.sp / 16.5.sp 行高 + 最多 3 行）
+            // 与在线画廊卡片保持同一紧凑标题规范（14.sp / 18.sp 行高 + 最多 2 行）
             GalleryTitleText(
                 info = info,
-                maxLines = 3,
+                maxLines = 2,
                 style = galleryListCardTitleStyle(),
             )
             // 标题区与下方元信息区保持清晰分层间距（明显大于标题内部行距）
