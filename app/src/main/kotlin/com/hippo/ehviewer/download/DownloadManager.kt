@@ -34,7 +34,10 @@ import com.ehviewer.core.database.model.DownloadArtist
 import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.database.model.DownloadLabel
 import com.ehviewer.core.files.delete
+import com.ehviewer.core.files.exists
 import com.ehviewer.core.files.find
+import com.ehviewer.core.files.list
+import com.ehviewer.core.files.metadataOrNull
 import com.ehviewer.core.files.toOkioPath
 import com.ehviewer.core.files.toUri
 import com.ehviewer.core.model.BaseGalleryInfo
@@ -114,10 +117,75 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
 
     init {
         launch {
+            hydrateUnfinishedProgress()
             val mode = sortMode
             if (mode != SortMode.Default) sortDownloads(mode)
             isInitialized = true
         }
+    }
+
+    /**
+     * 冷启动从本地 `.ehviewer`（SpiderInfo）与已落盘有效图片文件恢复未完成/已暂停任务的真实进度，
+     * 避免重启后 transient 字段归零导致卡片显示 `0/总页数P`。
+     */
+    private suspend fun hydrateUnfinishedProgress() {
+        val unfinished = sortMutex.withLock {
+            allInfoList.filter { it.state != DownloadInfo.STATE_FINISH }
+        }
+        var anyUpdated = false
+        for (info in unfinished) {
+            val dir = info.downloadDir ?: EhDB.getDownloadDirname(info.gid)?.let { downloadLocation / it }
+            if (dir == null || !dir.exists()) continue
+
+            val spiderInfo = dir.find(SPIDER_INFO_FILENAME)?.let { readCompatFromPath(it) }
+            val resolvedTotal = spiderInfo?.pages?.takeIf { it > 0 }
+                ?: info.pages.takeIf { it > 0 }
+                ?: 0
+
+            val metaCount = spiderInfo?.downloadedPages?.takeIf { it > 0 } ?: 0
+            val rawCount = if (metaCount > 0) {
+                metaCount
+            } else {
+                countValidDownloadedImages(dir)
+            }
+            val hydrated = if (resolvedTotal > 0) {
+                rawCount.coerceIn(0, resolvedTotal)
+            } else {
+                rawCount.coerceAtLeast(0)
+            }
+
+            if (resolvedTotal > 0) {
+                info.total = resolvedTotal
+            }
+            if (hydrated > 0 || resolvedTotal > 0) {
+                info.finished = hydrated
+                info.downloaded = hydrated
+                mutableNotifyFlow.emit(info)
+                anyUpdated = true
+            }
+        }
+        if (anyUpdated) {
+            mutableDownloadListVersion.value++
+        }
+    }
+
+    private fun countValidDownloadedImages(dir: Path): Int {
+        var count = 0
+        for (entry in dir.list()) {
+            val lower = entry.name.lowercase()
+            if (lower == SPIDER_INFO_FILENAME || lower == COMIC_INFO_FILE.lowercase() || lower.startsWith("thumb.")) {
+                continue
+            }
+            val dot = lower.lastIndexOf('.')
+            if (dot <= 0 || dot == lower.lastIndex) continue
+            val ext = lower.substring(dot + 1)
+            if (ext !in IMAGE_EXTENSIONS) continue
+            val size = entry.metadataOrNull()?.size ?: 0L
+            if (size > 0L) {
+                count++
+            }
+        }
+        return count
     }
 
     fun containLabel(label: String?): Boolean {
@@ -512,6 +580,7 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
         if (spider != null) {
             mCurrentSpider = null
             spider.removeOnSpiderListener(this@DownloadManager)
+            spider.flushSpiderInfo()
             SpiderQueen.releaseSpiderQueen(spider, SpiderQueen.MODE_DOWNLOAD)
         }
         mCurrentTask = null
@@ -877,6 +946,7 @@ object DownloadManager : OnSpiderListener, CoroutineScope {
         }
     }
 
+    private val IMAGE_EXTENSIONS = setOf("webp", "jpg", "jpeg", "png", "gif")
     private const val TAG = "DownloadManager"
 }
 

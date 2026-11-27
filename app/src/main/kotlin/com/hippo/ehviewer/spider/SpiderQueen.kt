@@ -384,8 +384,18 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
     @Synchronized
     private fun writeSpiderInfoToLocal() {
         if (!isReady) return
+        spiderInfo.downloadedPages = mFinishedPages.load()
         spiderDen.downloadDir?.run { spiderInfo.write(resolve(SPIDER_INFO_FILENAME)) }
         spiderInfo.saveToCache()
+    }
+
+    /** 暂停下载时立即同步落盘最新 .ehviewer 进度元数据，避免刚暂停即强杀后台导致进度丢失。 */
+    fun flushSpiderInfo() {
+        runCatching {
+            writeSpiderInfoToLocal()
+        }.onFailure {
+            logcat(it)
+        }
     }
 
     private fun isStateDone(state: Int): Boolean = state == STATE_FINISHED || state == STATE_FAILED

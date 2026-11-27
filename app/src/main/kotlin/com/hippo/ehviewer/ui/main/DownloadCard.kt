@@ -115,7 +115,7 @@ fun DownloadCard(
         var total by remember(info.gid) { mutableIntStateOf(info.total) }
         var finished by remember(info.gid) { mutableIntStateOf(info.finished) }
         var speed by remember(info.gid) { mutableLongStateOf(info.speed) }
-        if (isActive) {
+        if (!isFinish) {
             DownloadManager.updatedDownloadInfo(info) {
                 total = this.total
                 finished = this.finished
