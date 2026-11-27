@@ -127,7 +127,7 @@ object FloatingBottomBarDefaults {
     fun colors(
         containerColor: Color = MiuixTheme.colorScheme.surfaceContainer,
         indicatorColor: Color = MiuixTheme.colorScheme.primary,
-        contentColor: Color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        contentColor: Color = MiuixTheme.colorScheme.onSurface,
         activeContentColor: Color = indicatorColor,
     ): FloatingBottomBarColors = FloatingBottomBarColors(
         containerColor = containerColor,

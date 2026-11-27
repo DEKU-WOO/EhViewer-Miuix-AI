@@ -1,5 +1,7 @@
 package com.hippo.ehviewer.ui.screen
 
+import android.net.Uri
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -65,6 +67,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -76,7 +79,9 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.ehviewer.core.database.dao.SearchDao
+import com.ehviewer.core.files.toOkioPath
 import com.ehviewer.core.database.model.Search
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.TagNamespace
@@ -87,6 +92,7 @@ import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.MenuBook
@@ -96,13 +102,17 @@ import com.ehviewer.core.ui.util.ifTrueThen
 import com.ehviewer.core.ui.util.thenIf
 import com.hippo.ehviewer.EhApplication.Companion.searchDatabase
 import com.hippo.ehviewer.Settings
+import com.ehviewer.core.util.withIOContext
 import com.hippo.ehviewer.client.EhTagDatabase
+import com.hippo.ehviewer.client.data.ListUrlBuilder
+import com.hippo.ehviewer.client.data.ListUrlBuilder.Companion.MODE_IMAGE_SEARCH
 import com.hippo.ehviewer.collectAsState
-import com.hippo.ehviewer.ui.destinations.ImageSearchScreenDestination
 import com.hippo.ehviewer.ui.theme.scrim
 import com.hippo.ehviewer.ui.tools.DialogState
 import com.hippo.ehviewer.ui.tools.awaitConfirmationOrCancel
 import com.hippo.ehviewer.ui.tools.rememberCompositionActiveState
+import com.hippo.ehviewer.util.pickVisualMedia
+import com.hippo.ehviewer.util.sha1
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -111,7 +121,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import moe.tarsin.navigate
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SearchBar
@@ -124,6 +138,10 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.progressiveTextureBlur
+import top.yukonga.miuix.kmp.glass.GlassPopupSizing
+import top.yukonga.miuix.kmp.glass.GlassTransformPopup
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
@@ -259,6 +277,36 @@ fun SearchBarScreen(
     }
 
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showImageSearchPopup by rememberSaveable { mutableStateOf(false) }
+    var selectedImageUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val imageSearchAnchor = rememberGlassPopupAnchor()
+    val uiScope = rememberCoroutineScope()
+
+    fun pickImageForSearch() {
+        uiScope.launch {
+            with(context) {
+                val picked = pickVisualMedia(ImageOnly)
+                if (picked != null) {
+                    selectedImageUri = picked
+                }
+            }
+        }
+    }
+
+    fun startImageSearch() {
+        val uri = selectedImageUri ?: return
+        uiScope.launch {
+            val hash = withIOContext { uri.toOkioPath().sha1() }
+            showImageSearchPopup = false
+            hideSearchView()
+            navigate(
+                ListUrlBuilder(
+                    mode = MODE_IMAGE_SEARCH,
+                    hash = hash,
+                ).asDst(),
+            )
+        }
+    }
     val activeBackdrop = backdrop ?: rememberBlurBackdrop()
 
     CompositionLocalProvider(LocalBackdrop provides activeBackdrop) {
@@ -553,8 +601,14 @@ fun SearchBarScreen(
                                                 }
                                             }
                                         }
-                                        // 3) 右侧：独立正圆形毛玻璃高光「以图搜图」按钮
-                                        SearchBarCircleAction(onClick = { navigate(ImageSearchScreenDestination) }) {
+                                        // 3) 右侧：独立正圆形毛玻璃高光「以图搜图」按钮（锚点弹窗入口）
+                                        SearchBarCircleAction(
+                                            onClick = { showImageSearchPopup = true },
+                                            modifier = Modifier.glassPopupAnchor(
+                                                imageSearchAnchor,
+                                                cornerRadius = SearchBarActionSize * 0.5f,
+                                            ),
+                                        ) {
                                             Icon(
                                                 imageVector = MiuixIcons.Image,
                                                 contentDescription = null,
@@ -665,14 +719,24 @@ fun SearchBarScreen(
             }
 
             if (!expanded && !hideSearchBar) {
+                // 与初始展开态 SearchBar 使用完全一致的水平留白（16.dp + maxWidth 居中）与顶部呼吸偏移，
+                // 确保上滑收缩态右侧双圆钮与初始展开态右侧圆钮在 X/Y 坐标基准上无缝原位对齐。
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .windowInsetsPadding(WindowInsets.statusBars)
                         .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
                         .fillMaxWidth()
-                        .height(compactBarHeight),
+                        .padding(horizontal = SearchBarHorizontalPadding),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = SearchBarMaxWidth)
+                            .padding(top = SearchBarTopBreathingSpace)
+                            .height(SearchBarHeight),
+                    ) {
                     if (title != null) {
                         Text(
                             text = title,
@@ -680,7 +744,7 @@ fun SearchBarScreen(
                             color = MiuixTheme.colorScheme.onSurface,
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .padding(start = 24.dp)
+                                .padding(start = 8.dp)
                                 .graphicsLayer {
                                     alpha = ((collapseProgress - 0.3f) / 0.7f).coerceIn(0f, 1f)
                                 },
@@ -691,13 +755,12 @@ fun SearchBarScreen(
                     Row(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .padding(end = 12.dp)
                             .graphicsLayer {
                                 alpha = ((collapseProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
                                 scaleX = 0.85f + 0.15f * collapseProgress
                                 scaleY = 0.85f + 0.15f * collapseProgress
                             },
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(SearchBarActionGap),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (collapseProgress > 0.2f) {
@@ -724,6 +787,97 @@ fun SearchBarScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                    }
+                }
+            }
+
+            // 以图搜图锚点悬浮弹窗：点击展开态右侧圆形「以图搜图」按钮在正下方平滑弹出
+            GlassTransformPopup(
+                show = showImageSearchPopup && expanded,
+                onDismissRequest = { showImageSearchPopup = false },
+                anchor = imageSearchAnchor,
+                backdrop = activeBackdrop,
+                anchorContent = {
+                    Icon(
+                        imageVector = MiuixIcons.Image,
+                        contentDescription = null,
+                        modifier = Modifier.size(SearchBarIconSize),
+                    )
+                },
+                sizing = GlassPopupSizing(minWidth = 256.dp, maxWidth = 300.dp),
+                visuals = liquidGlassPopupVisuals(),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(156.dp)
+                            .clip(SquircleShape(14.dp))
+                            .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                            .clickable(role = Role.Button) { pickImageForSearch() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selectedImageUri != null) {
+                            AsyncImage(
+                                model = selectedImageUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Image,
+                                    contentDescription = null,
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier.size(32.dp),
+                                )
+                                Text(
+                                    text = "点击选择图片",
+                                    style = MiuixTheme.textStyles.body2,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(
+                            onClick = { pickImageForSearch() },
+                            colors = ButtonDefaults.buttonColors(),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = if (selectedImageUri != null) "重新选图" else stringResource(id = R.string.select_image),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Button(
+                            onClick = { startImageSearch() },
+                            enabled = selectedImageUri != null,
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = "开始搜索",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
