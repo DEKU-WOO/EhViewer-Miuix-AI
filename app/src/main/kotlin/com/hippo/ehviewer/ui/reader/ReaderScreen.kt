@@ -297,37 +297,39 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                         val blocked = page.status is PageStatus.Blocked
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
-                            LiquidGlassBottomSheet(
-                                show = true,
-                                modifier = Modifier,
-                                onDismissRequest = { dispose() },
-                            ) {
-                                ReaderPageSheetMeta(
-                                    retry = { pageLoader.retryPage(page.index) },
-                                    retryOrigin = { pageLoader.retryPage(page.index, true) },
-                                    share = { launchIO { with(pageLoader) { shareImage(page, info) } } },
-                                    copy = { launchIO { with(pageLoader) { copy(page) } } },
-                                    save = { launchIO { with(pageLoader) { save(page) } } },
-                                    saveTo = { launchIO { with(pageLoader) { saveTo(page) } } },
-                                    searchByImage = {
-                                        launchIO {
-                                            with(pageLoader) {
-                                                searchByImage(page) { hash ->
-                                                    withUIContext {
-                                                        nav.navigate(
-                                                            ListUrlBuilder(
-                                                                mode = ListUrlBuilder.MODE_IMAGE_SEARCH,
-                                                                hash = hash,
-                                                            ).asDst(),
-                                                        )
+                            CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
+                                LiquidGlassBottomSheet(
+                                    show = true,
+                                    modifier = Modifier,
+                                    onDismissRequest = { dispose() },
+                                ) {
+                                    ReaderPageSheetMeta(
+                                        retry = { pageLoader.retryPage(page.index) },
+                                        retryOrigin = { pageLoader.retryPage(page.index, true) },
+                                        share = { launchIO { with(pageLoader) { shareImage(page, info) } } },
+                                        copy = { launchIO { with(pageLoader) { copy(page) } } },
+                                        save = { launchIO { with(pageLoader) { save(page) } } },
+                                        saveTo = { launchIO { with(pageLoader) { saveTo(page) } } },
+                                        searchByImage = {
+                                            launchIO {
+                                                with(pageLoader) {
+                                                    searchByImage(page) { hash ->
+                                                        withUIContext {
+                                                            nav.navigate(
+                                                                ListUrlBuilder(
+                                                                    mode = ListUrlBuilder.MODE_IMAGE_SEARCH,
+                                                                    hash = hash,
+                                                                ).asDst(),
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                    },
-                                    showAds = { page.unblock() }.takeIf { blocked },
-                                    dismiss = { dispose() },
-                                )
+                                        },
+                                        showAds = { page.unblock() }.takeIf { blocked },
+                                        dismiss = { dispose() },
+                                    )
+                                }
                             }
                         }
                     }
@@ -421,14 +423,16 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
                             var isColorFilter by remember { mutableStateOf(false) }
-                            LiquidGlassBottomSheet(
-                                show = true,
-                                onDismissRequest = { dispose() },
-                                enableWindowDim = !isColorFilter,
-                            ) {
-                                SettingsPager(isWebtoon = isWebtoon, modifier = Modifier.fillMaxSize()) { page ->
-                                    isColorFilter = page == 2
-                                    appbarVisible = !isColorFilter
+                            CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
+                                LiquidGlassBottomSheet(
+                                    show = true,
+                                    onDismissRequest = { dispose() },
+                                    enableWindowDim = !isColorFilter,
+                                ) {
+                                    SettingsPager(isWebtoon = isWebtoon, modifier = Modifier.fillMaxSize()) { page ->
+                                        isColorFilter = page == 2
+                                        appbarVisible = !isColorFilter
+                                    }
                                 }
                             }
                         }

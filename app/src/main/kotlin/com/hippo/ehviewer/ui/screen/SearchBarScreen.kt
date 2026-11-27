@@ -97,6 +97,7 @@ import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.liquidGlassOverlayMaterial
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.MenuBook
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -706,7 +707,7 @@ fun SearchBarScreen(
                                             imageVector = EhIcons.Default.MenuBook,
                                             contentDescription = null,
                                             modifier = Modifier.padding(end = 12.dp).size(20.dp),
-                                            tint = MiuixTheme.colorScheme.primary,
+                                            tint = activeAccentColor(),
                                         )
                                     }
                                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -871,7 +872,7 @@ fun SearchBarScreen(
                             .fillMaxWidth()
                             .height(156.dp)
                             .clip(SquircleShape(14.dp))
-                            .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f))
+                            .background(MiuixTheme.colorScheme.surfaceContainerHigh)
                             .clickable(role = Role.Button) { pickImageForSearch() },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -944,7 +945,7 @@ fun SearchBarScreen(
                         onPersistFilter()
                     },
                     cornerRadius = FilterDialogCornerRadius,
-                    backgroundColor = MiuixTheme.colorScheme.background,
+                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
                 ) {
                     CompositionLocalProvider(LocalBackdrop provides null) {
                         Box(

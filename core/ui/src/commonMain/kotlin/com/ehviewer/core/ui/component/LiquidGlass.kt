@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.liquid.lens
 import com.ehviewer.core.ui.liquid.vibrancy
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -114,11 +115,11 @@ val LiquidGlassOverlayHighlight = EdgeStroke(
 @Composable
 fun liquidGlassOverlayMaterial(dialog: Boolean = false): GlassMaterial {
     val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
-    val tint = if (isDark) Color.Black else Color.White
+    val tint = if (isDark) DreamyPurplePalette.DarkGlassBase else Color.White
     return GlassMaterial(
         blurRadius = 18.dp,
         first = GlassColorLayer(
-            color = tint.copy(alpha = 0.18f),
+            color = tint.copy(alpha = if (isDark) 0.22f else 0.18f),
             mode = GlassColorBlendMode.SrcOver,
         ),
     )
@@ -140,7 +141,7 @@ fun LiquidGlassDialog(
     summary: String? = null,
     maxWidth: Dp = DialogDefaults.MaxWidth,
     cornerRadius: Dp? = null,
-    backgroundColor: Color = GlassDialogDefaults.containerColor(),
+    backgroundColor: Color = MiuixTheme.colorScheme.surfaceContainer,
     enableWindowDim: Boolean = true,
     content: @Composable () -> Unit,
 ) = GlassDialog(
@@ -320,7 +321,7 @@ fun LiquidGlass(
                 onDrawSurface = {
                     drawRect(
                         color = if (isDark) {
-                            Color.White.copy(alpha = 0.03f)
+                            DreamyPurplePalette.DarkHighlight.copy(alpha = 0.04f)
                         } else {
                             Color.White.copy(alpha = 0.06f)
                         },

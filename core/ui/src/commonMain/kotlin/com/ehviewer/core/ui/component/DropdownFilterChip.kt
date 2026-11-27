@@ -98,7 +98,7 @@ fun DropdownFilterChip(
         } else {
             LiquidGlassSurface(
                 shape = CircleShape,
-                containerColor = MiuixTheme.colorScheme.surfaceContainer,
+                containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
                 elevation = 1.dp,
                 refractionHeight = 8.dp,
                 refractionAmount = 8.dp,

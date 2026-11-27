@@ -56,6 +56,7 @@ import com.ehviewer.core.ui.liquid.InnerShadow
 import com.ehviewer.core.ui.liquid.innerShadow
 import com.ehviewer.core.ui.liquid.lens
 import com.ehviewer.core.ui.liquid.vibrancy
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur
@@ -269,10 +270,10 @@ internal fun BottomBarIndicatorLayer(
                         onDrawSurface = {
                             val progress = dampedDragAnimation.pressProgress
                             drawRect(
-                                color = if (!isDark) Color.Black.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
+                                color = if (!isDark) DreamyPurplePalette.Primary.copy(alpha = 0.12f) else DreamyPurplePalette.DarkHighlight.copy(alpha = 0.14f),
                                 alpha = 1f - progress,
                             )
-                            drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                            drawRect(DreamyPurplePalette.DarkGlassBase.copy(alpha = 0.05f * progress))
                         },
                     ).edgeStroke(
                         shape = pillShape,

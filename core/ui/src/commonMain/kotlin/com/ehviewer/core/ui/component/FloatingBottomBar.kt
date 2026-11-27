@@ -60,6 +60,8 @@ import androidx.compose.ui.util.fastRoundToInt
 import com.ehviewer.core.ui.animation.DampedDragAnimation
 import com.ehviewer.core.ui.animation.InteractiveHighlight
 import com.ehviewer.core.ui.liquid.rememberCombinedBackdrop
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
+import com.ehviewer.core.ui.theme.activeAccentColor
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -128,7 +130,7 @@ object FloatingBottomBarDefaults {
         containerColor: Color = MiuixTheme.colorScheme.surfaceContainer,
         indicatorColor: Color = MiuixTheme.colorScheme.primary,
         contentColor: Color = MiuixTheme.colorScheme.onSurface,
-        activeContentColor: Color = indicatorColor,
+        activeContentColor: Color = activeAccentColor(),
     ): FloatingBottomBarColors = FloatingBottomBarColors(
         containerColor = containerColor,
         indicatorColor = indicatorColor,
@@ -225,7 +227,7 @@ fun FloatingBottomBar(
     val isBlurMode = mode == FloatingBottomBarMode.Blur && backdrop != null
     val containerColor = if (isLiquidGlassMode) {
         // 去掉厚实灰色磨砂遮罩，仅保留极轻的纯黑/纯白通透底色，突出水晶玻璃边缘折射质感
-        if (isDark) Color.Black.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.12f)
+        if (isDark) DreamyPurplePalette.DarkGlassBase.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.12f)
     } else {
         colors.containerColor
     }

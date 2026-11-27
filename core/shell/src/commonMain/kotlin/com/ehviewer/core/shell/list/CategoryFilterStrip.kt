@@ -138,7 +138,7 @@ internal fun CategoryAllPill(
     } else {
         LiquidGlassSurface(
             shape = CircleShape,
-            containerColor = MiuixTheme.colorScheme.surfaceContainer,
+            containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
             elevation = 1.dp,
             refractionHeight = 8.dp,
             refractionAmount = 8.dp,
@@ -194,7 +194,7 @@ internal fun CategoryPill(
     } else {
         LiquidGlassSurface(
             shape = CircleShape,
-            containerColor = MiuixTheme.colorScheme.surfaceContainer,
+            containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
             elevation = 1.dp,
             refractionHeight = 8.dp,
             refractionAmount = 8.dp,

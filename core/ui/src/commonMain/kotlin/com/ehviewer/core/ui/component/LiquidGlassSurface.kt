@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.liquid.lens
 import com.ehviewer.core.ui.liquid.vibrancy
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
@@ -49,8 +50,8 @@ fun LiquidGlassSurface(
     val specularHighlight = if (isDark) LiquidGlassHighlightDark else LiquidGlassHighlightLight
 
     val finalContainerColor = if (shaderSupported) {
-        // 深色纯黑 / 浅色纯白 0.18f 低不透明通透遮罩，彻底消除灰色磨砂感
-        (if (isDark) Color.Black else Color.White).copy(alpha = 0.18f)
+        // 深色采用同色系暗紫基底 #16101C 低不透明通透遮罩，浅色保持纯白通透遮罩
+        if (isDark) DreamyPurplePalette.DarkGlassBase.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.18f)
     } else if (backdrop != null) {
         containerColor.copy(alpha = if (isDark) 0.62f else 0.72f)
     } else {
@@ -106,7 +107,7 @@ fun LiquidGlassSurface(
                         .background(finalContainerColor, shape)
                         .border(
                             width = 1.dp,
-                            color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.04f),
+                            color = if (isDark) DreamyPurplePalette.DarkHighlight.copy(alpha = 0.12f) else DreamyPurplePalette.Primary.copy(alpha = 0.08f),
                             shape = shape,
                         )
                 },

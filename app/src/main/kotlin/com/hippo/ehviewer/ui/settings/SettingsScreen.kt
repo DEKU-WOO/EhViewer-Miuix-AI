@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.ui.settings
 
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,7 +65,7 @@ fun SettingsTabContent(
     val backdrop = rememberBlurBackdrop()
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().background(colorScheme.surface),
         topBar = {
             BlurredBar(
                 backdrop = backdrop,

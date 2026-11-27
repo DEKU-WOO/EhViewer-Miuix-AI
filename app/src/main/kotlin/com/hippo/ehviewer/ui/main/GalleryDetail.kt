@@ -41,6 +41,7 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.GalleryDetail
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.SadAndroid
 import com.ehviewer.core.ui.util.LocalWindowLayout
@@ -71,7 +72,7 @@ fun GalleryDetailHeaderInfoCard(
     Column(
         modifier = modifier
             .clip(SquircleShape(12.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.65f))
+            .background(MiuixTheme.colorScheme.surfaceContainerHigh)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
@@ -83,7 +84,7 @@ fun GalleryDetailHeaderInfoCard(
             Text(
                 text = language.orEmpty(),
                 style = MiuixTheme.textStyles.footnote1,
-                color = MiuixTheme.colorScheme.primary,
+                color = activeAccentColor(),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
             )
@@ -186,7 +187,7 @@ fun GalleryDetailHeaderCard(
                 Row(
                     modifier = Modifier
                         .clip(SquircleShape(8.dp))
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .background(MiuixTheme.colorScheme.surfaceContainerHigh)
                         .clickable(role = Role.Button, onClick = onCategoryChipClick)
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -195,7 +196,7 @@ fun GalleryDetailHeaderCard(
                         imageVector = MiuixIcons.Folder,
                         contentDescription = null,
                         modifier = Modifier.size(15.dp),
-                        tint = MiuixTheme.colorScheme.primary,
+                        tint = activeAccentColor(),
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -204,7 +205,7 @@ fun GalleryDetailHeaderCard(
                         softWrap = false,
                         maxLines = 1,
                         style = MiuixTheme.textStyles.footnote1,
-                        color = MiuixTheme.colorScheme.primary,
+                        color = activeAccentColor(),
                     )
                 }
                 info.uploader?.takeIf { it.isNotEmpty() }?.let { uploaderText ->
@@ -212,7 +213,7 @@ fun GalleryDetailHeaderCard(
                     Row(
                         modifier = Modifier
                             .clip(SquircleShape(8.dp))
-                            .background(MiuixTheme.colorScheme.surfaceContainer),
+                            .background(MiuixTheme.colorScheme.surfaceContainerHigh),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (canBlock) {

@@ -1,46 +1,84 @@
 package com.hippo.ehviewer.ui.theme
 
-import android.app.WallpaperManager
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.scrollbar.LocalScrollbarStyle
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.expressiveLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalContext
 import com.ehviewer.core.ui.component.scrollbarStyle
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
 import com.ehviewer.core.ui.theme.rememberMiuixThemeController
-import com.ehviewer.core.util.isAtLeastOMR1
-import com.ehviewer.core.util.isAtLeastS
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
-import com.materialkolor.dynamicColorScheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.TextStyles
 
 val TextStyles.titleLarge get() = title3
 val TextStyles.bodyMedium get() = body2
 
-fun ColorScheme.amoled(amoled: Boolean) = if (amoled) {
-    copy(
-        surface = Color.Black,
-        onSurface = Color.White,
-        background = Color.Black,
-        onBackground = Color.White,
-    )
-} else {
-    this
-}
+private fun buildDreamyPurpleDarkM3Colors(amoled: Boolean): ColorScheme = darkColorScheme(
+    primary = DreamyPurplePalette.Primary,
+    onPrimary = Color.White,
+    primaryContainer = DreamyPurplePalette.DarkPrimaryContainer,
+    onPrimaryContainer = DreamyPurplePalette.DarkHighlight,
+    secondary = DreamyPurplePalette.DarkHighlight,
+    onSecondary = Color(0xFF271033),
+    secondaryContainer = if (amoled) DreamyPurplePalette.AmoledSurfaceContainerHigh else DreamyPurplePalette.DarkSurfaceContainerHigh,
+    onSecondaryContainer = DreamyPurplePalette.DarkOnSurface,
+    tertiary = DreamyPurplePalette.DarkHighlight,
+    onTertiary = Color(0xFF271033),
+    tertiaryContainer = if (amoled) DreamyPurplePalette.AmoledSurfaceContainerHigh else DreamyPurplePalette.DarkSurfaceContainerHigh,
+    onTertiaryContainer = DreamyPurplePalette.DarkHighlight,
+    background = if (amoled) Color.Black else DreamyPurplePalette.DarkBackground,
+    onBackground = DreamyPurplePalette.DarkOnSurface,
+    surface = if (amoled) DreamyPurplePalette.AmoledSurfaceCard else DreamyPurplePalette.DarkSurfaceCard,
+    onSurface = DreamyPurplePalette.DarkOnSurface,
+    surfaceVariant = if (amoled) DreamyPurplePalette.AmoledSurfaceContainerHigh else DreamyPurplePalette.DarkSurfaceContainerHigh,
+    onSurfaceVariant = DreamyPurplePalette.DarkOnSurfaceSecondary,
+    surfaceContainerLowest = if (amoled) Color.Black else DreamyPurplePalette.DarkBackground,
+    surfaceContainerLow = if (amoled) DreamyPurplePalette.AmoledSurfaceCard else Color(0xFF18111D),
+    surfaceContainer = if (amoled) DreamyPurplePalette.AmoledSurfaceCard else DreamyPurplePalette.DarkSurfaceCard,
+    surfaceContainerHigh = if (amoled) DreamyPurplePalette.AmoledSurfaceContainerHigh else DreamyPurplePalette.DarkSurfaceContainerHigh,
+    surfaceContainerHighest = if (amoled) DreamyPurplePalette.AmoledSurfaceContainerHighest else DreamyPurplePalette.DarkSurfaceContainerHighest,
+    outline = DreamyPurplePalette.DarkOnSurfaceSecondary,
+    outlineVariant = if (amoled) DreamyPurplePalette.AmoledDivider else DreamyPurplePalette.DarkDivider,
+)
+
+private val DreamyPurpleLightM3Colors: ColorScheme = lightColorScheme(
+    primary = DreamyPurplePalette.Primary,
+    onPrimary = Color.White,
+    primaryContainer = DreamyPurplePalette.LightPrimaryContainer,
+    onPrimaryContainer = DreamyPurplePalette.LightHighlight,
+    secondary = DreamyPurplePalette.LightHighlight,
+    onSecondary = Color.White,
+    secondaryContainer = DreamyPurplePalette.LightSurfaceContainerHigh,
+    onSecondaryContainer = DreamyPurplePalette.LightOnSurface,
+    tertiary = DreamyPurplePalette.LightHighlight,
+    onTertiary = Color.White,
+    tertiaryContainer = DreamyPurplePalette.LightSurfaceContainerHigh,
+    onTertiaryContainer = DreamyPurplePalette.LightHighlight,
+    background = DreamyPurplePalette.LightBackground,
+    onBackground = DreamyPurplePalette.LightOnSurface,
+    surface = DreamyPurplePalette.LightSurfaceCard,
+    onSurface = DreamyPurplePalette.LightOnSurface,
+    surfaceVariant = DreamyPurplePalette.LightSurfaceContainerHigh,
+    onSurfaceVariant = DreamyPurplePalette.LightOnSurfaceSecondary,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = DreamyPurplePalette.LightBackground,
+    surfaceContainer = DreamyPurplePalette.LightSurfaceCard,
+    surfaceContainerHigh = DreamyPurplePalette.LightSurfaceContainerHigh,
+    surfaceContainerHighest = DreamyPurplePalette.LightSurfaceContainerHighest,
+    outline = DreamyPurplePalette.LightOnSurfaceSecondary,
+    outlineVariant = DreamyPurplePalette.LightDivider,
+)
 
 // Settings.theme 存的是 AppCompatDelegate night mode 值（arrays.xml night_mode_values = [-1, 1, 2]）
 @PublishedApi
@@ -53,29 +91,11 @@ internal fun resolveUseDarkTheme(theme: Int, isSystemDarkTheme: Boolean) = when 
 @Composable
 fun EhTheme(useDarkTheme: Boolean, content: @Composable () -> Unit) {
     val amoled by Settings.blackDarkTheme.collectAsState()
-    val context = LocalContext.current
-    val colors = if (isAtLeastS) {
+    val colors = remember(useDarkTheme, amoled) {
         if (useDarkTheme) {
-            dynamicDarkColorScheme(context).amoled(amoled)
+            buildDreamyPurpleDarkM3Colors(amoled)
         } else {
-            dynamicLightColorScheme(context)
-        }
-    } else {
-        val color = if (isAtLeastOMR1) extractWallPaperPalette() else null
-        if (color != null) {
-            dynamicColorScheme(
-                primary = color.first,
-                isDark = useDarkTheme,
-                isAmoled = amoled,
-                secondary = color.second,
-                tertiary = color.third,
-            )
-        } else {
-            if (useDarkTheme) {
-                darkColorScheme().amoled(amoled)
-            } else {
-                expressiveLightColorScheme()
-            }
+            DreamyPurpleLightM3Colors
         }
     }
 
@@ -83,7 +103,7 @@ fun EhTheme(useDarkTheme: Boolean, content: @Composable () -> Unit) {
 
     MiuixTheme(controller = miuixController) {
         MaterialTheme(colorScheme = colors, motionScheme = CustomMotionScheme) {
-            // 移动端滚动条沿用单一主色（静息与悬停同色，保持既有行为）
+            // 移动端快速滚动条统一使用主主题色 #AF52DE
             val scrollbarStyle = scrollbarStyle(
                 thumbColor = MiuixTheme.colorScheme.primary,
                 hoverThumbColor = MiuixTheme.colorScheme.primary,
@@ -99,18 +119,6 @@ fun EhTheme(useDarkTheme: Boolean, content: @Composable () -> Unit) {
 
 @Composable
 fun Color.scrim() = copy(alpha = if (MiuixTheme.colorScheme.surface.luminance() < 0.5f) 0.5f else 0.9f)
-
-typealias WallPaperPalette = Triple<Color, Color?, Color?>
-
-@Composable
-@RequiresApi(Build.VERSION_CODES.O_MR1)
-fun extractWallPaperPalette(): WallPaperPalette? {
-    val colors = WallpaperManager.getInstance(LocalContext.current)?.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) ?: return null
-    val primary = colors.primaryColor.toArgb().let { Color(it) }
-    val secondary = colors.secondaryColor?.toArgb()?.let { Color(it) }
-    val tertiary = colors.tertiaryColor?.toArgb()?.let { Color(it) }
-    return WallPaperPalette(primary, secondary, tertiary)
-}
 
 // https://issuetracker.google.com/363892346
 object CustomMotionScheme : MotionScheme by MotionScheme.expressive() {

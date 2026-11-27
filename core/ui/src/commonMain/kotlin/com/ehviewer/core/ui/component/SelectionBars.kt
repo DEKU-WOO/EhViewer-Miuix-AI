@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.ehviewer.core.ui.theme.activeAccentColor
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -95,7 +96,7 @@ fun SelectionTopBar(
                 contentDescription = null,
                 onClick = onToggleSelectAll,
                 backdrop = backdrop,
-                tint = if (allSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface,
+                tint = if (allSelected) activeAccentColor() else MiuixTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.CenterEnd),
             )
         }
@@ -117,7 +118,7 @@ private fun SelectionCircleButton(
         refractionHeight = 14.dp,
         refractionAmount = 14.dp,
         highlight = LiquidGlassNavHighlight,
-        containerColor = MiuixTheme.colorScheme.surface,
+        containerColor = MiuixTheme.colorScheme.surfaceContainer,
         modifier = modifier.size(LiquidGlassCircleButtonSize),
         backdrop = backdrop,
     ) {
@@ -169,7 +170,7 @@ fun SelectionActionBar(
             refractionHeight = 24.dp,
             refractionAmount = 24.dp,
             highlight = LiquidGlassNavHighlight,
-            containerColor = MiuixTheme.colorScheme.surface,
+            containerColor = MiuixTheme.colorScheme.surfaceContainer,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp),

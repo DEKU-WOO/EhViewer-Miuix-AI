@@ -80,6 +80,7 @@ import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Bookmarks
 import com.ehviewer.core.ui.icons.filled.MenuBook
@@ -827,7 +828,8 @@ private fun QuickSearchMenuRow(
     onDelete: () -> Unit,
     onCommitEdit: () -> Unit,
 ) {
-    val titleColor = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceContainer
+    val accentColor = activeAccentColor()
+    val titleColor = if (selected) accentColor else MiuixTheme.colorScheme.onSurfaceContainer
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -879,7 +881,7 @@ private fun QuickSearchMenuRow(
         when {
             editing -> QuickSearchIconAction(
                 icon = MiuixIcons.Basic.Check,
-                tint = MiuixTheme.colorScheme.primary,
+                tint = accentColor,
                 contentDescription = null,
                 onClick = onCommitEdit,
             )
@@ -903,7 +905,7 @@ private fun QuickSearchMenuRow(
             selected -> Icon(
                 imageVector = MiuixIcons.Basic.Check,
                 contentDescription = null,
-                tint = MiuixTheme.colorScheme.primary,
+                tint = accentColor,
                 modifier = Modifier
                     .padding(start = 12.dp)
                     .size(DropdownDefaults.CheckIconSize),

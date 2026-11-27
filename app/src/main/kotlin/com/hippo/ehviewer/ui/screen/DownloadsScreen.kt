@@ -85,6 +85,7 @@ import com.ehviewer.core.ui.component.SelectionActionBar
 import com.ehviewer.core.ui.component.SelectionTopBar
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.Download
@@ -1064,7 +1065,7 @@ private fun DownloadLabelPanelRow(
             .padding(horizontal = 8.dp, vertical = 2.dp)
             .clip(SquircleShape(10.dp))
             .background(
-                if (selected) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                if (selected) activeAccentColor().copy(alpha = 0.14f) else Color.Transparent,
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 12.dp),
@@ -1074,14 +1075,14 @@ private fun DownloadLabelPanelRow(
             text = "$name [$count]",
             modifier = Modifier.weight(1f),
             style = MiuixTheme.textStyles.body1,
-            color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface,
+            color = if (selected) activeAccentColor() else MiuixTheme.colorScheme.onSurface,
         )
         if (selected) {
             Icon(
                 imageVector = MiuixIcons.Ok,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = MiuixTheme.colorScheme.primary,
+                tint = activeAccentColor(),
             )
         }
     }

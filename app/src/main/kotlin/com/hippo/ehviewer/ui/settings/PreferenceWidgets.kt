@@ -43,6 +43,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.util.LocalBottomBarContentPadding
 import com.ehviewer.core.ui.util.LocalWindowLayout
 import com.ehviewer.core.ui.util.readableWidth
@@ -123,7 +124,7 @@ fun PreferenceHeader(
                     imageVector = icon,
                     contentDescription = null,
                     modifier = Modifier.size(24.dp),
-                    tint = MiuixTheme.colorScheme.primary,
+                    tint = activeAccentColor(),
                 )
             }
         },

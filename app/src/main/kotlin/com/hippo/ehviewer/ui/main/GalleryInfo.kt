@@ -43,6 +43,7 @@ import com.ehviewer.core.model.GalleryInfo.Companion.NOT_FAVORITED
 import com.ehviewer.core.ui.component.CrystalCard
 import com.ehviewer.core.ui.component.GalleryListCardRating
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.util.LocalIsPageVisible
 import com.ehviewer.core.ui.util.SharedElementBox
 import com.ehviewer.core.ui.util.TransitionsVisibilityScope
@@ -152,20 +153,21 @@ fun GalleryInfoListItem(
                         imageVector = MiuixIcons.Download,
                         contentDescription = null,
                         modifier = Modifier.size(13.dp),
-                        tint = MiuixTheme.colorScheme.primary,
+                        tint = activeAccentColor(),
                     )
                 }
                 info.simpleLanguage?.let { lang ->
                     if (lang == "ZH") {
-                        // 中文画廊：在页数左侧渲染醒目的圆角胶囊徽章，便于未限定语言时快速识别汉化资源
+                        // 中文画廊：使用梦幻紫高亮色（深底 #D277FF / 浅底 #892EC0）渲染醒目圆角徽章
+                        val zhAccent = activeAccentColor()
                         Text(
                             text = lang,
                             style = metaStyle,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE53935),
+                            color = zhAccent,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0x26E53935))
+                                .background(zhAccent.copy(alpha = 0.16f))
                                 .padding(horizontal = 4.dp, vertical = 1.dp),
                         )
                     } else {
