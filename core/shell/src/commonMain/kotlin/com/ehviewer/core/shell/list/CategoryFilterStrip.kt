@@ -1,5 +1,6 @@
 package com.ehviewer.core.shell.list
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ehviewer.core.ui.component.LiquidGlassSurface
@@ -72,7 +75,7 @@ fun CategoryFilterStrip(
     }
 }
 
-// 筛选面板里的分类胶囊组（移动端 SearchFilter 上半段同构）：与分类条同一交互语义，纵向换行排布
+// 筛选面板里的分类胶囊组（保留兼容签名）
 @Composable
 fun CategoryPillRow(
     categories: List<CategoryChipSpec>,
@@ -106,73 +109,105 @@ fun CategoryPillRow(
 }
 
 @Composable
-private fun CategoryAllPill(
+internal fun CategoryAllPill(
     selectedCategory: Int,
     allLabel: String,
     onSelectCategory: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 14.dp,
+    verticalPadding: Dp = 7.dp,
 ) {
     val haptic = LocalHapticFeedback.current
     val isAllSelected = selectedCategory == CategoryChipFlags.ALL || selectedCategory <= 0
-    val allBg = if (isAllSelected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.surfaceContainer
-    val allText = if (isAllSelected) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface
-    LiquidGlassSurface(
-        shape = CircleShape,
-        containerColor = allBg,
-        elevation = if (isAllSelected) 3.dp else 1.dp,
-        refractionHeight = 8.dp,
-        refractionAmount = 8.dp,
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(role = Role.RadioButton) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onSelectCategory(CategoryChipFlags.ALL)
-            },
-    ) {
+    val allText = if (isAllSelected) Color.White else MiuixTheme.colorScheme.onSurface
+    val onClick = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        onSelectCategory(CategoryChipFlags.ALL)
+    }
+    if (isAllSelected) {
         Box(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            modifier = modifier
+                .clip(CircleShape)
+                .background(MiuixTheme.colorScheme.primary, CircleShape)
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
             contentAlignment = Alignment.Center,
         ) {
-            CategoryPillText(text = allLabel, selected = isAllSelected, color = allText)
+            CategoryPillText(text = allLabel, selected = true, color = allText)
+        }
+    } else {
+        LiquidGlassSurface(
+            shape = CircleShape,
+            containerColor = MiuixTheme.colorScheme.surfaceContainer,
+            elevation = 1.dp,
+            refractionHeight = 8.dp,
+            refractionAmount = 8.dp,
+            modifier = modifier
+                .clip(CircleShape)
+                .clickable(role = Role.RadioButton, onClick = onClick),
+        ) {
+            Box(
+                modifier = Modifier.padding(horizontal = horizontalPadding, vertical = verticalPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CategoryPillText(text = allLabel, selected = false, color = allText)
+            }
         }
     }
 }
 
 @Composable
-private fun CategoryPill(
+internal fun CategoryPill(
     spec: CategoryChipSpec,
     selected: Boolean,
     isAllSelected: Boolean,
     currentSelection: Int,
     onSelectCategory: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    horizontalPadding: Dp = 12.dp,
+    verticalPadding: Dp = 7.dp,
 ) {
     val haptic = LocalHapticFeedback.current
-    val pillBg = if (selected) spec.color else MiuixTheme.colorScheme.surfaceContainer
     val pillText = if (selected) Color.White else MiuixTheme.colorScheme.onSurface
-    LiquidGlassSurface(
-        shape = CircleShape,
-        containerColor = pillBg,
-        elevation = if (selected) 3.dp else 1.dp,
-        refractionHeight = 8.dp,
-        refractionAmount = 8.dp,
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(role = Role.RadioButton) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                if (selected) {
-                    val newCat = currentSelection and spec.flag.inv()
-                    onSelectCategory(if (newCat == 0) CategoryChipFlags.ALL else newCat)
-                } else if (isAllSelected) {
-                    onSelectCategory(spec.flag)
-                } else {
-                    onSelectCategory(currentSelection or spec.flag)
-                }
-            },
-    ) {
+    val onClick = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (selected) {
+            val newCat = currentSelection and spec.flag.inv()
+            onSelectCategory(if (newCat == 0) CategoryChipFlags.ALL else newCat)
+        } else if (isAllSelected) {
+            onSelectCategory(spec.flag)
+        } else {
+            onSelectCategory(currentSelection or spec.flag)
+        }
+    }
+    if (selected) {
         Box(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = modifier
+                .clip(CircleShape)
+                .background(spec.color, CircleShape)
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
             contentAlignment = Alignment.Center,
         ) {
-            CategoryPillText(text = spec.label, selected = selected, color = pillText)
+            CategoryPillText(text = spec.label, selected = true, color = pillText)
+        }
+    } else {
+        LiquidGlassSurface(
+            shape = CircleShape,
+            containerColor = MiuixTheme.colorScheme.surfaceContainer,
+            elevation = 1.dp,
+            refractionHeight = 8.dp,
+            refractionAmount = 8.dp,
+            modifier = modifier
+                .clip(CircleShape)
+                .clickable(role = Role.RadioButton, onClick = onClick),
+        ) {
+            Box(
+                modifier = Modifier.padding(horizontal = horizontalPadding, vertical = verticalPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CategoryPillText(text = spec.label, selected = false, color = pillText)
+            }
         }
     }
 }
@@ -184,5 +219,7 @@ private fun CategoryPillText(text: String, selected: Boolean, color: Color) {
         fontSize = 13.sp,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }

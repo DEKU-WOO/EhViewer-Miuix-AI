@@ -44,10 +44,10 @@ private val categoryTable = arrayOf(
     EhUtils.MANGA to R.string.manga,
     EhUtils.ARTIST_CG to R.string.artist_cg,
     EhUtils.GAME_CG to R.string.game_cg,
+    EhUtils.COSPLAY to R.string.cosplay,
     EhUtils.WESTERN to R.string.western,
     EhUtils.NON_H to R.string.non_h,
     EhUtils.IMAGE_SET to R.string.image_set,
-    EhUtils.COSPLAY to R.string.cosplay,
     EhUtils.ASIAN_PORN to R.string.asian_porn,
     EhUtils.MISC to R.string.misc,
 )
