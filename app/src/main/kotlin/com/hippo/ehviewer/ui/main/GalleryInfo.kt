@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.model.GalleryInfo.Companion.NOT_FAVORITED
@@ -85,18 +86,23 @@ fun GalleryInfoListItem(
                 modifier = Modifier.aspectRatio(DEFAULT_RATIO),
             )
         }
-        Column(modifier = Modifier.padding(start = 8.dp, top = 2.dp, end = 4.dp, bottom = 4.dp)) {
+        Column(modifier = Modifier.padding(start = 8.dp, top = 4.dp, end = 6.dp, bottom = 4.dp)) {
             GalleryTitleText(
                 info = info,
                 maxLines = 3,
-                style = MiuixTheme.textStyles.body1,
+                style = galleryListCardTitleStyle(),
             )
+            // 标题区与下方元信息区保持清晰分层间距（明显大于标题内部行距）
+            Spacer(modifier = Modifier.height(6.dp))
             Spacer(modifier = Modifier.weight(1f))
+            val metaStyle = MiuixTheme.textStyles.footnote1.copy(fontSize = 11.5.sp, lineHeight = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = info.uploader.orEmpty(),
-                    modifier = Modifier.alignByBaseline().alpha(if (info.disowned) 0.5f else 1f),
-                    style = MiuixTheme.textStyles.footnote1,
+                    modifier = Modifier.alignByBaseline().weight(1f, fill = false).alpha(if (info.disowned) 0.5f else 1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = metaStyle,
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (isInFavScene) {
@@ -104,8 +110,10 @@ fun GalleryInfoListItem(
                         Text(
                             text = it,
                             modifier = Modifier.alignByBaseline(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             fontStyle = FontStyle.Italic,
-                            style = MiuixTheme.textStyles.footnote1,
+                            style = metaStyle,
                         )
                     }
                 } else {
@@ -114,14 +122,16 @@ fun GalleryInfoListItem(
                         Icon(
                             imageVector = MiuixIcons.FavoritesFill,
                             contentDescription = null,
-                            modifier = Modifier.size(14.dp).align(Alignment.CenterVertically),
+                            modifier = Modifier.size(13.dp).align(Alignment.CenterVertically),
                             tint = EhUtils.favoriteIconColor,
                         )
                         info.favoriteName?.let {
                             Text(
                                 text = it,
                                 modifier = Modifier.alignByBaseline(),
-                                style = MiuixTheme.textStyles.footnote1,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = metaStyle,
                             )
                         }
                     }
@@ -132,14 +142,14 @@ fun GalleryInfoListItem(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Place the rating near the uploader text as there's more visual space
-                GalleryListCardRating(rating = info.rating, modifier = Modifier.padding(top = 1.dp, bottom = 3.dp))
+                GalleryListCardRating(rating = info.rating, modifier = Modifier.padding(vertical = 1.dp))
                 Spacer(modifier = Modifier.weight(1f))
                 val downloaded by DownloadManager.collectContainDownloadInfo(info.gid)
                 if (downloaded) {
                     Icon(
                         imageVector = MiuixIcons.Download,
                         contentDescription = null,
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(13.dp),
                         tint = MiuixTheme.colorScheme.primary,
                     )
                 }
@@ -148,7 +158,7 @@ fun GalleryInfoListItem(
                         // 中文画廊：在页数左侧渲染醒目的圆角胶囊徽章，便于未限定语言时快速识别汉化资源
                         Text(
                             text = lang,
-                            style = MiuixTheme.textStyles.footnote1,
+                            style = metaStyle,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFE53935),
                             modifier = Modifier
@@ -158,7 +168,7 @@ fun GalleryInfoListItem(
                         )
                     } else {
                         // 其他语言（EN / KO / RU 等）保持原有朴素灰色纯文本
-                        Text(text = lang, style = MiuixTheme.textStyles.footnote1)
+                        Text(text = lang, style = metaStyle)
                     }
                 }
                 if (info.pages != 0 && showPages) {
@@ -169,7 +179,7 @@ fun GalleryInfoListItem(
                     }
                     Text(
                         text = if (readProgress > 0) "${readProgress + 1}/${info.pages}P" else "${info.pages}P",
-                        style = MiuixTheme.textStyles.footnote1,
+                        style = metaStyle,
                     )
                 }
             }
@@ -184,9 +194,9 @@ fun GalleryInfoListItem(
                     modifier = Modifier
                         .clip(SquircleShape(6.dp))
                         .background(categoryColor)
-                        .padding(vertical = 2.dp, horizontal = 6.dp),
+                        .padding(vertical = 1.5.dp, horizontal = 6.dp),
                     color = EhUtils.getCategoryTextColor(categoryColor),
-                    style = MiuixTheme.textStyles.footnote2,
+                    style = MiuixTheme.textStyles.footnote2.copy(lineHeight = 14.sp),
                 )
                 // 分类徽章与上传时间之间保持纯留白，避免挤压右侧时间
                 Spacer(modifier = Modifier.weight(1f))
@@ -194,7 +204,7 @@ fun GalleryInfoListItem(
                     text = info.posted.orEmpty(),
                     maxLines = 1,
                     softWrap = false,
-                    style = MiuixTheme.textStyles.footnote2,
+                    style = MiuixTheme.textStyles.footnote2.copy(lineHeight = 14.sp),
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )
             }
@@ -375,6 +385,13 @@ fun GalleryTitleText(
         },
     )
 }
+
+/** 画廊列表卡片统一标题样式：适配 80% 卡片高度，字号收至 13.5.sp 配合紧凑 16.5.sp 行高，完整保留 3 行上限。 */
+@Composable
+internal fun galleryListCardTitleStyle(): TextStyle = MiuixTheme.textStyles.body1.copy(
+    fontSize = 13.5.sp,
+    lineHeight = 16.5.sp,
+)
 
 private const val MIN_RATIO = 0.5F
 private const val MAX_RATIO = 1.5F

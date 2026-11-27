@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ehviewer.core.database.model.DownloadInfo
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.CrystalCard
@@ -97,15 +98,17 @@ fun DownloadCard(
         val stateFailed = stringResource(R.string.download_state_failed)
         val stateFailed2 = stringResource(R.string.download_state_failed_2, info.legacy)
         val downloadState by DownloadManager.collectDownloadState(info.gid)
-        Column(modifier = Modifier.fillMaxHeight().padding(start = 8.dp, top = 2.dp, end = 4.dp, bottom = 4.dp)) {
-            // 与在线画廊卡片保持同一标题规范（body1 + 最多 3 行），避免误用详情页大标题
+        Column(modifier = Modifier.fillMaxHeight().padding(start = 8.dp, top = 4.dp, end = 6.dp, bottom = 4.dp)) {
+            // 与在线画廊卡片保持同一紧凑标题规范（13.5.sp / 16.5.sp 行高 + 最多 3 行）
             GalleryTitleText(
                 info = info,
                 maxLines = 3,
-                style = MiuixTheme.textStyles.body1,
+                style = galleryListCardTitleStyle(),
             )
-            // 标题贴顶、作者/星级/分类/状态贴底，与在线卡片一致的上下两端对齐
+            // 标题区与下方元信息区保持清晰分层间距（明显大于标题内部行距）
+            Spacer(modifier = Modifier.height(6.dp))
             Spacer(modifier = Modifier.weight(1f))
+            val metaStyle = MiuixTheme.textStyles.footnote1.copy(fontSize = 11.5.sp, lineHeight = 14.sp)
             if (downloadState != DownloadInfo.STATE_DOWNLOAD) {
                 val stateText = when (downloadState) {
                     DownloadInfo.STATE_NONE -> stringResource(R.string.download_state_none)
@@ -128,13 +131,13 @@ fun DownloadCard(
                         modifier = Modifier.alignByBaseline().weight(1f).alpha(if (info.disowned) 0.5f else 1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MiuixTheme.textStyles.body2,
+                        style = metaStyle,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                     Text(
                         text = stateText.orEmpty(),
                         modifier = Modifier.alignByBaseline(),
-                        style = MiuixTheme.textStyles.body2,
+                        style = metaStyle,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
@@ -151,9 +154,9 @@ fun DownloadCard(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 } else {
                     Row {
-                        Text(text = "$finished/${total}P", style = MiuixTheme.textStyles.footnote1)
+                        Text(text = "$finished/${total}P", style = metaStyle)
                         Spacer(modifier = Modifier.weight(1f))
-                        Text(text = FileUtils.humanReadableByteCount(speed.coerceAtLeast(0)) + "/s", style = MiuixTheme.textStyles.footnote1)
+                        Text(text = FileUtils.humanReadableByteCount(speed.coerceAtLeast(0)) + "/s", style = metaStyle)
                     }
                     LinearProgressIndicator(
                         progress = (finished.toFloat() / total.toFloat()).coerceIn(0f, 1f),
@@ -169,9 +172,9 @@ fun DownloadCard(
                     val categoryText = EhUtils.getCategory(info.category).uppercase()
                     Text(
                         text = categoryText,
-                        modifier = Modifier.clip(SquircleShape(4.dp)).background(categoryColor).padding(vertical = 2.dp, horizontal = 8.dp),
+                        modifier = Modifier.clip(SquircleShape(6.dp)).background(categoryColor).padding(vertical = 1.5.dp, horizontal = 6.dp),
                         color = EhUtils.getCategoryTextColor(categoryColor),
-                        style = MiuixTheme.textStyles.body2,
+                        style = MiuixTheme.textStyles.footnote2.copy(lineHeight = 14.sp),
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
