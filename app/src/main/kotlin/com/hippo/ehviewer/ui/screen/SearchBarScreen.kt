@@ -921,7 +921,10 @@ fun SearchBarScreen(
                         Button(
                             onClick = { startImageSearch() },
                             enabled = selectedImageUri != null,
-                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            colors = ButtonDefaults.buttonColorsPrimary(
+                                disabledColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                disabledContentColor = Color.White.copy(alpha = 0.78f),
+                            ),
                             modifier = Modifier.weight(1f),
                         ) {
                             Text(

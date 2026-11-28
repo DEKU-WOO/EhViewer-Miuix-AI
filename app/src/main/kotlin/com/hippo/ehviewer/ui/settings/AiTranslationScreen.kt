@@ -452,13 +452,18 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    TextButton(text = addModelTitle, onClick = ::addModel)
+                                    TextButton(
+                                        text = addModelTitle,
+                                        onClick = ::addModel,
+                                        modifier = Modifier.weight(1f),
+                                    )
                                     TextButton(
                                         text = stringResource(R.string.settings_ai_translation_model_delete),
                                         onClick = ::deleteSelectedModel,
+                                        modifier = Modifier.weight(1f),
                                     )
                                 }
                                 TextButton(
