@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Soft dreamy purple adaptive launcher icon (Dark mode: muted purple-gray base, zero pure black) -->
-    <color name="ic_launcher_background">#22192A</color>
-    <color name="ic_launcher_foreground_primary">#C47BE8</color>
-    <color name="ic_launcher_foreground_secondary">#A467C2</color>
-
     <!-- Cold-start SplashScreen & window background (Dark mode) -->
     <color name="splash_background">#120D16</color>
 </resources>
