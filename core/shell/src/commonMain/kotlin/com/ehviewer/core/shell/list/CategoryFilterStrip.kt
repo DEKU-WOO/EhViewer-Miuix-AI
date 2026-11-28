@@ -28,11 +28,11 @@ import com.ehviewer.core.ui.component.LiquidGlassSurface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-// 分类胶囊数据面（宿主注入 flag/显示名/类目色；共享层不感知 EH 具体分类表）
+// 分类胶囊数据面（宿主注入 flag/显示名；选中态统一使用主题实心 primary 底色 + 纯白文字）
 data class CategoryChipSpec(
     val flag: Int,
     val label: String,
-    val color: Color,
+    val color: Color = Color.Unspecified,
 )
 
 // 分类位掩码（与移动端 EhUtils.ALL_CATEGORY 同值）；「全部」态在 UI 层仅作高亮判定
@@ -184,7 +184,7 @@ internal fun CategoryPill(
         Box(
             modifier = modifier
                 .clip(CircleShape)
-                .background(spec.color, CircleShape)
+                .background(MiuixTheme.colorScheme.primary, CircleShape)
                 .clickable(role = Role.RadioButton, onClick = onClick)
                 .padding(horizontal = horizontalPadding, vertical = verticalPadding),
             contentAlignment = Alignment.Center,

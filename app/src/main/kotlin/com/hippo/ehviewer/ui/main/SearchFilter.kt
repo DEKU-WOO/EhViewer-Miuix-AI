@@ -52,13 +52,13 @@ private val categoryTable = arrayOf(
     EhUtils.MISC to R.string.misc,
 )
 
-// 分类胶囊数据面：搜索展开视图分类条与筛选面板共用（flag/颜色与 EhUtils 同源）
+// 分类胶囊数据面：搜索展开视图筛选区与全局筛选悬浮弹窗共用（选中态统一为主题 primary 实心底色）
 @Composable
 fun galleryCategoryChips(): List<CategoryChipSpec> = categoryTable.map { (cat, stringRes) ->
     CategoryChipSpec(
         flag = cat,
         label = stringResource(stringRes),
-        color = EhUtils.getCategoryColor(cat),
+        color = MiuixTheme.colorScheme.primary,
     )
 }
 
