@@ -5,7 +5,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,7 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import com.ehviewer.core.ui.util.ProvideVectorPainterCache
 import com.ehviewer.core.ui.util.SHARED_THUMB_DURATION_MS
+import com.ehviewer.core.ui.util.SHARED_THUMB_SHRINK_DURATION_MS
 import com.ehviewer.core.ui.util.SharedThumbEasing
+import com.ehviewer.core.ui.util.SharedThumbShrinkEasing
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.collectAsState
 import com.hippo.ehviewer.ui.destinations.GalleryDetailScreenDestination
@@ -55,9 +56,14 @@ inline fun ComponentActivity.setMiuixContent(crossinline content: @Composable Di
 
 private typealias Ty = AnimatedContentTransitionScope<NavBackStackEntry>
 
-private val DetailTransitionFloatSpec = tween<Float>(
+private val DetailEnterFloatSpec = tween<Float>(
     durationMillis = SHARED_THUMB_DURATION_MS,
     easing = SharedThumbEasing,
+)
+
+private val DetailPopFloatSpec = tween<Float>(
+    durationMillis = SHARED_THUMB_SHRINK_DURATION_MS,
+    easing = SharedThumbShrinkEasing,
 )
 
 @Composable
@@ -67,8 +73,8 @@ fun rememberEhNavAnim(): NavHostAnimatedDestinationStyle {
         object : NavHostAnimatedDestinationStyle() {
             override val enterTransition: Ty.() -> EnterTransition = {
                 if (targetState.destination.route == GalleryDetailScreenDestination.route) {
-                    fadeIn(animationSpec = DetailTransitionFloatSpec) +
-                        scaleIn(initialScale = 0.94f, animationSpec = DetailTransitionFloatSpec) +
+                    fadeIn(animationSpec = DetailEnterFloatSpec) +
+                        scaleIn(initialScale = 0.94f, animationSpec = DetailEnterFloatSpec) +
                         slideInHorizontally(
                             animationSpec = tween(
                                 durationMillis = SHARED_THUMB_DURATION_MS,
@@ -82,8 +88,8 @@ fun rememberEhNavAnim(): NavHostAnimatedDestinationStyle {
 
             override val exitTransition: Ty.() -> ExitTransition = {
                 if (targetState.destination.route == GalleryDetailScreenDestination.route) {
-                    fadeOut(animationSpec = DetailTransitionFloatSpec) +
-                        scaleOut(targetScale = 0.96f, animationSpec = DetailTransitionFloatSpec)
+                    fadeOut(animationSpec = DetailEnterFloatSpec) +
+                        scaleOut(targetScale = 0.96f, animationSpec = DetailEnterFloatSpec)
                 } else {
                     materialSharedAxisXOut(true, slideDistance)
                 }
@@ -91,8 +97,8 @@ fun rememberEhNavAnim(): NavHostAnimatedDestinationStyle {
 
             override val popEnterTransition: Ty.() -> EnterTransition = {
                 if (initialState.destination.route == GalleryDetailScreenDestination.route) {
-                    fadeIn(animationSpec = DetailTransitionFloatSpec) +
-                        scaleIn(initialScale = 0.96f, animationSpec = DetailTransitionFloatSpec)
+                    fadeIn(animationSpec = DetailPopFloatSpec) +
+                        scaleIn(initialScale = 0.96f, animationSpec = DetailPopFloatSpec)
                 } else {
                     materialSharedAxisXIn(false, slideDistance)
                 }
@@ -100,12 +106,12 @@ fun rememberEhNavAnim(): NavHostAnimatedDestinationStyle {
 
             override val popExitTransition: Ty.() -> ExitTransition = {
                 if (initialState.destination.route == GalleryDetailScreenDestination.route) {
-                    fadeOut(animationSpec = DetailTransitionFloatSpec) +
-                        scaleOut(targetScale = 0.94f, animationSpec = DetailTransitionFloatSpec) +
+                    fadeOut(animationSpec = DetailPopFloatSpec) +
+                        scaleOut(targetScale = 0.94f, animationSpec = DetailPopFloatSpec) +
                         slideOutHorizontally(
                             animationSpec = tween(
-                                durationMillis = SHARED_THUMB_DURATION_MS,
-                                easing = SharedThumbEasing,
+                                durationMillis = SHARED_THUMB_SHRINK_DURATION_MS,
+                                easing = SharedThumbShrinkEasing,
                             ),
                         ) { (it * 0.06f).toInt() }
                 } else {

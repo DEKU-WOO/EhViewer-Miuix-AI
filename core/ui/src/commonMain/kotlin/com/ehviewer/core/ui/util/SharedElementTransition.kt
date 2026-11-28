@@ -25,8 +25,15 @@ import kotlin.concurrent.atomics.fetchAndIncrement
 val SharedThumbEasing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
 const val SHARED_THUMB_DURATION_MS = 400
 
-private val DefaultSharedThumbBoundsTransform = BoundsTransform { _, _ ->
-    tween(durationMillis = SHARED_THUMB_DURATION_MS, easing = SharedThumbEasing)
+val SharedThumbShrinkEasing = CubicBezierEasing(0.16f, 1f, 0.30f, 1f)
+const val SHARED_THUMB_SHRINK_DURATION_MS = 580
+
+private val DefaultSharedThumbBoundsTransform = BoundsTransform { initialBounds, targetBounds ->
+    if (targetBounds.width < initialBounds.width) {
+        tween(durationMillis = SHARED_THUMB_SHRINK_DURATION_MS, easing = SharedThumbShrinkEasing)
+    } else {
+        tween(durationMillis = SHARED_THUMB_DURATION_MS, easing = SharedThumbEasing)
+    }
 }
 
 private val DefaultSharedThumbEnter: EnterTransition = fadeIn(
@@ -34,7 +41,7 @@ private val DefaultSharedThumbEnter: EnterTransition = fadeIn(
 )
 
 private val DefaultSharedThumbExit: ExitTransition = fadeOut(
-    animationSpec = tween(durationMillis = SHARED_THUMB_DURATION_MS, easing = SharedThumbEasing),
+    animationSpec = tween(durationMillis = SHARED_THUMB_SHRINK_DURATION_MS, easing = SharedThumbShrinkEasing),
 )
 
 val NoopTransitionsVisibilityScope = TransitionsVisibilityScope(emptySet())
