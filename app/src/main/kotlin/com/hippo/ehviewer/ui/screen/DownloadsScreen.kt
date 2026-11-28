@@ -662,13 +662,13 @@ fun DownloadsTabContent(
         val marginH = dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_h)
         val marginV = dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_list_margin_v)
         // 从隐藏状态栏的全屏阅读器返回时，Scaffold 首帧可能沿用旧 inset 导致顶部内边距变矮；
-        // 这里按「状态栏 + 搜索栏 + 8.dp」兜底，保证首张卡片始终在搜索栏下方
+        // 这里按与历史页一致的「状态栏 + 搜索栏 + 16.dp」兜底，保证首张卡片与历史页严格齐平且不被遮挡
         val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
-        val expectedTop = statusBarTop + SearchBarDefaults.InputFieldMinHeight + 16.dp + 8.dp
+        val expectedTop = statusBarTop + SearchBarDefaults.InputFieldMinHeight + 16.dp
         val layoutDirection = LocalLayoutDirection.current
         val realPadding = PaddingValues(
             start = contentPadding.calculateStartPadding(layoutDirection) + marginH,
-            top = maxOf(contentPadding.calculateTopPadding(), expectedTop) + marginV,
+            top = maxOf(contentPadding.calculateTopPadding(), expectedTop),
             end = contentPadding.calculateEndPadding(layoutDirection) + marginH,
             bottom = contentPadding.calculateBottomPadding() + marginV,
         )
