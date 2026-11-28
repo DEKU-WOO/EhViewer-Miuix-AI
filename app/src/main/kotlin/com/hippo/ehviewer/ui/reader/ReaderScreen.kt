@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -45,11 +47,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.keepScreenOn
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import arrow.core.Either
 import arrow.core.Either.Companion.catch
@@ -60,6 +65,7 @@ import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
+import com.ehviewer.core.ui.theme.rememberMiuixThemeController
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.asyncInVM
 import com.ehviewer.core.ui.util.rememberSystemUiController
@@ -109,11 +115,12 @@ import kotlinx.serialization.Serializable
 import moe.tarsin.string
 import okio.Path.Companion.toPath
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.ehviewer.core.ui.component.LiquidGlassBottomSheet
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 @Serializable
 sealed interface ReaderScreenArgs {
@@ -192,11 +199,16 @@ fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: Dest
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = { navigator.popBackStack() },
+                            colors = ButtonDefaults.buttonColors(
+                                color = MiuixTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = MiuixTheme.colorScheme.onSurface,
+                            ),
                         ) {
                             Text(text = stringResource(id = android.R.string.cancel))
                         }
                         Button(
                             onClick = { retryTrigger++ },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
                         ) {
                             Text(text = stringResource(id = R.string.action_retry))
                         }
@@ -297,11 +309,13 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                         val blocked = page.status is PageStatus.Blocked
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
-                            CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
-                                LiquidGlassBottomSheet(
+                            val isDarkSheet = MiuixTheme.colorScheme.surface.luminance() < 0.5f
+                            MiuixTheme(controller = rememberMiuixThemeController(useDarkTheme = isDarkSheet, isAmoled = false)) {
+                                WindowBottomSheet(
                                     show = true,
-                                    modifier = Modifier,
                                     onDismissRequest = { dispose() },
+                                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
+                                    insideMargin = DpSize(0.dp, 0.dp),
                                 ) {
                                     ReaderPageSheetMeta(
                                         retry = { pageLoader.retryPage(page.index) },
@@ -423,13 +437,28 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
                             var isColorFilter by remember { mutableStateOf(false) }
-                            CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
-                                LiquidGlassBottomSheet(
+                            val isDarkSheet = MiuixTheme.colorScheme.surface.luminance() < 0.5f
+                            val config = LocalConfiguration.current
+                            val sheetHeight = if (config.screenWidthDp > config.screenHeightDp) {
+                                (config.screenHeightDp * 0.78f).dp.coerceAtLeast(260.dp)
+                            } else {
+                                (config.screenHeightDp * 0.58f).dp.coerceIn(340.dp, 540.dp)
+                            }
+                            // 绑定标准梦幻紫氛围色板：底层页面底色（浅色 #F7F4FA / 深色 #120D16）+ 一级圆角卡片（浅色 #FFFFFF / 深色 #1E1624）
+                            MiuixTheme(controller = rememberMiuixThemeController(useDarkTheme = isDarkSheet, isAmoled = false)) {
+                                WindowBottomSheet(
                                     show = true,
                                     onDismissRequest = { dispose() },
+                                    backgroundColor = MiuixTheme.colorScheme.background,
+                                    insideMargin = DpSize(0.dp, 0.dp),
                                     enableWindowDim = !isColorFilter,
                                 ) {
-                                    SettingsPager(isWebtoon = isWebtoon, modifier = Modifier.fillMaxSize()) { page ->
+                                    SettingsPager(
+                                        isWebtoon = isWebtoon,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(sheetHeight),
+                                    ) { page ->
                                         isColorFilter = page == 2
                                         appbarVisible = !isColorFilter
                                     }

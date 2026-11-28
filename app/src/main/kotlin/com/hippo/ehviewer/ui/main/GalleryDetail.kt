@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
@@ -59,8 +61,10 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Favorites
+import top.yukonga.miuix.kmp.icon.extended.FavoritesFill
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+private val DetailFavoriteHeartRed = Color(0xFFE53935)
 
 /**
  * 统一详情页与列表卡片的语言解析优先级：
@@ -101,6 +105,7 @@ fun GalleryDetailHeaderCard(
     onCoverClick: (() -> Unit)? = null,
 ) = Card(modifier = modifier) {
     val detail = info as? GalleryDetail
+    val topStatStyle = MiuixTheme.textStyles.body2.copy(fontSize = 14.5.sp, lineHeight = 18.sp)
     val metaStyle = MiuixTheme.textStyles.footnote1.copy(fontSize = 12.5.sp, lineHeight = 16.sp)
     val subMetaStyle = MiuixTheme.textStyles.footnote2.copy(fontSize = 12.sp, lineHeight = 15.sp)
 
@@ -123,7 +128,7 @@ fun GalleryDetailHeaderCard(
                 .padding(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            // 右侧上半区：详情页专属扩展信息（左文件大小 + 右收藏数 ♡）
+            // 右侧上半区：详情页专属扩展信息（左文件大小 + 右实心红心收藏人数，无左内边距严格对齐下方各行）
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -137,22 +142,23 @@ fun GalleryDetailHeaderCard(
             ) {
                 Text(
                     text = detail?.size.orEmpty(),
-                    style = metaStyle,
+                    style = topStatStyle,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     maxLines = 1,
                 )
                 if (detail != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = MiuixIcons.Favorites,
+                            imageVector = MiuixIcons.FavoritesFill,
                             contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                            modifier = Modifier.size(16.5.dp),
+                            tint = DetailFavoriteHeartRed,
                         )
-                        Spacer(modifier = Modifier.width(3.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = detail.favoriteCount.toString(),
-                            style = metaStyle,
+                            style = topStatStyle,
+                            fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onSurfaceSecondary,
                             maxLines = 1,
                         )
@@ -180,7 +186,7 @@ fun GalleryDetailHeaderCard(
                                 onLongClick = onBlockUploaderIconClick,
                             )
                         }
-                        .padding(vertical = 2.dp),
+                        .padding(top = 2.dp, bottom = 2.dp, end = 8.dp),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     Text(
@@ -193,7 +199,7 @@ fun GalleryDetailHeaderCard(
                     )
                 }
 
-                // 2) 星级与语言页数行：左侧 5 颗可点击评分星标，右侧对齐 [ZH] 语言胶囊 + 总页数
+                // 2) 星级与语言页数行：仅在上下与右侧扩展点击热区，并补偿星星矢量左侧约 1.5~2.dp 透明画布留白，严格左对齐上传者与分类徽章
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -205,13 +211,14 @@ fun GalleryDetailHeaderCard(
                             .thenIf(onRatingClick != null) {
                                 clickable(role = Role.Button, onClick = onRatingClick!!)
                             }
-                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                            .padding(top = 4.dp, bottom = 4.dp, end = 6.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         RatingWidgetReuse(
                             rating = rating,
                             ratingSize = 17.dp,
                             ratingInterval = 1.5.dp,
+                            modifier = Modifier.offset(x = (-1.5).dp),
                         )
                     }
                     Spacer(modifier = Modifier.weight(1f))

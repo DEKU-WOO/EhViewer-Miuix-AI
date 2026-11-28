@@ -15,11 +15,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
+import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.theme.activeAccentColor
 import moe.tarsin.kt.andThen
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -49,16 +52,27 @@ fun ReaderPageSheetMeta(
     fun Item(icon: ImageVector, @StringRes text: Int, onClick: () -> Unit) = Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .height(52.dp)
+            .clip(SquircleShape(12.dp))
             .clickable(role = Role.Button, onClick = onClick andThen dismiss)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(imageVector = icon, contentDescription = null, tint = MiuixTheme.colorScheme.onSurface)
-        Spacer(modifier = Modifier.size(32.dp))
-        Text(text = stringResource(id = text), style = MiuixTheme.textStyles.body1)
+        Icon(imageVector = icon, contentDescription = null, tint = activeAccentColor())
+        Spacer(modifier = Modifier.size(20.dp))
+        Text(
+            text = stringResource(id = text),
+            style = MiuixTheme.textStyles.body1,
+            color = MiuixTheme.colorScheme.onSurface,
+        )
     }
-    Column(modifier = Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(top = 4.dp, bottom = 12.dp),
+    ) {
         showAds?.let { Item(icon = MiuixIcons.Show, text = R.string.show_blocked_image, onClick = it) }
         Item(icon = MiuixIcons.Refresh, text = R.string.refresh, onClick = retry)
         Item(icon = MiuixIcons.Show, text = R.string.view_original, onClick = retryOrigin)

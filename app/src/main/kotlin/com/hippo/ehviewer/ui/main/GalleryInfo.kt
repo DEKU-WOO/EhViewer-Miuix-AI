@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -144,8 +145,13 @@ fun GalleryInfoListItem(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Place the rating near the uploader text as there's more visual space
-                GalleryListCardRating(rating = info.rating, modifier = Modifier.padding(vertical = 1.dp))
+                // 补偿星星矢量（24dp 画布内左尖端位于 x=2f）自带的约 1.5~2.dp 左侧透明留白，使首颗星左尖端与上传者及分类徽章严丝合缝左对齐
+                GalleryListCardRating(
+                    rating = info.rating,
+                    modifier = Modifier
+                        .offset(x = (-1.5).dp)
+                        .padding(vertical = 1.dp),
+                )
                 Spacer(modifier = Modifier.weight(1f))
                 val downloaded by DownloadManager.collectContainDownloadInfo(info.gid)
                 if (downloaded) {

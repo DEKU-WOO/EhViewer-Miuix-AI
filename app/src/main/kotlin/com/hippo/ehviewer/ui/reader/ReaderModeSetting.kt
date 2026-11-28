@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,8 +26,7 @@ import com.hippo.ehviewer.asMutableState
 import eu.kanade.tachiyomi.ui.reader.setting.OrientationType
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingModeType
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.SmallTitle
 
 @Composable
 fun ReaderModeSetting(isWebtoon: Boolean) = Column(
@@ -54,14 +53,11 @@ fun ReaderModeSetting(isWebtoon: Boolean) = Column(
             )
         }
     }
-    Spacer(modifier = Modifier.size(16.dp))
+    Spacer(modifier = Modifier.height(8.dp))
     Crossfade(targetState = isWebtoon, label = "Setting") { webtoon ->
         Column {
-            Text(
+            SmallTitle(
                 text = stringResource(id = if (webtoon) R.string.webtoon_viewer else R.string.pager_viewer),
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                style = MiuixTheme.textStyles.body2,
             )
             Card(
                 modifier = Modifier
@@ -76,6 +72,7 @@ fun ReaderModeSetting(isWebtoon: Boolean) = Column(
             }
         }
     }
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 @Composable

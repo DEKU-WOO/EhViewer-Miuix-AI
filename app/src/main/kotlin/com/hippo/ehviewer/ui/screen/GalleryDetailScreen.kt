@@ -50,7 +50,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -69,6 +68,7 @@ import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.model.GalleryDetail
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.ui.component.BlurredBar
+import com.ehviewer.core.ui.component.FadingMarqueeTitle
 import com.ehviewer.core.ui.component.LiquidGlassCircleButtonIconSize
 import com.ehviewer.core.ui.component.LiquidGlassCircleButtonSize
 import com.ehviewer.core.ui.component.LiquidGlassNavHighlight
@@ -529,13 +529,10 @@ private fun GalleryDetailTopAppBar(
                         },
                     contentAlignment = Alignment.CenterStart,
                 ) {
-                    Text(
+                    FadingMarqueeTitle(
                         text = title,
                         color = animatedTitleColor,
                         style = galleryDetailCollapsedTitleStyle,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
                             .thenIf(titleClickable && smallTitleVisible) {
