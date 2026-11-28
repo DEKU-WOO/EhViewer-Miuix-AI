@@ -31,8 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +42,7 @@ import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.CrystalCard
 import com.ehviewer.core.ui.component.GalleryListCardRating
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.listThumbGenerator
 import com.hippo.ehviewer.EhDB
@@ -62,9 +61,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 private val DownloadActionBadgeSize = 32.dp
 private val DownloadActionIconSize = 16.dp
 private val DownloadProgressBarHeight = 4.dp
-private val DownloadFinishBadgeBg = Color(0xFF34C759).copy(alpha = 0.15f)
-private val DownloadFinishIconLight = Color(0xFF28A745)
-private val DownloadFinishIconDark = Color(0xFF34C759)
 
 @Composable
 context(_: SharedTransitionScope, _: TransitionsVisibilityScope)
@@ -107,7 +103,6 @@ fun DownloadCard(
                 thumb(info)
             }
         }
-        val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
         val downloadState by DownloadManager.collectDownloadState(info.gid)
         val isFinish = downloadState == DownloadInfo.STATE_FINISH
         val isDownloading = downloadState == DownloadInfo.STATE_DOWNLOAD
@@ -279,17 +274,18 @@ fun DownloadCard(
                 // 右下角统一 32.dp 正圆形徽章/操作按钮：开始(▷) / 暂停(‖) / 已完成(✓)
                 when {
                     isFinish -> {
+                        val finishAccent = activeAccentColor()
                         Box(
                             modifier = Modifier
                                 .size(DownloadActionBadgeSize)
                                 .clip(CircleShape)
-                                .background(DownloadFinishBadgeBg),
+                                .background(finishAccent.copy(alpha = 0.14f)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Ok,
                                 contentDescription = stringResource(id = R.string.download_state_finish),
-                                tint = if (isDark) DownloadFinishIconDark else DownloadFinishIconLight,
+                                tint = finishAccent,
                                 modifier = Modifier.size(DownloadActionIconSize),
                             )
                         }

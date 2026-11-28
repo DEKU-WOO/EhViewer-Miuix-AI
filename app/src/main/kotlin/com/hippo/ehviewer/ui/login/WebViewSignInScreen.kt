@@ -5,7 +5,6 @@ import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,19 +22,23 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.ehviewer.core.i18n.R
 import com.ehviewer.core.network.EhCookieStore
+import com.ehviewer.core.ui.component.LiquidGlassCircleButtonIconSize
+import com.ehviewer.core.ui.component.LiquidGlassCircleButtonSize
+import com.ehviewer.core.ui.component.LiquidGlassNavHighlight
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
 import com.google.accompanist.web.WebView
 import com.google.accompanist.web.rememberWebViewState
 import com.hippo.ehviewer.Settings
@@ -50,12 +53,9 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.material.edgeStroke
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-// 与 LiquidGlassSurface 一致的玻璃提亮描边（上亮下暗）
-private val GLASS_RIM = Brush.verticalGradient(
-    listOf(Color.White.copy(alpha = 0.8f), Color.White.copy(alpha = 0.1f)),
-)
 private val GLASS_BLUR_RADIUS = 18.dp
 
 /**
@@ -66,8 +66,8 @@ private val GLASS_BLUR_RADIUS = 18.dp
 private const val LOGIN_BUTTON_BLUR_SKSL = """
     uniform shader content;
     uniform float2 uSize;
-    uniform float uRadius;
     uniform float3 uButton;
+    uniform float uRadius;
 
     const int TAPS = 32;
     const float GOLDEN_ANGLE = 2.39996323;
@@ -144,11 +144,16 @@ fun AnimatedVisibilityScope.WebViewSignInScreen(navigator: DestinationsNavigator
         }
     }
 
-    // 登录页极简：不做顶栏，仅全屏网页内容 + 液态玻璃返回按钮
-    val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
+    // 登录页极简：不做顶栏，仅全屏网页内容 + 全局统一规格的液态毛玻璃圆形返回按钮
+    val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
+    val glassFill = if (isDark) {
+        DreamyPurplePalette.DarkGlassBase.copy(alpha = 0.52f)
+    } else {
+        Color.White.copy(alpha = 0.62f)
+    }
     val density = LocalDensity.current
     val blurRadiusPx = with(density) { GLASS_BLUR_RADIUS.toPx() }
-    val buttonRadiusPx = with(density) { 20.dp.toPx() }
+    val buttonRadiusPx = with(density) { (LiquidGlassCircleButtonSize / 2).toPx() }
     var layerSize by remember { mutableStateOf(IntSize.Zero) }
     var buttonCenter by remember { mutableStateOf(Offset.Zero) }
     var webViewOffset by remember { mutableStateOf(Offset.Zero) }
@@ -157,7 +162,7 @@ fun AnimatedVisibilityScope.WebViewSignInScreen(navigator: DestinationsNavigator
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MiuixTheme.colorScheme.background),
+            .background(MiuixTheme.colorScheme.surface),
     ) {
         WebView(
             state = state,
@@ -183,17 +188,22 @@ fun AnimatedVisibilityScope.WebViewSignInScreen(navigator: DestinationsNavigator
         Box(
             modifier = Modifier
                 .statusBarsPadding()
-                .padding(start = 12.dp, top = 8.dp)
-                .size(40.dp)
+                .padding(start = 16.dp, top = 8.dp)
+                .size(LiquidGlassCircleButtonSize)
                 .onGloballyPositioned {
                     buttonCenter = it.positionInRoot() + Offset(it.size.width / 2f, it.size.height / 2f)
                 }
-                .background(surfaceContainer.copy(alpha = 0.5f), CircleShape)
-                .border(1.dp, GLASS_RIM, CircleShape)
-                .clickable { navigator.popBackStack() },
+                .background(glassFill, CircleShape)
+                .edgeStroke(shape = CircleShape, stroke = LiquidGlassNavHighlight)
+                .clickable(role = Role.Button) { navigator.popBackStack() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(imageVector = MiuixIcons.Back, contentDescription = null, tint = MiuixTheme.colorScheme.onSurface)
+            Icon(
+                imageVector = MiuixIcons.Back,
+                contentDescription = null,
+                modifier = Modifier.size(LiquidGlassCircleButtonIconSize),
+                tint = MiuixTheme.colorScheme.onSurface,
+            )
         }
     }
 }

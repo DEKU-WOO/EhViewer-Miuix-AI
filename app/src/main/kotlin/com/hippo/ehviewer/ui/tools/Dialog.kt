@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -26,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -54,7 +54,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -72,10 +71,9 @@ import arrow.core.right
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.FastScrollLazyColumn
 import com.ehviewer.core.ui.component.LabeledCheckbox
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.util.LocalWindowLayout
-import com.ehviewer.core.ui.util.ifNotNullThen
-import com.ehviewer.core.ui.util.ifTrueThen
 import com.hippo.ehviewer.client.EhTagDatabase
 import com.hippo.ehviewer.client.EhTagDatabase.suggestion
 import eu.kanade.tachiyomi.util.view.setSecureScreen
@@ -98,11 +96,9 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Create
-import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.layout.DialogDefaults as MiuixDialogDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 fun interface ActionScope {
     fun onSelect(action: String, that: suspend () -> Unit)
@@ -210,6 +206,7 @@ suspend fun awaitSelectTags(): List<String> = dialog { cont ->
             MiuixTextButton(
                 text = stringResource(id = android.R.string.ok),
                 onClick = { cont.resume(selected.toList()) },
+                colors = MiuixButtonDefaults.textButtonColorsPrimary(),
             )
         },
         dismissButton = {
@@ -245,9 +242,9 @@ suspend fun awaitSelectTags(): List<String> = dialog { cont ->
                         selected.forEach { text ->
                             Row(
                                 modifier = Modifier
-                                    .clip(SquircleShape(8.dp))
+                                    .clip(CircleShape)
                                     .background(MiuixTheme.colorScheme.primaryContainer)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 MiuixText(
@@ -301,8 +298,8 @@ suspend fun awaitSelectTags(): List<String> = dialog { cont ->
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 180.dp)
-                            .clip(SquircleShape(8.dp))
-                            .background(MiuixTheme.colorScheme.surfaceContainer),
+                            .clip(SquircleShape(12.dp))
+                            .background(MiuixTheme.colorScheme.surfaceContainerHigh),
                     ) {
                         items(items.size) { i ->
                             val (tag, hint) = items[i]
@@ -611,6 +608,7 @@ suspend fun awaitSelectDate(
                 MiuixTextButton(
                     text = stringResource(id = android.R.string.ok),
                     onClick = { state.selectedDateMillis?.let { cont.resume(it) } ?: cont.cancel() },
+                    colors = MiuixButtonDefaults.textButtonColorsPrimary(),
                 )
             }
         }
@@ -669,6 +667,7 @@ suspend fun awaitSelectTime(
                 MiuixTextButton(
                     text = stringResource(id = android.R.string.ok),
                     onClick = { cont.resume(state.hour to state.minute) },
+                    colors = MiuixButtonDefaults.textButtonColorsPrimary(),
                 )
             }
         }
@@ -937,6 +936,8 @@ private fun SecureDialogWindow() {
             if (!wasSecure) window?.setSecureScreen(false)
         }
     }
-} private val DatePickerTitlePadding = PaddingValues(start = 24.dp, end = 12.dp, top = 16.dp)
+}
+
+private val DatePickerTitlePadding = PaddingValues(start = 24.dp, end = 12.dp, top = 16.dp)
 
 val LocalGlobalDialogState = compositionLocalOf<DialogState> { error("CompositionLocal LocalDialogState not present!") }

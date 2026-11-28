@@ -5,10 +5,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
@@ -27,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -50,15 +46,17 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
+import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
-import com.ehviewer.core.ui.util.readableWidth
+import com.ehviewer.core.ui.theme.activeAccentColor
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.logcat
 import com.ehviewer.core.util.withIOContext
@@ -89,7 +87,9 @@ import java.util.Locale
 import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import moe.tarsin.snackbar
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -148,16 +148,16 @@ cat /opt/ehviewer-sync/token.txt && echo ""
 
 @Composable
 private fun DeployStepCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = title)
-            content()
-        }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(SquircleShape(12.dp))
+            .background(MiuixTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = title, fontWeight = FontWeight.SemiBold)
+        content()
     }
 }
 
@@ -178,10 +178,9 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
     val backdrop = rememberBlurBackdrop()
     val context = LocalContext.current
 
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-    // LauncherPreference 的回调运行在 IO 线程，Toast 需要切回主线程
-    fun postToast(message: String) = mainHandler.post { toast(message) }
+    fun toast(message: String) = launch { snackbar(message) }
+    // LauncherPreference 的回调运行在 IO 线程，launch 投递回页面主协程作用域展示毛玻璃提示
+    fun postToast(message: String) = launch { snackbar(message) }
 
     val exportDone = stringResource(R.string.backup_export_success)
     val exportFailed = stringResource(R.string.backup_export_failed)
@@ -305,16 +304,17 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                                         style = MiuixTheme.textStyles.body1,
                                     )
                                     if (isLocal) {
-                                        Spacer(modifier = Modifier.height(0.dp))
+                                        val accent = activeAccentColor()
                                         Text(
                                             text = stringResource(R.string.backup_cloud_this_device),
                                             style = MiuixTheme.textStyles.footnote2,
-                                            color = colorScheme.onPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            color = accent,
                                             modifier = Modifier
                                                 .padding(start = 6.dp)
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colorScheme.primary)
-                                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                                                .clip(CircleShape)
+                                                .background(accent.copy(alpha = 0.16f))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp),
                                         )
                                     }
                                 }
@@ -349,7 +349,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                     if (!isLocal) {
                         Text(
                             text = stringResource(R.string.backup_cloud_cross_device_warning),
-                            color = Color(0xFFE53935),
+                            color = colorScheme.error,
                             style = MiuixTheme.textStyles.footnote1,
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -759,6 +759,7 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                                                 WebDavSyncService.start(context)
                                             },
                                             modifier = Modifier.weight(1f),
+                                            colors = ButtonDefaults.textButtonColorsPrimary(),
                                         )
                                     }
                                 }
@@ -766,7 +767,6 @@ fun AnimatedVisibilityScope.BackupRestoreScreen(navigator: DestinationsNavigator
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }

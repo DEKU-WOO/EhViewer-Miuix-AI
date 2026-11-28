@@ -13,7 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -22,20 +21,18 @@ import com.ehviewer.core.ui.component.LiquidGlassSurface
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.filled.Crop
 import com.ehviewer.core.ui.icons.filled.CropOff
-import com.ehviewer.core.ui.theme.rememberMiuixThemeController
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.asMutableState
 import com.hippo.ehviewer.collectAsState
 import eu.kanade.tachiyomi.ui.reader.setting.OrientationType
 import eu.kanade.tachiyomi.ui.reader.setting.PreferenceType
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingModeType
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
+import top.yukonga.miuix.kmp.glass.glassPopupAnchor
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -43,6 +40,10 @@ fun BottomReaderBar(
     onClickSettings: () -> Unit,
     modifier: Modifier = Modifier,
     containerColor: Color = MiuixTheme.colorScheme.surfaceContainer,
+    readingModeAnchor: GlassPopupAnchor = remember { GlassPopupAnchor() },
+    orientationAnchor: GlassPopupAnchor = remember { GlassPopupAnchor() },
+    onReadingModeClick: () -> Unit = {},
+    onOrientationClick: () -> Unit = {},
 ) = LiquidGlassSurface(
     modifier = modifier
         .fillMaxWidth()
@@ -51,7 +52,6 @@ fun BottomReaderBar(
     elevation = 8.dp,
     containerColor = containerColor,
 ) {
-    val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
     Row(
         modifier = Modifier.fillMaxSize(),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -60,22 +60,16 @@ fun BottomReaderBar(
         val readingMode by Settings.readingMode.collectAsState { ReadingModeType.fromPreference(it) }
         DropdownIconButton(
             label = stringResource(R.string.viewer),
-            menuItems = ReadingModeType.entries,
             selectedItem = readingMode,
-            isDark = isDark,
-            onSelectedItemChange = {
-                Settings.readingMode.value = it.prefValue
-            },
+            anchor = readingModeAnchor,
+            onClick = onReadingModeClick,
         )
         val orientationMode by Settings.orientationMode.collectAsState { OrientationType.fromPreference(it) }
         DropdownIconButton(
             label = stringResource(R.string.pref_rotation_type),
-            menuItems = OrientationType.entries,
             selectedItem = orientationMode,
-            isDark = isDark,
-            onSelectedItemChange = {
-                Settings.orientationMode.value = it.prefValue
-            },
+            anchor = orientationAnchor,
+            onClick = onOrientationClick,
         )
         var cropBorder by Settings.cropBorder.asMutableState()
         ActionButton(
@@ -94,35 +88,19 @@ fun BottomReaderBar(
 @Composable
 private fun DropdownIconButton(
     label: String,
-    menuItems: List<PreferenceType>,
     selectedItem: PreferenceType,
-    isDark: Boolean,
-    onSelectedItemChange: (PreferenceType) -> Unit,
+    anchor: GlassPopupAnchor,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val titles = menuItems.map { stringResource(it.stringRes) }
-    val entry = remember(menuItems, titles, selectedItem, onSelectedItemChange) {
-        DropdownEntry(
-            items = menuItems.mapIndexed { index, item ->
-                DropdownItem(
-                    text = titles[index],
-                    selected = item == selectedItem,
-                    onClick = { onSelectedItemChange(item) },
-                )
-            },
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.glassPopupAnchor(anchor, cornerRadius = 28.dp),
+    ) {
+        Icon(
+            imageVector = selectedItem.icon,
+            contentDescription = label,
         )
-    }
-    // 使用 MIUIX 原生不透明圆角下拉菜单，并锁定标准梦幻紫卡片色（浅色 #FFFFFF / 深色 #1E1624），带选中高亮与对勾
-    MiuixTheme(controller = rememberMiuixThemeController(useDarkTheme = isDark, isAmoled = false)) {
-        WindowIconDropdownMenu(
-            entry = entry,
-            modifier = modifier,
-        ) {
-            Icon(
-                imageVector = selectedItem.icon,
-                contentDescription = label,
-            )
-        }
     }
 }
 

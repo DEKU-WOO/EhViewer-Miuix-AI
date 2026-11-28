@@ -11,6 +11,8 @@ import android.text.style.URLSpan
 import androidx.annotation.ColorInt
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +34,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,8 +48,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -56,8 +58,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.input.TextFieldValue
@@ -116,9 +118,9 @@ import moe.tarsin.coroutines.runSuspendCatching
 import moe.tarsin.navigate
 import moe.tarsin.snackbar
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
@@ -126,6 +128,7 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField as MiuixTextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -260,6 +263,7 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(MiuixTheme.colorScheme.surface)
                     .blurBackdropSource(backdrop)
                     .padding(paddingValues),
                 contentAlignment = Alignment.Center,
@@ -275,7 +279,10 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
                         )
                         if (commentsState is GalleryCommentsState.NeedsFetch) {
                             Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = { fetchAttempt++ }) {
+                            Button(
+                                onClick = { fetchAttempt++ },
+                                colors = ButtonDefaults.buttonColorsPrimary(),
+                            ) {
                                 Text(text = stringResource(id = R.string.action_retry))
                             }
                         }
@@ -420,7 +427,6 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
                 }
             },
         ) { paddingValues ->
-            val keylineMargin = dimensionResource(id = com.hippo.ehviewer.R.dimen.keyline_margin)
             var editTextMeasured by remember { mutableStateOf(MinimumContentPaddingEditText) }
             var isRefreshing by remember { mutableStateOf(false) }
             val refreshState = rememberPullToRefreshState()
@@ -441,6 +447,7 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .background(MiuixTheme.colorScheme.surface)
                         .blurBackdropSource(backdrop),
                 ) {
                     val additionalPadding = if (commenting) {
@@ -460,10 +467,11 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
                     val layoutDirection = LocalLayoutDirection.current
                     val lazyListState = rememberLazyListState()
                     LazyColumn(
-                        modifier = Modifier.readableWidth().fillMaxSize().padding(horizontal = keylineMargin),
+                        modifier = Modifier.readableWidth().fillMaxSize().padding(horizontal = 12.dp),
                         state = lazyListState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(
+                            top = 8.dp,
                             start = paddingValues.calculateStartPadding(layoutDirection),
                             end = paddingValues.calculateEndPadding(layoutDirection),
                             bottom = paddingValues.calculateBottomPadding() + additionalPadding,
@@ -551,7 +559,7 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
                         }
                         if (comments.hasMore) {
                             item {
-                                Crossfade(targetState = refreshing, modifier = Modifier.padding(keylineMargin), label = "refreshing") {
+                                Crossfade(targetState = refreshing, modifier = Modifier.padding(vertical = 8.dp), label = "refreshing") {
                                     Box(
                                         modifier = Modifier.fillMaxWidth().height(40.dp),
                                         contentAlignment = Alignment.Center,
@@ -591,34 +599,50 @@ fun AnimatedVisibilityScope.GalleryCommentsScreen(
                                 placeable.placeRelative(0, 0)
                             }
                         }.graphicsLayer {
-                            shape = RoundedCornerShape((animationProgress * 100).roundToInt())
+                            val morphPercent = (animationProgress * 100).roundToInt()
+                            shape = if (morphPercent > 0) {
+                                RoundedCornerShape(morphPercent)
+                            } else {
+                                RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                            }
                             clip = true
                         }.height(IntrinsicSize.Min),
-                        color = MiuixTheme.colorScheme.primaryContainer,
+                        color = MiuixTheme.colorScheme.surfaceContainer,
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().navigationBarsPadding().onGloballyPositioned { coordinates ->
-                                editTextMeasured = max(with(density) { coordinates.size.height.toDp() }, MinimumContentPaddingEditText)
-                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .onGloballyPositioned { coordinates ->
+                                    editTextMeasured = max(with(density) { coordinates.size.height.toDp() }, MinimumContentPaddingEditText)
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            val color = MiuixTheme.colorScheme.onPrimaryContainer
-                            BasicTextField(
+                            @Suppress("DEPRECATION")
+                            MiuixTextField(
                                 value = userComment,
                                 onValueChange = { textFieldValue ->
                                     userComment = textFieldValue.updateSpan(userComment)
                                 },
-                                modifier = Modifier.weight(1f).padding(keylineMargin).addBBCodeTextContextMenuItems(userCommentBackField),
-                                textStyle = MiuixTheme.textStyles.body1.merge(color = color),
-                                cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+                                maxLines = 4,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .addBBCodeTextContextMenuItems(userCommentBackField),
                             )
-                            IconButton(
-                                onClick = { launchIO { sendComment() } },
-                                modifier = Modifier.align(Alignment.CenterVertically).padding(16.dp),
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(MiuixTheme.colorScheme.primary)
+                                    .clickable(role = Role.Button) { launchIO { sendComment() } },
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     imageVector = MiuixIcons.Send,
                                     contentDescription = null,
-                                    tint = MiuixTheme.colorScheme.onPrimaryContainer,
+                                    tint = Color.White,
                                 )
                             }
                         }

@@ -25,13 +25,13 @@ fun PageIndicatorText(
     if (currentPage <= 0 || totalPages <= 0) return
 
     val style = TextStyle(
-        color = Color(235, 235, 235),
+        color = Color(0xFFF3EDF7),
         fontSize = MiuixTheme.textStyles.footnote1.fontSize,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.sp,
     )
     val strokeStyle = style.copy(
-        color = Color(45, 45, 45),
+        color = Color(0xFF1E1624),
         drawStyle = Stroke(width = 4f),
     )
 

@@ -13,6 +13,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.component.RollingNumber
 import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.theme.activeAccentColor
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -23,6 +24,7 @@ fun FundsItem(
     modifier: Modifier = Modifier,
     textStyle: TextStyle = MiuixTheme.textStyles.body2,
 ) {
+    val accent = activeAccentColor()
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
@@ -30,15 +32,15 @@ fun FundsItem(
     ) {
         Box(
             modifier = Modifier
-                .clip(SquircleShape(4.dp))
-                .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.15f))
+                .clip(SquircleShape(6.dp))
+                .background(accent.copy(alpha = 0.15f))
                 .padding(horizontal = 6.dp, vertical = 2.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = type,
                 style = MiuixTheme.textStyles.footnote2,
-                color = MiuixTheme.colorScheme.primary,
+                color = accent,
             )
         }
         RollingNumber(number = amount, style = textStyle, separator = true)

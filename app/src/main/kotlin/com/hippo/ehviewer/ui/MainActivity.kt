@@ -92,6 +92,7 @@ import com.ehviewer.core.files.toOkioPath
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.IosLiquidGlassNavigationBar
 import com.ehviewer.core.ui.component.LabeledCheckbox
+import com.ehviewer.core.ui.component.LiquidGlassSnackbar
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.LocalSideSheetState
 import com.ehviewer.core.ui.component.LocalTabGesturePosition
@@ -556,7 +557,12 @@ class MainActivity : AppCompatActivity() {
                                         snackbarFabPadding = it.size.height.toDp()
                                     }
                                 },
-                        )
+                        ) { data ->
+                            LiquidGlassSnackbar(
+                                data = data,
+                                backdrop = contentBackdrop,
+                            )
+                        }
                     },
                 ) { _ ->
                     @Composable

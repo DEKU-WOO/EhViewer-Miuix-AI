@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,8 +42,9 @@ import top.yukonga.miuix.kmp.icon.extended.Theme
  * picker.
  */
 @Composable
-fun ColorFilterSetting() = Column(modifier = Modifier.verticalScroll(rememberScrollState()).navigationBarsPadding()) {
+fun ColorFilterSetting() = Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
     Card(
+        colors = readerGlassCardColors(),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -123,5 +123,5 @@ fun ColorFilterSetting() = Column(modifier = Modifier.verticalScroll(rememberScr
             )
         }
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 }

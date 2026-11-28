@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.icons.EhIcons
 import com.ehviewer.core.ui.icons.big.SadAndroid
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -89,6 +90,7 @@ private fun ErrorTipContent(
             Button(
                 enabled = enabled,
                 onClick = onRetry,
+                colors = ButtonDefaults.buttonColorsPrimary(),
             ) {
                 Text(text = retryText)
             }

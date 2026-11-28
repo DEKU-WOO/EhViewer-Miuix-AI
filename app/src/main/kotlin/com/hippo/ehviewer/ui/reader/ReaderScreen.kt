@@ -47,14 +47,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.keepScreenOn
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import arrow.core.Either
 import arrow.core.Either.Companion.catch
@@ -62,10 +61,10 @@ import arrow.core.raise.ensure
 import arrow.core.right
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.model.BaseGalleryInfo
+import com.ehviewer.core.ui.component.LiquidGlassBottomSheet
 import com.ehviewer.core.ui.component.LocalBackdrop
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
-import com.ehviewer.core.ui.theme.rememberMiuixThemeController
 import com.ehviewer.core.ui.util.Await
 import com.ehviewer.core.ui.util.asyncInVM
 import com.ehviewer.core.ui.util.rememberSystemUiController
@@ -120,7 +119,6 @@ import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 @Serializable
 sealed interface ReaderScreenArgs {
@@ -270,13 +268,17 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
     val pagerState = rememberPagerState(pageLoader.startPage) { pageLoader.size }
     val syncState = rememberSliderPagerDoubleSyncState(lazyListState, pagerState, pageLoader)
     var appbarVisible by remember { mutableStateOf(false) }
+    var settingsSheetOpen by remember { mutableStateOf(false) }
+    var isColorFilterTab by remember { mutableStateOf(false) }
+    val topBarVisible = appbarVisible && !(settingsSheetOpen && isColorFilterTab)
+    val bottomBarVisible = appbarVisible && !settingsSheetOpen
     val isWebtoon by rememberUpdatedState(ReadingModeType.isWebtoon(readingMode))
     val readerBackdrop = rememberBlurBackdrop()
     val focusRequester = remember { FocusRequester() }
     CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
         Box(
             Modifier.keyEventHandler(
-                volumeKeysEnabled = { volumeKeysEnabled && !appbarVisible },
+                volumeKeysEnabled = { volumeKeysEnabled && !appbarVisible && !settingsSheetOpen },
                 volumeKeysInverted = { volumeKeysInverted },
                 movePrevious = { launch { if (isWebtoon) lazyListState.scrollUp() else pagerState.moveToPrevious() } },
                 moveNext = { launch { if (isWebtoon) lazyListState.scrollDown() else pagerState.moveToNext() } },
@@ -292,7 +294,7 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                     uiController.isSystemBarsVisible = true
                     uiController.showTransientSystemBarsBySwipe = false
                 } else {
-                    snapshotFlow { appbarVisible }.collect {
+                    snapshotFlow { topBarVisible }.collect {
                         uiController.isSystemBarsVisible = it || !fullscreen
                         uiController.statusBarDarkContentEnabled = readerBackground.isLight
                     }
@@ -309,13 +311,10 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                         val blocked = page.status is PageStatus.Blocked
                         dialog { cont ->
                             fun dispose() = cont.resume(Unit)
-                            val isDarkSheet = MiuixTheme.colorScheme.surface.luminance() < 0.5f
-                            MiuixTheme(controller = rememberMiuixThemeController(useDarkTheme = isDarkSheet, isAmoled = false)) {
-                                WindowBottomSheet(
+                            CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
+                                LiquidGlassBottomSheet(
                                     show = true,
                                     onDismissRequest = { dispose() },
-                                    backgroundColor = MiuixTheme.colorScheme.surfaceContainer,
-                                    insideMargin = DpSize(0.dp, 0.dp),
                                 ) {
                                     ReaderPageSheetMeta(
                                         retry = { pageLoader.retryPage(page.index) },
@@ -413,7 +412,7 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                 }
             }
             val showPageNumber by Settings.showPageNumber.collectAsState()
-            if (showPageNumber && !appbarVisible) {
+            if (showPageNumber && !appbarVisible && !settingsSheetOpen) {
                 PageIndicatorText(
                     currentPage = syncState.sliderValue,
                     totalPages = pageLoader.size,
@@ -425,7 +424,8 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                 )
             }
             ReaderAppBars(
-                visible = appbarVisible,
+                visible = topBarVisible,
+                bottomBarVisible = bottomBarVisible,
                 title = pageLoader.title,
                 isRtl = readingMode == ReadingModeType.RIGHT_TO_LEFT,
                 showSeekBar = showSeekbar,
@@ -434,36 +434,41 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, isExiting: Bool
                 onSliderValueChange = syncState::sliderScrollTo,
                 onClickSettings = {
                     launch {
-                        dialog { cont ->
-                            fun dispose() = cont.resume(Unit)
-                            var isColorFilter by remember { mutableStateOf(false) }
-                            val isDarkSheet = MiuixTheme.colorScheme.surface.luminance() < 0.5f
-                            val config = LocalConfiguration.current
-                            val sheetHeight = if (config.screenWidthDp > config.screenHeightDp) {
-                                (config.screenHeightDp * 0.78f).dp.coerceAtLeast(260.dp)
-                            } else {
-                                (config.screenHeightDp * 0.58f).dp.coerceIn(340.dp, 540.dp)
-                            }
-                            // 绑定标准梦幻紫氛围色板：底层页面底色（浅色 #F7F4FA / 深色 #120D16）+ 一级圆角卡片（浅色 #FFFFFF / 深色 #1E1624）
-                            MiuixTheme(controller = rememberMiuixThemeController(useDarkTheme = isDarkSheet, isAmoled = false)) {
-                                WindowBottomSheet(
-                                    show = true,
-                                    onDismissRequest = { dispose() },
-                                    backgroundColor = MiuixTheme.colorScheme.background,
-                                    insideMargin = DpSize(0.dp, 0.dp),
-                                    enableWindowDim = !isColorFilter,
-                                ) {
-                                    SettingsPager(
-                                        isWebtoon = isWebtoon,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(sheetHeight),
-                                    ) { page ->
-                                        isColorFilter = page == 2
-                                        appbarVisible = !isColorFilter
+                        settingsSheetOpen = true
+                        isColorFilterTab = false
+                        try {
+                            dialog { cont ->
+                                fun dispose() = cont.resume(Unit)
+                                val density = LocalDensity.current
+                                val containerSize = LocalWindowInfo.current.containerSize
+                                val winWidthDp = with(density) { containerSize.width.toDp() }
+                                val winHeightDp = with(density) { containerSize.height.toDp() }
+                                val isShortLandscape = winWidthDp > winHeightDp && winHeightDp < 480.dp
+                                val sheetHeight = if (isShortLandscape) {
+                                    (winHeightDp * 0.78f).coerceAtLeast(240.dp)
+                                } else {
+                                    winHeightDp * 0.52f
+                                }
+                                CompositionLocalProvider(LocalBackdrop provides readerBackdrop) {
+                                    LiquidGlassBottomSheet(
+                                        show = true,
+                                        onDismissRequest = { dispose() },
+                                        enableWindowDim = !isColorFilterTab,
+                                    ) {
+                                        SettingsPager(
+                                            isWebtoon = isWebtoon,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(sheetHeight),
+                                        ) { page ->
+                                            isColorFilterTab = page == 2
+                                        }
                                     }
                                 }
                             }
+                        } finally {
+                            settingsSheetOpen = false
+                            isColorFilterTab = false
                         }
                     }
                 },

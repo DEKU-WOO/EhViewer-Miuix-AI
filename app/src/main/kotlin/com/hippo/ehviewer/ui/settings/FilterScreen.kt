@@ -63,6 +63,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.coroutines.resume
 import moe.tarsin.coroutines.groupByToObserved
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
@@ -172,6 +173,7 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
                             TextButton(
                                 text = stringResource(id = R.string.add),
                                 onClick = ::invalidateAndSave,
+                                colors = ButtonDefaults.textButtonColorsPrimary(),
                             )
                         }
                     }
@@ -255,6 +257,7 @@ fun AnimatedVisibilityScope.FilterScreen(navigator: DestinationsNavigator) = Scr
                             item(key = "card_$filterMode") {
                                 Card(
                                     modifier = Modifier
+                                        .fillMaxWidth()
                                         .padding(horizontal = 12.dp, vertical = 4.dp)
                                         .thenIf(animateItems) { animateItem() },
                                 ) {

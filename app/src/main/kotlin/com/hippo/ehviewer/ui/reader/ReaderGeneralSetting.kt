@@ -3,14 +3,9 @@ package com.hippo.ehviewer.ui.reader
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -29,10 +24,10 @@ import top.yukonga.miuix.kmp.basic.Card
 
 @Composable
 fun ReaderGeneralSetting() = Column(
-    // 只消费底部 inset：横向 inset 由外层 sheet 统一处理，否则横屏三键导航时每页左右不对称
-    modifier = Modifier.verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+    modifier = Modifier.verticalScroll(rememberScrollState()),
 ) {
     Card(
+        colors = readerGlassCardColors(),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -96,5 +91,5 @@ fun ReaderGeneralSetting() = Column(
             }
         }
     }
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(12.dp))
 }

@@ -81,6 +81,9 @@ fun AnimatedVisibilityScope.LicenseScreen(navigator: DestinationsNavigator) = Sc
                     scrollBehavior = scrollBehavior,
                     contentPadding = paddingValues,
                 ) {
+                    item(key = "top_gap") {
+                        Spacer(modifier = Modifier.height(SettingsContentTopGap))
+                    }
                     items(
                         items = currentLibraries.libraries,
                         key = { it.uniqueId },

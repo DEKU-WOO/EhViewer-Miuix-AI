@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -70,8 +69,7 @@ fun ReaderPageSheetMeta(
     Column(
         modifier = Modifier
             .verticalScroll(rememberScrollState())
-            .navigationBarsPadding()
-            .padding(top = 4.dp, bottom = 12.dp),
+            .padding(vertical = 8.dp),
     ) {
         showAds?.let { Item(icon = MiuixIcons.Show, text = R.string.show_blocked_image, onClick = it) }
         Item(icon = MiuixIcons.Refresh, text = R.string.refresh, onClick = retry)

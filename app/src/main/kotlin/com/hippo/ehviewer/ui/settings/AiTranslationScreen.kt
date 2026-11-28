@@ -1,6 +1,5 @@
 package com.hippo.ehviewer.ui.settings
 
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -8,21 +7,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,19 +33,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.i18n.R
 import com.ehviewer.core.ui.component.BlurredBar
-import com.ehviewer.core.ui.component.SquircleShape
+import com.ehviewer.core.ui.component.LiquidGlassDialog
 import com.ehviewer.core.ui.component.blurBackdropSource
 import com.ehviewer.core.ui.component.liquidGlassPopupVisuals
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
-import com.ehviewer.core.ui.util.readableWidth
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.withIOContext
 import com.hippo.ehviewer.EhDB
@@ -68,8 +60,9 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.coroutines.resume
+import moe.tarsin.snackbar
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -79,12 +72,11 @@ import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
-import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import com.ehviewer.core.ui.component.LiquidGlassDialog
 
 /** 添加模型弹窗中的历史记录上限。 */
 private const val ModelHistoryLimit = 10
@@ -131,7 +123,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
     val cacheCleared = stringResource(R.string.settings_ai_translation_cache_cleared)
     var testing by remember { mutableStateOf(false) }
 
-    fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    fun showSnackbar(message: String) = launch { snackbar(message) }
 
     fun newProfile() = launch {
         val name = awaitInputText(title = newProfileTitle, hint = profileNameHint) { text ->
@@ -159,7 +151,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
     fun deleteProfile() = launch {
         val current = AiProfileStore.activeProfile() ?: return@launch
         if (AiProfileStore.profiles().size <= 1) {
-            toast(keepOneProfile)
+            showSnackbar(keepOneProfile)
             return@launch
         }
         awaitConfirmationOrCancel(
@@ -212,8 +204,8 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                     style = MiuixTheme.textStyles.footnote1,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     modifier = Modifier
-                                        .clip(SquircleShape(8.dp))
-                                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                                        .clip(CircleShape)
+                                        .background(MiuixTheme.colorScheme.surfaceContainerHigh)
                                         .combinedClickable(
                                             onClick = {
                                                 fieldState.setTextAndPlaceCursorAtEnd(id)
@@ -258,6 +250,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                     else -> cont.resume(id)
                                 }
                             },
+                            colors = ButtonDefaults.textButtonColorsPrimary(),
                         )
                     }
                 }
@@ -272,7 +265,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
     fun deleteSelectedModel() = launch {
         val current = AiProfileStore.activeProfile() ?: return@launch
         if (current.models.size <= 1) {
-            toast(keepOneModel)
+            showSnackbar(keepOneModel)
             return@launch
         }
         val remaining = current.models - current.selectedModel
@@ -290,7 +283,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                 is AiConnectionTestResult.Success -> context.getString(R.string.settings_ai_translation_test_success, result.elapsedMs)
                 is AiConnectionTestResult.Failure -> context.getString(R.string.settings_ai_translation_test_failure, result.message)
             }
-            toast(message)
+            showSnackbar(message)
         } finally {
             testing = false
         }
@@ -304,7 +297,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
             MiuixText(text = stringResource(R.string.settings_ai_translation_cache_confirm))
         }
         withIOContext { EhDB.clearTranslations() }
-        toast(cacheCleared)
+        showSnackbar(cacheCleared)
     }
 
     Scaffold(
@@ -480,6 +473,7 @@ fun AnimatedVisibilityScope.AiTranslationScreen(navigator: DestinationsNavigator
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.textButtonColorsPrimary(),
                                 )
                             }
                         }

@@ -4,11 +4,19 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -16,6 +24,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,25 +34,39 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.ehviewer.core.ui.liquid.lens
 import com.ehviewer.core.ui.liquid.vibrancy
 import com.ehviewer.core.ui.theme.DreamyPurplePalette
+import com.ehviewer.core.ui.theme.activeAccentColor
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.SearchBarDefaults
+import top.yukonga.miuix.kmp.basic.SnackbarData
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.glass.GlassBottomSheet
 import top.yukonga.miuix.kmp.glass.GlassDialog
-import top.yukonga.miuix.kmp.glass.GlassDialogDefaults
 import top.yukonga.miuix.kmp.glass.GlassPopupDefaults
 import top.yukonga.miuix.kmp.glass.GlassPopupVisuals
-import top.yukonga.miuix.kmp.layout.BottomSheetDefaults
+import top.yukonga.miuix.kmp.glass.glassSurface
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.Close
 import top.yukonga.miuix.kmp.layout.DialogDefaults
 import top.yukonga.miuix.kmp.material.EdgeLightSource
 import top.yukonga.miuix.kmp.material.EdgePeak
@@ -160,26 +184,144 @@ fun LiquidGlassDialog(
     content = content,
 )
 
-/** 全应用底部抽屉统一入口；沿用原 WindowBottomSheet 的内容边距，避免改变页内布局。 */
+/**
+ * 全应用底部悬浮弹出式面板统一入口（替代贴底直角抽屉）：
+ * 四周统一 28.dp 大圆角、左右与底边各留 12.dp 对称外边距（自动叠加 navigationBarsPadding），
+ * 内容超高时按屏幕总高约 52% 封顶滚动（短横屏按 78% 兜底），短内容自适应包裹高度。
+ */
 @Composable
 fun LiquidGlassBottomSheet(
     show: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    cornerRadius: Dp = 28.dp,
+    maxWidth: Dp = 560.dp,
+    maxHeightFraction: Float = 0.52f,
+    insideMargin: DpSize = DpSize(0.dp, 0.dp),
     enableWindowDim: Boolean = true,
     content: @Composable () -> Unit,
-) = GlassBottomSheet(
-    show = show,
-    onDismissRequest = onDismissRequest,
-    backdrop = LocalBackdrop.current,
-    modifier = modifier,
-    enableWindowDim = enableWindowDim,
-    progressiveBlur = false,
-    insideMargin = BottomSheetDefaults.insideMargin,
-    material = liquidGlassOverlayMaterial(dialog = true),
-    stroke = LiquidGlassOverlayHighlight,
 ) {
-    content()
+    val density = LocalDensity.current
+    val containerSize = LocalWindowInfo.current.containerSize
+    val windowWidthDp = with(density) { containerSize.width.toDp() }
+    val windowHeightDp = with(density) { containerSize.height.toDp() }
+    val isShortLandscape = windowWidthDp > windowHeightDp && windowHeightDp < 480.dp
+    val maxSheetHeight = if (windowHeightDp > 0.dp) {
+        if (isShortLandscape) {
+            (windowHeightDp * 0.78f).coerceAtLeast(240.dp)
+        } else {
+            windowHeightDp * maxHeightFraction
+        }
+    } else {
+        Dp.Unspecified
+    }
+    GlassDialog(
+        show = show,
+        onDismissRequest = onDismissRequest,
+        backdrop = LocalBackdrop.current,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(max = maxSheetHeight),
+        enableWindowDim = enableWindowDim,
+        largeScreen = false,
+        maxWidth = maxWidth,
+        cornerRadius = cornerRadius,
+        outsideMargin = DpSize(12.dp, 12.dp),
+        insideMargin = insideMargin,
+        material = liquidGlassOverlayMaterial(dialog = true),
+        stroke = LiquidGlassOverlayHighlight,
+        containerColor = MiuixTheme.colorScheme.surfaceContainer,
+        content = content,
+    )
+}
+
+/**
+ * 居中悬浮的液态毛玻璃圆角提示胶囊（与设置页 GlassDropdownPreference 同源材质与斜向高光描边）。
+ */
+@Composable
+fun LiquidGlassSnackbar(
+    data: SnackbarData,
+    backdrop: Backdrop? = LocalBackdrop.current,
+    modifier: Modifier = Modifier,
+) {
+    val visuals = data.visuals
+    val scope = rememberCoroutineScope()
+    val cornerRadius = 24.dp
+    val capsuleShape = remember { RoundedCornerShape(cornerRadius) }
+    val glassModifier = glassSurface(
+        backdrop = backdrop,
+        visuals = liquidGlassPopupVisuals(),
+        cornerRadius = cornerRadius,
+    )(capsuleShape)
+    val actionColor = activeAccentColor()
+
+    Box(
+        modifier = modifier
+            .semantics(mergeDescendants = false) {
+                isTraversalGroup = true
+                liveRegion = LiveRegionMode.Polite
+            }
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .widthIn(max = 420.dp)
+            .then(glassModifier)
+            .pointerInput(Unit) {
+                detectTapGestures { /* Consume click */ }
+            },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .defaultMinSize(minHeight = 44.dp)
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            Text(
+                text = visuals.message,
+                color = MiuixTheme.colorScheme.onSurface,
+                style = MiuixTheme.textStyles.body2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+
+            if (!visuals.actionLabel.isNullOrEmpty()) {
+                val onAction by rememberUpdatedState(data::performAction)
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(actionColor.copy(alpha = 0.14f))
+                        .clickable(role = Role.Button) { scope.launch { onAction() } }
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = visuals.actionLabel.orEmpty(),
+                        color = actionColor,
+                        style = MiuixTheme.textStyles.body2,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                }
+            }
+
+            if (visuals.withDismissAction) {
+                val onDismiss by rememberUpdatedState(data::dismiss)
+                Icon(
+                    imageVector = MiuixIcons.Basic.Close,
+                    contentDescription = "Dismiss",
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable(
+                            indication = null,
+                            interactionSource = null,
+                        ) {
+                            scope.launch { onDismiss() }
+                        },
+                )
+            }
+        }
+    }
 }
 
 val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }

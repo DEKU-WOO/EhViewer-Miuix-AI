@@ -31,7 +31,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocal
 import androidx.compose.runtime.DisposableEffect
@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
+import com.ehviewer.core.ui.theme.DreamyPurplePalette
 import kotlin.math.roundToInt
 
 /**
@@ -93,10 +94,10 @@ fun defaultScrollbarStyle() = ScrollbarStyle(
     minimalHeight = 16.dp,
     thickness = 8.dp,
     padding = 0.dp,
-    shape = RoundedCornerShape(4.dp),
+    shape = CircleShape,
     hoverDurationMillis = 300,
-    unhoverColor = Color.Black.copy(alpha = 0.12f),
-    hoverColor = Color.Black.copy(alpha = 0.50f),
+    unhoverColor = DreamyPurplePalette.Primary.copy(alpha = 0.45f),
+    hoverColor = DreamyPurplePalette.Primary,
 )
 
 /**

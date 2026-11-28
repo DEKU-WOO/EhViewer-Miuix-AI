@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ehviewer.core.ui.theme.activeAccentColor
 import androidx.core.net.toUri
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
@@ -300,12 +300,14 @@ fun GalleryDetailContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .navigationBarsPadding(),
+                            .padding(vertical = 8.dp),
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp)
+                                .padding(horizontal = 8.dp)
+                                .height(52.dp)
+                                .clip(SquircleShape(14.dp))
                                 .clickable(role = Role.Button) {
                                     cont.resume(Unit)
                                     launchIO {
@@ -315,8 +317,8 @@ fun GalleryDetailContent(
                                 .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(imageVector = MiuixIcons.Search, contentDescription = null, tint = MiuixTheme.colorScheme.onSurface)
-                            Spacer(modifier = Modifier.size(32.dp))
+                            Icon(imageVector = MiuixIcons.Search, contentDescription = null, tint = activeAccentColor())
+                            Spacer(modifier = Modifier.size(20.dp))
                             Text(text = stringResource(id = R.string.image_search), style = MiuixTheme.textStyles.body1)
                         }
                     }
