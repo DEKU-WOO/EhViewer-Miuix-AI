@@ -72,9 +72,8 @@ private fun resolveDetailDisplayLanguage(info: GalleryInfo): String? {
     val detail = info as? GalleryDetail
     if (detail != null) {
         val langTags = detail.tagGroups
-            .firstOrNull { it.nameSpace == TagNamespace.Language }
-            ?.tags
-            ?.map { "language:${it.text}" }
+            .firstOrNull { (ns, _) -> ns == TagNamespace.Language }
+            ?.let { (_, tags) -> tags.map { "language:${it.text}" } }
             .orEmpty()
         if ("language:chinese" in langTags) {
             return "ZH"

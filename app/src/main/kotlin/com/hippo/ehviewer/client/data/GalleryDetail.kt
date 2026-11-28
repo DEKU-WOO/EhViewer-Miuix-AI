@@ -50,9 +50,8 @@ suspend fun GalleryDetail.fillInfo() {
     }
     // 优先从 language: 标签推导简写语言（中文汉化优先识别为 ZH），其次走标题正则，最后回退 Language 元数据字段
     val langTags = tagGroups
-        .firstOrNull { it.nameSpace == TagNamespace.Language }
-        ?.tags
-        ?.map { "language:${it.text}" }
+        .firstOrNull { (ns, _) -> ns == TagNamespace.Language }
+        ?.let { (_, tags) -> tags.map { "language:${it.text}" } }
         .orEmpty()
     val fromLangTags = when {
         "language:chinese" in langTags -> "ZH"
