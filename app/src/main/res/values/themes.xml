@@ -17,6 +17,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
     <style name="Base.AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Align Activity window background with SplashScreen & Compose surface -->
+        <item name="android:windowBackground">@color/splash_background</item>
+
         <!-- Non-overhead workaround for ROMs enable it by default, MIUI etc. -->
         <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
 

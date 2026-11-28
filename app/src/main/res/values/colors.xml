@@ -24,6 +24,11 @@
 
     <color name="reader_background_dark">#1E1624</color>
 
-    <!-- Dreamy purple ambient dark theme surface -->
-    <color name="ic_launcher_background_night">#120D16</color>
+    <!-- Soft dreamy purple adaptive launcher icon (Light mode) -->
+    <color name="ic_launcher_background">#F3ECF8</color>
+    <color name="ic_launcher_foreground_primary">#A64CD6</color>
+    <color name="ic_launcher_foreground_secondary">#B974DF</color>
+
+    <!-- Cold-start SplashScreen & window background (Light mode) -->
+    <color name="splash_background">#F7F4FA</color>
 </resources>
