@@ -12,7 +12,6 @@
  * 2. [BottomBarActiveTabsLayer]：激活状态隐藏层，供 tabsBackdrop 录制高亮状态；
  * 3. [BottomBarIndicatorLayer]：双重背景采样透镜折射滑块，含 Blur / None 降级滑块分支。
  *
- * 液态玻璃绘制链与阻尼拖动动画参数整体原样搬运，不做拆解或优化，避免影响渲染行为。
  * 所有 `remember` / `derivedStateOf` / 动画状态仍保留在 [FloatingBottomBar] 作用域内，通过参数传入。
  */
 
@@ -83,10 +82,19 @@ internal fun BottomBarBaseLayer(
     dampedDragAnimation: DampedDragAnimation,
     baseHighlight: State<EdgeStroke>,
     interactiveHighlight: InteractiveHighlight?,
+    activeBackdropSampling: Boolean = true,
     onSizeChanged: (IntSize) -> Unit,
     content: @Composable RowScope.() -> Unit,
 ) {
-    CompositionLocalProvider(LocalFloatingBottomBarContentColor provides colors.contentColor) {
+    val selectedColorInBase = if (isLiquidGlassMode && !activeBackdropSampling) {
+        colors.activeContentColor
+    } else {
+        Color.Unspecified
+    }
+    CompositionLocalProvider(
+        LocalFloatingBottomBarContentColor provides colors.contentColor,
+        LocalFloatingBottomBarSelectedContentColor provides selectedColorInBase,
+    ) {
         Row(
             modifier = Modifier
                 .selectableGroup()
@@ -160,7 +168,8 @@ internal fun BottomBarBaseLayer(
 /**
  * Layer 2：激活状态隐藏层。
  *
- * 仅液态玻璃模式下存在，以 alpha=0 隐藏渲染，供 tabsBackdrop 录制选中态内容。
+ * 仅液态玻璃模式下存在，以 alpha=0 隐藏渲染，供 tabsBackdrop 录制选中态内容；
+ * 静息浏览状态下跳过双倍模糊与透镜折射离屏采样，仅在按压、切页过渡或手势滑页期间开启。
  */
 @Composable
 internal fun BottomBarActiveTabsLayer(
@@ -173,6 +182,7 @@ internal fun BottomBarActiveTabsLayer(
     containerColor: Color,
     interactiveHighlight: InteractiveHighlight?,
     tabsBackdrop: LayerBackdrop,
+    activeBackdropSampling: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
     if (backdrop != null && isLiquidGlassMode) {
@@ -181,6 +191,7 @@ internal fun BottomBarActiveTabsLayer(
                 lerp(1f, 1.2f, dampedDragAnimation.pressProgress)
             },
             LocalFloatingBottomBarContentColor provides colors.activeContentColor,
+            LocalFloatingBottomBarSelectedContentColor provides Color.Unspecified,
         ) {
             Row(
                 modifier = Modifier
@@ -191,6 +202,7 @@ internal fun BottomBarActiveTabsLayer(
                     .drawBackdrop(
                         backdrop = backdrop,
                         shape = { pillShape },
+                        enabled = activeBackdropSampling,
                         effects = {
                             vibrancy()
                             blur(4.dp.toPx(), 4.dp.toPx())
@@ -203,7 +215,7 @@ internal fun BottomBarActiveTabsLayer(
                         },
                         onDrawSurface = { drawRect(containerColor) },
                     )
-                    .then(interactiveHighlight?.modifier ?: Modifier)
+                    .then(if (activeBackdropSampling && interactiveHighlight != null) interactiveHighlight.modifier else Modifier)
                     .height(NavBarHeight)
                     .padding(horizontal = NavBarInsidePadding, vertical = NavBarVerticalPadding),
                 verticalAlignment = Alignment.CenterVertically,
@@ -216,7 +228,7 @@ internal fun BottomBarActiveTabsLayer(
 /**
  * Layer 3：指示器滑块。
  *
- * 液态玻璃模式下使用双重背景采样透镜折射；否则降级为普通着色滑块 + 横向滚动内容。
+ * 液态玻璃模式下使用双重背景采样透镜折射；静息落位状态直接叠加等色胶囊着色并释放闲置离屏层，否则降级为普通着色滑块 + 横向滚动内容。
  */
 @Composable
 internal fun BottomBarIndicatorLayer(
@@ -234,11 +246,17 @@ internal fun BottomBarIndicatorLayer(
     colors: FloatingBottomBarColors,
     isDark: Boolean,
     isLtr: Boolean,
+    activeBackdropSampling: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
     if (tabWidthPx > 0f) {
         val tabWidthDp = with(density) { tabWidthPx.toDp() }
         if (isLiquidGlassMode && combinedBackdrop != null) {
+            val settledPillTint = if (!isDark) {
+                DreamyPurplePalette.Primary.copy(alpha = 0.12f)
+            } else {
+                DreamyPurplePalette.DarkHighlight.copy(alpha = 0.14f)
+            }
             Box(
                 modifier = Modifier
                     .padding(horizontal = NavBarInsidePadding)
@@ -251,6 +269,7 @@ internal fun BottomBarIndicatorLayer(
                     .drawBackdrop(
                         backdrop = combinedBackdrop,
                         shape = { pillShape },
+                        enabled = activeBackdropSampling,
                         effects = {
                             val progress = dampedDragAnimation.pressProgress
                             lens(
@@ -270,12 +289,20 @@ internal fun BottomBarIndicatorLayer(
                         onDrawSurface = {
                             val progress = dampedDragAnimation.pressProgress
                             drawRect(
-                                color = if (!isDark) DreamyPurplePalette.Primary.copy(alpha = 0.12f) else DreamyPurplePalette.DarkHighlight.copy(alpha = 0.14f),
+                                color = settledPillTint,
                                 alpha = 1f - progress,
                             )
                             drawRect(DreamyPurplePalette.DarkGlassBase.copy(alpha = 0.05f * progress))
                         },
-                    ).edgeStroke(
+                    )
+                    .then(
+                        if (!activeBackdropSampling) {
+                            Modifier.background(settledPillTint, pillShape)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .edgeStroke(
                         shape = pillShape,
                         stroke = { pillHighlight.value },
                         alpha = { dampedDragAnimation.pressProgress },
@@ -308,7 +335,10 @@ internal fun BottomBarIndicatorLayer(
                     .width(tabWidthDp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                CompositionLocalProvider(LocalFloatingBottomBarContentColor provides colors.activeContentColor) {
+                CompositionLocalProvider(
+                    LocalFloatingBottomBarContentColor provides colors.activeContentColor,
+                    LocalFloatingBottomBarSelectedContentColor provides Color.Unspecified,
+                ) {
                     Row(
                         modifier = Modifier
                             .clearAndSetSemantics {}

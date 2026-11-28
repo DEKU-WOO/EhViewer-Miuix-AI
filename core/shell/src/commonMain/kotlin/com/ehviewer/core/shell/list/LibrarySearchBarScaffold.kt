@@ -40,9 +40,11 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -154,7 +156,23 @@ fun LibrarySearchBarScaffold(
             val fullBarHeight = SearchBarDefaults.InputFieldMinHeight + 16.dp + subHeaderHeight
             // 折叠阈值必须与顶栏完整高度同口径，否则带分类条时折叠进度永远到不了终态
             val collapseThresholdPx = with(density) { fullBarHeight.toPx() }
-            val collapseProgress = if (expanded) 0f else (-searchBarOffsetY().toFloat() / collapseThresholdPx).coerceIn(0f, 1f)
+            val currentCollapseThresholdPx by rememberUpdatedState(collapseThresholdPx)
+            val currentOffsetY by rememberUpdatedState(searchBarOffsetY)
+            val readCollapseProgress: () -> Float = remember(expanded) {
+                {
+                    if (expanded || currentCollapseThresholdPx <= 0f) {
+                        0f
+                    } else {
+                        (-currentOffsetY().toFloat() / currentCollapseThresholdPx).coerceIn(0f, 1f)
+                    }
+                }
+            }
+            val showCollapsedActions by remember(expanded, readCollapseProgress) {
+                derivedStateOf { !expanded && readCollapseProgress() > 0.2f }
+            }
+            val isCollapsedHidden by remember(expanded, readCollapseProgress) {
+                derivedStateOf { !expanded && readCollapseProgress() >= 0.67f }
+            }
 
             Scaffold(
                 topBar = {
@@ -237,7 +255,7 @@ fun LibrarySearchBarScaffold(
                             offset { androidx.compose.ui.unit.IntOffset(0, searchBarOffsetY()) }
                                 .graphicsLayer {
                                     // alpha 在 collapseProgress 2/3 时已归零，无需再用位移瞬移隐藏
-                                    alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                                    alpha = (1f - readCollapseProgress() * 1.5f).coerceIn(0f, 1f)
                                 }
                         }
                         .thenIf(expanded) { fillMaxSize() },
@@ -302,6 +320,7 @@ fun LibrarySearchBarScaffold(
                                 refractionHeight = 16.dp,
                                 refractionAmount = 16.dp,
                                 containerColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+                                enabled = !isCollapsedHidden,
                                 modifier = inputFieldModifier,
                                 backdrop = backdrop,
                             ) {
@@ -361,7 +380,7 @@ fun LibrarySearchBarScaffold(
                         }
                         .graphicsLayer {
                             // alpha 在 collapseProgress 2/3 时已归零，无需再用位移瞬移隐藏
-                            alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                            alpha = (1f - readCollapseProgress() * 1.5f).coerceIn(0f, 1f)
                         }
                         .fillMaxWidth(),
                 ) {
@@ -387,7 +406,7 @@ fun LibrarySearchBarScaffold(
                                 .align(Alignment.CenterStart)
                                 .padding(start = 24.dp)
                                 .graphicsLayer {
-                                    alpha = ((collapseProgress - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                    alpha = ((readCollapseProgress() - 0.3f) / 0.7f).coerceIn(0f, 1f)
                                 },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -398,13 +417,15 @@ fun LibrarySearchBarScaffold(
                             .align(Alignment.CenterEnd)
                             .padding(end = 12.dp)
                             .graphicsLayer {
-                                alpha = ((collapseProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
-                                scaleX = 0.85f + 0.15f * collapseProgress
-                                scaleY = 0.85f + 0.15f * collapseProgress
+                                val p = readCollapseProgress()
+                                alpha = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                                val s = 0.85f + 0.15f * p
+                                scaleX = s
+                                scaleY = s
                             },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (collapseProgress > 0.2f) {
+                        if (showCollapsedActions) {
                             IconButton(
                                 onClick = { onExpandedChange(true) },
                             ) {

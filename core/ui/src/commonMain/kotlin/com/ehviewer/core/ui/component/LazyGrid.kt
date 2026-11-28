@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 @Composable
 fun FastScrollLazyVerticalGrid(
@@ -35,7 +36,9 @@ fun FastScrollLazyVerticalGrid(
     Box {
         LazyVerticalGrid(
             columns = columns,
-            modifier = modifier,
+            modifier = Modifier
+                .overScrollVertical(isEnabled = { userScrollEnabled })
+                .then(modifier),
             state = state,
             contentPadding = contentPadding,
             reverseLayout = reverseLayout,
@@ -69,7 +72,9 @@ fun FastScrollLazyVerticalStaggeredGrid(
     Box {
         LazyVerticalStaggeredGrid(
             columns = columns,
-            modifier = modifier,
+            modifier = Modifier
+                .overScrollVertical(isEnabled = { userScrollEnabled })
+                .then(modifier),
             state = state,
             contentPadding = contentPadding,
             reverseLayout = reverseLayout,

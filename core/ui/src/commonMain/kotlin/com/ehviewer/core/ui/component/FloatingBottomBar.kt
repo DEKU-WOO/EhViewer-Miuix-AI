@@ -101,6 +101,7 @@ internal val NavBarVerticalPadding = 4.dp
 val LocalTabGesturePosition = staticCompositionLocalOf<State<Float?>?> { null }
 
 val LocalFloatingBottomBarContentColor = staticCompositionLocalOf { Color.Unspecified }
+internal val LocalFloatingBottomBarSelectedContentColor = staticCompositionLocalOf { Color.Unspecified }
 val LocalFloatingBottomBarTabScale = staticCompositionLocalOf { { 1f } }
 
 /**
@@ -158,7 +159,10 @@ private val GRAVITY_ANGLE_STEP_RAD = (3.0 * PI / 180.0).toFloat() // 3° quantiz
  * Returns a [State] so that reads are deferred to the Draw phase, preventing 50Hz sensor Recompositions.
  */
 @Composable
-private fun rememberQuantizedGravityAngle(): State<Float> {
+private fun rememberQuantizedGravityAngle(enabled: Boolean = true): State<Float> {
+    if (!enabled) {
+        return remember { mutableFloatStateOf((-PI / 2).toFloat()) }
+    }
     val tiltState = rememberDeviceTilt()
     return remember(tiltState) {
         derivedStateOf {
@@ -181,12 +185,15 @@ private fun rememberQuantizedGravityAngle(): State<Float> {
  */
 @Composable
 private fun rememberGravityRotatedHighlight(
+    gravityAngle: State<Float>,
     base: EdgeStroke,
     extraDegrees: Float = 0f,
-): State<EdgeStroke> {
-    val gravityAngle = rememberQuantizedGravityAngle()
-    return remember(gravityAngle, base, extraDegrees) {
-        derivedStateOf {
+    activeWhen: (() -> Boolean)? = null,
+): State<EdgeStroke> = remember(gravityAngle, base, extraDegrees, activeWhen) {
+    derivedStateOf {
+        if (activeWhen != null && !activeWhen()) {
+            base
+        } else {
             val basePrimary = base.primary
             val rad = gravityAngle.value + (extraDegrees * PI / 180.0).toFloat()
             base.copy(
@@ -217,6 +224,7 @@ fun FloatingBottomBar(
     mode: FloatingBottomBarMode = if (isRuntimeShaderSupported() && backdrop != null) FloatingBottomBarMode.LiquidGlass else FloatingBottomBarMode.Blur,
     colors: FloatingBottomBarColors = FloatingBottomBarDefaults.colors(),
     directSelector: FloatingBottomBarDirectSelector? = null,
+    sensorEnabled: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
     val isDark = MiuixTheme.colorScheme.surface.luminance() < 0.5f
@@ -399,8 +407,21 @@ fun FloatingBottomBar(
             null
         }
 
-    val baseHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = -45f)
-    val pillHighlight = rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = 90f)
+    val gravityAngle = rememberQuantizedGravityAngle(enabled = isLiquidGlassMode && sensorEnabled)
+    val baseHighlight = rememberGravityRotatedHighlight(gravityAngle, iosIndicatorSpecular, extraDegrees = -45f)
+    val pillHighlight = rememberGravityRotatedHighlight(
+        gravityAngle = gravityAngle,
+        base = iosIndicatorSpecular,
+        extraDegrees = 90f,
+        activeWhen = { dampedDragAnimation.pressProgress > 0f },
+    )
+    val activeBackdropSampling by remember(dampedDragAnimation, gesturePosition) {
+        derivedStateOf {
+            dampedDragAnimation.pressProgress > 0.001f ||
+                gesturePosition?.value != null ||
+                abs(dampedDragAnimation.value - currentSelectedIndex().toFloat()) > 0.001f
+        }
+    }
 
     val combinedBackdrop = backdrop?.let { rememberCombinedBackdrop(it, tabsBackdrop) }
 
@@ -428,6 +449,7 @@ fun FloatingBottomBar(
             dampedDragAnimation = dampedDragAnimation,
             baseHighlight = baseHighlight,
             interactiveHighlight = interactiveHighlight,
+            activeBackdropSampling = activeBackdropSampling,
             onSizeChanged = { coords ->
                 totalWidthPx = coords.width.toFloat()
                 val contentWidthPx = totalWidthPx - with(density) { NavBarInsidePadding.toPx() * 2 }
@@ -447,6 +469,7 @@ fun FloatingBottomBar(
             containerColor = containerColor,
             interactiveHighlight = interactiveHighlight,
             tabsBackdrop = tabsBackdrop,
+            activeBackdropSampling = activeBackdropSampling,
             content = content,
         )
 
@@ -466,6 +489,7 @@ fun FloatingBottomBar(
             colors = colors,
             isDark = isDark,
             isLtr = isLtr,
+            activeBackdropSampling = activeBackdropSampling,
             content = content,
         )
     }
@@ -483,6 +507,7 @@ fun IosLiquidGlassNavigationBar(
     modifier: Modifier = Modifier,
     mode: FloatingBottomBarMode = if (isRuntimeShaderSupported() && backdrop != null) FloatingBottomBarMode.LiquidGlass else FloatingBottomBarMode.Blur,
     colors: FloatingBottomBarColors = FloatingBottomBarDefaults.colors(),
+    sensorEnabled: Boolean = true,
     badge: (Int) -> (@Composable () -> Unit)? = { null },
 ) {
     if (items.isEmpty()) return
@@ -514,6 +539,7 @@ fun IosLiquidGlassNavigationBar(
                 mode = mode,
                 colors = colors,
                 directSelector = directSelector,
+                sensorEnabled = sensorEnabled,
                 modifier = Modifier.width(barWidth),
             ) {
                 items.forEachIndexed { index, item ->
@@ -524,6 +550,7 @@ fun IosLiquidGlassNavigationBar(
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                             onItemClickUpdated(index)
                         },
+                        selected = index == selectedIndex,
                         modifier = Modifier.semantics {
                             selected = index == selectedIndex
                         },

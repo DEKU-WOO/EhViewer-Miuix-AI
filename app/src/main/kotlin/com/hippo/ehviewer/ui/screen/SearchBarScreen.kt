@@ -50,10 +50,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -362,7 +364,23 @@ fun SearchBarScreen(
             val fullBarHeight = SearchBarDefaults.InputFieldMinHeight + 16.dp + subHeaderHeight
             // 折叠阈值必须与顶栏完整高度同口径，否则带分类条时折叠进度永远到不了终态
             val collapseThresholdPx = with(density) { fullBarHeight.toPx() }
-            val collapseProgress = if (expanded) 0f else (-searchBarOffsetY().toFloat() / collapseThresholdPx).coerceIn(0f, 1f)
+            val currentCollapseThresholdPx by rememberUpdatedState(collapseThresholdPx)
+            val currentOffsetY by rememberUpdatedState(searchBarOffsetY)
+            val readCollapseProgress: () -> Float = remember(expanded) {
+                {
+                    if (expanded || currentCollapseThresholdPx <= 0f) {
+                        0f
+                    } else {
+                        (-currentOffsetY().toFloat() / currentCollapseThresholdPx).coerceIn(0f, 1f)
+                    }
+                }
+            }
+            val showCollapsedActions by remember(expanded, readCollapseProgress) {
+                derivedStateOf { !expanded && readCollapseProgress() > 0.2f }
+            }
+            val isCollapsedHidden by remember(expanded, readCollapseProgress) {
+                derivedStateOf { !expanded && readCollapseProgress() >= 0.67f }
+            }
 
             Scaffold(
                 topBar = {
@@ -477,7 +495,7 @@ fun SearchBarScreen(
                             offset { IntOffset(0, searchBarOffsetY()) }
                                 .graphicsLayer {
                                     // alpha 在 collapseProgress 2/3 时已归零，无需再用位移瞬移隐藏
-                                    alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
+                                    alpha = (1f - readCollapseProgress() * 1.5f).coerceIn(0f, 1f)
                                 }
                         }
                         .thenIf(expanded) { fillMaxSize() },
@@ -490,7 +508,10 @@ fun SearchBarScreen(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.Center,
                         ) {
-                            CompositionLocalProvider(LocalSearchBarBackdrop provides activeBackdrop) {
+                            CompositionLocalProvider(
+                                LocalSearchBarBackdrop provides activeBackdrop,
+                                LocalSearchBarGlassEnabled provides !isCollapsedHidden,
+                            ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -508,6 +529,7 @@ fun SearchBarScreen(
                                             refractionAmount = 14.dp,
                                             highlight = LiquidGlassNavHighlight,
                                             containerColor = MiuixTheme.colorScheme.surfaceContainer,
+                                            enabled = !isCollapsedHidden,
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .height(SearchBarHeight),
@@ -758,10 +780,9 @@ fun SearchBarScreen(
                             IntOffset(0, searchBarOffsetY() + inputFieldOffset)
                         }
                         .graphicsLayer {
-                            alpha = (1f - collapseProgress * 1.5f).coerceIn(0f, 1f)
-                            if (collapseProgress >= 0.8f) {
-                                translationY = -10000f
-                            }
+                            val p = readCollapseProgress()
+                            alpha = (1f - p * 1.5f).coerceIn(0f, 1f)
+                            translationY = if (p >= 0.8f) -10000f else 0f
                         }
                         .fillMaxWidth(),
                 ) {
@@ -797,7 +818,7 @@ fun SearchBarScreen(
                                 .align(Alignment.CenterStart)
                                 .padding(start = 8.dp)
                                 .graphicsLayer {
-                                    alpha = ((collapseProgress - 0.3f) / 0.7f).coerceIn(0f, 1f)
+                                    alpha = ((readCollapseProgress() - 0.3f) / 0.7f).coerceIn(0f, 1f)
                                 },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -807,14 +828,16 @@ fun SearchBarScreen(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .graphicsLayer {
-                                alpha = ((collapseProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
-                                scaleX = 0.85f + 0.15f * collapseProgress
-                                scaleY = 0.85f + 0.15f * collapseProgress
+                                val p = readCollapseProgress()
+                                alpha = ((p - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                                val s = 0.85f + 0.15f * p
+                                scaleX = s
+                                scaleY = s
                             },
                         horizontalArrangement = Arrangement.spacedBy(SearchBarActionGap),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (collapseProgress > 0.2f) {
+                        if (showCollapsedActions) {
                             // 收缩态不再让图标裸渲染在文字上，统一包装为与主界面严格同径的独立正圆毛玻璃按钮
                             CollapsedCircleAction(
                                 backdrop = activeBackdrop,
@@ -1009,6 +1032,7 @@ private val SearchBarActionGap = 8.dp
 
 /** 供 [SearchBarCircleAction] 取实时 backdrop，由搜索栏在胶囊同一层级提供。 */
 internal val LocalSearchBarBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+internal val LocalSearchBarGlassEnabled = staticCompositionLocalOf { true }
 
 // 顶部磨砂在覆盖整条搜索栏后继续向下延伸缓冲带，渐变终点落在首张卡片上缘下方并完全归零
 private val TopScrimExtraHeight = 8.dp
@@ -1022,9 +1046,10 @@ private val TopScrimExtraHeight = 8.dp
 fun SearchBarCircleAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = LocalSearchBarGlassEnabled.current,
     content: @Composable () -> Unit,
 ) {
-    val backdrop = LocalSearchBarBackdrop.current
+    val backdrop = LocalSearchBarBackdrop.current?.takeIf { enabled }
     GlassIconButton(
         onClick = onClick,
         modifier = modifier,

@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.IntOffset
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 @Composable
 fun FastScrollLazyColumn(
@@ -26,7 +27,9 @@ fun FastScrollLazyColumn(
 ) {
     Layout({
         LazyColumn(
-            modifier = modifier,
+            modifier = Modifier
+                .overScrollVertical(isEnabled = { userScrollEnabled })
+                .then(modifier),
             state = state,
             contentPadding = contentPadding,
             reverseLayout = reverseLayout,

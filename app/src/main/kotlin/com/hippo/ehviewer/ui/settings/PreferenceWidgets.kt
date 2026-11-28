@@ -66,6 +66,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.overScrollVertical
 
 /** 卡片自身的外边距（与各页 Card 的 padding(horizontal = 12.dp, vertical = 4.dp) 保持一致）。 */
 private val CardVerticalPadding = 4.dp
@@ -291,6 +292,7 @@ internal fun SettingsScrollColumn(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .overScrollVertical()
             .nestedScroll(scrollBehavior.nestedScrollConnection)
             .verticalScroll(scrollState)
             .padding(contentPadding),
@@ -332,6 +334,7 @@ internal fun SettingsLazyColumn(
         LazyColumn(
             modifier = modifier
                 .fillMaxSize()
+                .overScrollVertical()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(
                 start = contentPadding.calculateStartPadding(layoutDirection) + sidePadding,

@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -49,10 +50,17 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor as MiuixLocalContentColor
 internal fun RowScope.FloatingBottomBarItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val scale = LocalFloatingBottomBarTabScale.current
     val contentColor = LocalFloatingBottomBarContentColor.current
+    val selectedContentColor = LocalFloatingBottomBarSelectedContentColor.current
+    val resolvedColor = if (selected && selectedContentColor != Color.Unspecified) {
+        selectedContentColor
+    } else {
+        contentColor
+    }
 
     Column(
         modifier = modifier
@@ -86,7 +94,7 @@ internal fun RowScope.FloatingBottomBarItem(
         horizontalAlignment = CenterHorizontally,
     ) {
         CompositionLocalProvider(
-            MiuixLocalContentColor provides contentColor,
+            MiuixLocalContentColor provides resolvedColor,
         ) {
             content()
         }

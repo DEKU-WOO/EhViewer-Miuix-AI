@@ -640,6 +640,7 @@ class MainActivity : AppCompatActivity() {
                                                 visibleNavItems.getOrNull(index)?.let { selectMainNavItem(it) }
                                             },
                                             backdrop = contentBackdrop,
+                                            sensorEnabled = isOnMainTabs,
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }

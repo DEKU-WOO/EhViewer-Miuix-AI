@@ -40,6 +40,7 @@ fun LiquidGlassSurface(
     refractionHeight: Dp = 16.dp,
     refractionAmount: Dp = 16.dp,
     highlight: EdgeStroke? = null,
+    enabled: Boolean = true,
     contentAlignment: Alignment = Alignment.Center,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -61,7 +62,7 @@ fun LiquidGlassSurface(
     Box(
         modifier = modifier
             .then(
-                if (elevation > 0.dp) {
+                if (elevation > 0.dp && enabled) {
                     Modifier.dropShadow(
                         shape = shape,
                         shadow = Shadow(
@@ -80,6 +81,7 @@ fun LiquidGlassSurface(
                     Modifier.drawBackdrop(
                         backdrop = backdrop,
                         shape = { shape },
+                        enabled = enabled,
                         effects = {
                             padding = maxOf(padding, 40.dp.toPx())
                             vibrancy()
@@ -97,6 +99,7 @@ fun LiquidGlassSurface(
                     Modifier.drawBackdrop(
                         backdrop = backdrop,
                         shape = { shape },
+                        enabled = enabled,
                         effects = {
                             blur(25.dp.toPx(), 25.dp.toPx())
                         },

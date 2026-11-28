@@ -14,8 +14,10 @@ import kotlinx.coroutines.launch
 
 context(ctx: Context)
 inline fun imageRequest(preview: GalleryPreview, builder: ImageRequest.Builder.() -> Unit = {}) = ImageRequest.Builder(ctx).ehPreview(preview).apply(builder).build()
+
 context(ctx: Context)
-inline fun imageRequest(info: GalleryInfo, builder: ImageRequest.Builder.() -> Unit = {}) = ImageRequest.Builder(ctx).ehUrl(info).apply(builder).build()
+inline fun imageRequest(info: GalleryInfo, constrainSize: Boolean = true, builder: ImageRequest.Builder.() -> Unit = {}) = ImageRequest.Builder(ctx).ehUrl(info, constrainSize).apply(builder).build()
+
 context(ctx: Context)
 inline fun imageRequest(builder: ImageRequest.Builder.() -> Unit = {}) = ImageRequest.Builder(ctx).apply(builder).build()
 inline fun diskCache(builder: DiskCache.Builder.() -> Unit) = DiskCache.Builder().apply(builder).build()

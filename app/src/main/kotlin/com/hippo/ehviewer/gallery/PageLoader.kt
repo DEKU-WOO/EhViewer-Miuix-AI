@@ -19,6 +19,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +34,7 @@ import moe.tarsin.coroutines.withLock
 import okio.Path
 
 private val progressScope = CoroutineScope(Dispatchers.IO)
-private const val MAX_CACHE_SIZE = 512 * 1024 * 1024
+private const val MAX_CACHE_SIZE = 320 * 1024 * 1024
 private const val MIN_CACHE_SIZE = 256 * 1024 * 1024
 
 abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, startPage: Int, val size: Int, val hasAds: Boolean = false) : AutoCloseable {
@@ -72,6 +73,10 @@ abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, sta
     private val prefetchPageCount = Settings.preloadImage.value
 
     fun restart() {
+        synchronized(jobs) {
+            jobs.forEach { _, job -> job.cancel() }
+            jobs.clear()
+        }
         lock.write { cache.evictAll() }
         pages.forEach(Page::reset)
     }
@@ -111,6 +116,10 @@ abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, sta
     }
 
     override fun close() {
+        synchronized(jobs) {
+            jobs.forEach { _, job -> job.cancel() }
+            jobs.clear()
+        }
         lock.write { cache.evictAll() }
         info?.run {
             progressScope.launch {
@@ -128,6 +137,20 @@ abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, sta
     }
 
     fun request(index: Int) {
+        val activeWindow = prefetchPageCount + 4
+        synchronized(jobs) {
+            jobs.removeIf { k, job ->
+                if (!job.isActive) {
+                    true
+                } else if (abs(k - index) > activeWindow) {
+                    job.cancel()
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+
         val prefetchRange = if (index >= prevIndex.load()) {
             index + 1..(index + prefetchPageCount).coerceAtMost(size - 1)
         } else {
@@ -180,15 +203,15 @@ abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, sta
         }
     }
 
-    fun cancelRequest(index: Int) {
-        jobs[index]?.cancel()
+    fun cancelRequest(index: Int) = synchronized(jobs) {
+        jobs.remove(index)?.cancel()
     }
 
     abstract fun save(index: Int, file: Path): Boolean
 
     fun notifySourceReady(index: Int) = synchronized(jobs) {
         if (jobs[index]?.isActive != true) {
-            jobs[index] = scope.launch {
+            val newJob = scope.launch {
                 try {
                     mutex.withLock(index) {
                         semaphore.withPermit {
@@ -201,6 +224,14 @@ abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, sta
                         throw e
                     } else {
                         notifyPageFailed(index, e.displayString())
+                    }
+                }
+            }
+            jobs[index] = newJob
+            newJob.invokeOnCompletion {
+                synchronized(jobs) {
+                    if (jobs[index] === newJob) {
+                        jobs.remove(index)
                     }
                 }
             }

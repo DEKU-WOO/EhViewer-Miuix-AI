@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -14,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -51,8 +51,10 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlin.math.abs
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withTimeoutOrNull
 import moe.tarsin.coroutines.runSuspendCatching
 
 private class OutgoingSlideSnapshot(
@@ -67,8 +69,8 @@ private const val TAB_TRANSITION_DURATION_MS = 280
  * 根级主导航平滑分页容器：
  * - 基于 [HorizontalPager]（`beyondViewportPageCount = 1`）原地承载所有可见主 Tab，100% 不改变 Compose 节点树层级；
  * - 相邻切页（`|to - from| == 1`）走原生平滑滚动；
- * - 跨多页切页（`|to - from| >= 2`）采用 `rememberGraphicsLayer()` 静态截屏 + `scrollToPage` 瞬时落位 + 280ms 双图层紧贴平推，
- *   彻底杜绝 `movableContentOf` 跨 `SubcomposeLayout` 挪动导致的崩溃，截屏异常或未就绪时自动安全降级直达。
+ * - 跨多页切页（`|to - from| >= 2`）按需触发单帧 `rememberGraphicsLayer()` 静态截屏 + `scrollToPage` 瞬时落位 + 280ms 双图层紧贴平推，
+ *   日常静息与滚动浏览期间直接绘制无额外离屏图层开销。
  */
 @Destination<RootGraph>
 @Composable
@@ -94,6 +96,7 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
     )
 
     val stageGraphicsLayer = rememberGraphicsLayer()
+    var pendingCapture by remember { mutableStateOf<CompletableDeferred<Unit>?>(null) }
     var stageWidthPx by remember { mutableFloatStateOf(0f) }
     var outgoingSnapshot by remember { mutableStateOf<OutgoingSlideSnapshot?>(null) }
     var isProgrammaticSwitch by remember { mutableStateOf(false) }
@@ -101,6 +104,7 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
 
     DisposableEffect(Unit) {
         onDispose {
+            pendingCapture = null
             outgoingSnapshot = null
             isProgrammaticSwitch = false
             tabsViewModel.updateGesturePosition(null)
@@ -163,14 +167,22 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
                     tabsViewModel.onPageSettled(targetPage, currentTabs)
                 } else {
                     val dir = if (targetPage >= fromPage) 1 else -1
-                    val captured = if (
-                        stageWidthPx > 1f &&
-                        stageGraphicsLayer.size.width > 0 &&
-                        stageGraphicsLayer.size.height > 0
-                    ) {
-                        runSuspendCatching { stageGraphicsLayer.toImageBitmap() }
-                            .getOrNull()
-                            ?.takeIf { it.width > 0 && it.height > 0 }
+                    val captured = if (stageWidthPx > 1f) {
+                        val ready = CompletableDeferred<Unit>()
+                        pendingCapture = ready
+                        val recorded = withTimeoutOrNull(48L) { ready.await() } != null
+                        pendingCapture = null
+                        if (
+                            recorded &&
+                            stageGraphicsLayer.size.width > 0 &&
+                            stageGraphicsLayer.size.height > 0
+                        ) {
+                            runSuspendCatching { stageGraphicsLayer.toImageBitmap() }
+                                .getOrNull()
+                                ?.takeIf { it.width > 0 && it.height > 0 }
+                        } else {
+                            null
+                        }
                     } else {
                         null
                     }
@@ -198,6 +210,7 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
                     }
                 }
             } finally {
+                pendingCapture = null
                 outgoingSnapshot = null
                 isProgrammaticSwitch = false
             }
@@ -238,10 +251,16 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
             .clipToBounds()
             .onSizeChanged { stageWidthPx = it.width.toFloat() }
             .drawWithContent {
-                stageGraphicsLayer.record {
-                    this@drawWithContent.drawContent()
+                val signal = pendingCapture
+                if (signal != null) {
+                    stageGraphicsLayer.record {
+                        this@drawWithContent.drawContent()
+                    }
+                    drawLayer(stageGraphicsLayer)
+                    signal.complete(Unit)
+                } else {
+                    drawContent()
                 }
-                drawLayer(stageGraphicsLayer)
             },
     ) {
         val containerWidthPx = constraints.maxWidth.toFloat()
@@ -264,9 +283,15 @@ fun AnimatedVisibilityScope.MainTabsScreen(navigator: DestinationsNavigator) {
             key = { page -> visibleTabs.getOrNull(page)?.name ?: "page_$page" },
         ) { page ->
             val item = visibleTabs.getOrNull(page) ?: return@HorizontalPager
-            val continuousPage = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            val isSettledVisible = activeSlide == null && page == pagerState.settledPage
-            val isInViewport = activeSlide != null || abs(continuousPage - page) < 0.995f
+            val isSettledVisible by remember(pagerState, page) {
+                derivedStateOf { outgoingSnapshot == null && page == pagerState.settledPage }
+            }
+            val isInViewport by remember(pagerState, page) {
+                derivedStateOf {
+                    outgoingSnapshot != null ||
+                        abs((pagerState.currentPage + pagerState.currentPageOffsetFraction) - page) < 0.995f
+                }
+            }
             key(item) {
                 CompositionLocalProvider(
                     LocalIsPageVisible provides isSettledVisible,

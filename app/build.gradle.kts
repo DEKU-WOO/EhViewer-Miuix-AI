@@ -175,6 +175,10 @@ baselineProfile {
     mergeIntoMain = true
 }
 
+composeCompiler {
+    includeSourceInformation.set(!isRelease)
+}
+
 dependencies {
     implementation(projects.core.data)
     implementation(projects.core.i18n)

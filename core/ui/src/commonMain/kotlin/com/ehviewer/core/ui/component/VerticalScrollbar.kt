@@ -14,6 +14,7 @@ import androidx.compose.foundation.scrollbar.VerticalScrollbar
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -49,7 +50,8 @@ fun VerticalScrollbar(
     }
     // 正常滚动 0.85 透明度，手指按住拖动时恢复完全不透明
     val thumbAlpha = if (isDragged) 1f else ScrollbarIdleAlpha
-    val scrollbarModifier = if (scrollbarAlpha.value > 0f && !isDragged && !isScrollInProgress) {
+    val isVisible by remember { derivedStateOf { scrollbarAlpha.value > 0f } }
+    val scrollbarModifier = if (isVisible && !isDragged && !isScrollInProgress) {
         modifier.excludeSystemGesture()
     } else {
         modifier
