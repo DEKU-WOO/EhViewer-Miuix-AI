@@ -181,14 +181,15 @@ fun GalleryInfoListItem(
                         Text(text = lang, style = metaStyle)
                     }
                 }
-                if (info.pages != 0 && showPages) {
+                if (showPages && info.gid > 0L) {
+                    val displayPages = if (info.pages > 1) info.pages else 1
                     val readProgress = if (showProgress) {
-                        remember { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0).value
+                        remember(info.gid) { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0).value
                     } else {
                         0
                     }
                     Text(
-                        text = if (readProgress > 0) "${readProgress + 1}/${info.pages}P" else "${info.pages}P",
+                        text = if (readProgress in 1..<displayPages) "${readProgress + 1}/${displayPages}P" else "${displayPages}P",
                         style = metaStyle,
                     )
                 }
@@ -280,14 +281,15 @@ fun GalleryInfoGridItem(
         ) {
             val shouldShowLanguage = showLanguage && info.simpleLanguage != null
             val textColor = EhUtils.getCategoryTextColor(categoryColor)
-            if (showPages && info.pages > 0) {
+            if (showPages && info.gid > 0L) {
+                val displayPages = if (info.pages > 1) info.pages else 1
                 val readProgress = if (showProgress) {
-                    remember { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0).value
+                    remember(info.gid) { EhDB.getReadProgressFlow(info.gid) }.collectAsState(0).value
                 } else {
                     0
                 }
                 Text(
-                    text = if (readProgress > 0) "${readProgress + 1}/${info.pages}" else "${info.pages}",
+                    text = if (readProgress in 1..<displayPages) "${readProgress + 1}/$displayPages" else "$displayPages",
                     style = MiuixTheme.textStyles.footnote2,
                     color = textColor,
                 )
