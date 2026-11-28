@@ -14,15 +14,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastFirst
 import androidx.compose.ui.util.fastJoinToString
@@ -63,12 +69,15 @@ import com.ehviewer.core.model.BaseGalleryInfo
 import com.ehviewer.core.model.GalleryDetail
 import com.ehviewer.core.model.GalleryInfo
 import com.ehviewer.core.ui.component.BlurredBar
+import com.ehviewer.core.ui.component.LiquidGlassCircleButtonIconSize
+import com.ehviewer.core.ui.component.LiquidGlassCircleButtonSize
+import com.ehviewer.core.ui.component.LiquidGlassNavHighlight
 import com.ehviewer.core.ui.component.blurBackdropSource
+import com.ehviewer.core.ui.component.liquidGlassOverlayMaterial
 import com.ehviewer.core.ui.component.rememberBlurBackdrop
-import com.ehviewer.core.ui.util.LocalWindowSizeClass
-import com.ehviewer.core.ui.util.isExpanded
 import com.ehviewer.core.ui.util.launchInVM
 import com.ehviewer.core.ui.util.rememberInVM
+import com.ehviewer.core.ui.util.thenIf
 import com.ehviewer.core.util.launchIO
 import com.ehviewer.core.util.logcat
 import com.ehviewer.core.util.withIOContext
@@ -86,7 +95,6 @@ import com.hippo.ehviewer.spider.SpiderDen
 import com.hippo.ehviewer.ui.MainActivity
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.main.GalleryDetailErrorTip
-import com.hippo.ehviewer.ui.main.NavigationIcon
 import com.hippo.ehviewer.ui.main.rememberGalleryDetailTitleState
 import com.hippo.ehviewer.ui.navToReader
 import com.hippo.ehviewer.ui.openBrowser
@@ -107,18 +115,18 @@ import moe.tarsin.snackbar
 import moe.tarsin.tip
 import top.yukonga.miuix.kmp.anim.folmeSpring
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.basic.SearchBarDefaults
 import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBarDefaults
+import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.More
-import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 typealias VoteTag = suspend GalleryDetail.(String, Int) -> Unit
@@ -210,7 +218,6 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
     val exportArchive = stringResource(id = R.string.export_as_archive)
     val exportSuccess = stringResource(id = R.string.export_as_archive_success)
     val exportFailed = stringResource(id = R.string.export_as_archive_failed)
-    val windowSizeClass = LocalWindowSizeClass.current
     val titleState = rememberGalleryDetailTitleState(gid, galleryInfo?.let { EhUtils.getSuitableTitle(it) }.orEmpty())
     val title = titleState.title
     val backdrop = rememberBlurBackdrop()
@@ -224,64 +231,42 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
                     title = title,
                     titleClickable = titleState.translationEnabled,
                     onTitleClick = titleState.onTranslateOrToggle,
-                    navigationIcon = { NavigationIcon() },
+                    navigationIcon = {
+                        DetailTopBarCircleAction(
+                            backdrop = backdrop,
+                            onClick = { navigator.popBackStack() },
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Back,
+                                contentDescription = stringResource(id = R.string.desktop_a11y_back),
+                                modifier = Modifier.size(LiquidGlassCircleButtonIconSize),
+                            )
+                        }
+                    },
                     scrollBehavior = scrollBehavior,
                     color = if (backdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
                     actions = {
-                        if (windowSizeClass.isExpanded) {
-                            IconButton(
-                                onClick = {
-                                    val detail = galleryInfo as? GalleryDetail ?: return@IconButton
-                                    launchIO {
-                                        if (detail.apiUid < 0) {
-                                            snackbar(signInFirst)
-                                        } else {
-                                            val tags = awaitSelectTags()
-                                            if (tags.isNotEmpty()) {
-                                                val text = tags.fastJoinToString(",")
-                                                detail.voteTag(text, 1)
-                                            }
-                                        }
-                                    }
-                                },
-                            ) {
-                                Icon(imageVector = MiuixIcons.Add, contentDescription = null)
-                            }
-                            IconButton(
-                                onClick = {
-                                    // Invalidate cache
-                                    detailCache.remove(gid)
-
-                                    // Trigger recompose
-                                    galleryInfo = galleryInfo?.findBaseInfo()
-                                    getDetailError = ""
-                                },
-                            ) {
-                                Icon(imageVector = MiuixIcons.Refresh, contentDescription = null)
-                            }
-                        }
-                        IconButton(
+                        DetailTopBarCircleAction(
+                            backdrop = backdrop,
                             onClick = {
                                 launchIO {
                                     awaitSelectAction {
-                                        if (!windowSizeClass.isExpanded) {
-                                            onSelect(addTag) {
-                                                val detail = galleryInfo as? GalleryDetail ?: return@onSelect
-                                                if (detail.apiUid < 0) {
-                                                    snackbar(signInFirst)
-                                                } else {
-                                                    val tags = awaitSelectTags()
-                                                    if (tags.isNotEmpty()) {
-                                                        val text = tags.fastJoinToString(",")
-                                                        detail.voteTag(text, 1)
-                                                    }
+                                        onSelect(addTag) {
+                                            val detail = galleryInfo as? GalleryDetail ?: return@onSelect
+                                            if (detail.apiUid < 0) {
+                                                snackbar(signInFirst)
+                                            } else {
+                                                val tags = awaitSelectTags()
+                                                if (tags.isNotEmpty()) {
+                                                    val text = tags.fastJoinToString(",")
+                                                    detail.voteTag(text, 1)
                                                 }
                                             }
-                                            onSelect(refresh) {
-                                                detailCache.remove(gid)
-                                                galleryInfo = galleryInfo?.findBaseInfo()
-                                                getDetailError = ""
-                                            }
+                                        }
+                                        onSelect(refresh) {
+                                            detailCache.remove(gid)
+                                            galleryInfo = galleryInfo?.findBaseInfo()
+                                            getDetailError = ""
                                         }
                                         onSelect(clearCache) {
                                             val gd = galleryInfo as? GalleryDetail ?: return@onSelect
@@ -334,7 +319,11 @@ fun AnimatedVisibilityScope.GalleryDetailScreen(args: GalleryDetailScreenArgs, n
                                 }
                             },
                         ) {
-                            Icon(imageVector = MiuixIcons.More, contentDescription = stringResource(R.string.more_actions))
+                            Icon(
+                                imageVector = MiuixIcons.More,
+                                contentDescription = stringResource(R.string.more_actions),
+                                modifier = Modifier.size(LiquidGlassCircleButtonIconSize),
+                            )
                         }
                     },
                 )
@@ -386,7 +375,47 @@ private val galleryDetailTitleStyle = TextStyle(
     fontWeight = FontWeight.Medium,
 )
 
-/** 保留 MIUIX 顶栏布局与折叠动画，仅将详情页标题替换为可点击的紧凑文本。 */
+private val galleryDetailCollapsedTitleStyle = TextStyle(
+    fontSize = 17.sp,
+    lineHeight = 22.sp,
+    fontWeight = FontWeight.Medium,
+)
+
+// 与主页 SearchBarScreen 圆形玻璃按钮严格同口径的外边距与顶部呼吸基准线
+private val DetailTopBarHorizontalMargin = 16.dp
+private val DetailTopBarCenterGap = 12.dp
+private val DetailTopBarBreathingSpace = SearchBarDefaults.InputFieldMinHeight - LiquidGlassCircleButtonSize
+private val DetailTopBarBottomBreathing = 8.dp
+private val DetailTopBarCollapsedHeight = SearchBarDefaults.InputFieldMinHeight + DetailTopBarBottomBreathing
+private val DetailLargeTitleTopGap = 6.dp
+private val DetailLargeTitleBottomGap = 6.dp
+
+/** 与主页搜索栏右侧圆钮 100% 同源的独立正圆形液态玻璃高光按钮。 */
+@Composable
+private fun DetailTopBarCircleAction(
+    backdrop: Backdrop?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    GlassIconButton(
+        onClick = onClick,
+        modifier = modifier,
+        inheritTopBarMaterial = false,
+        backdrop = backdrop,
+        material = liquidGlassOverlayMaterial(),
+        size = LiquidGlassCircleButtonSize,
+        stroke = LiquidGlassNavHighlight,
+        content = content,
+    )
+}
+
+/**
+ * 详情页顶栏：
+ * 1) 顶部常驻水平三段式收缩行（左圆形玻璃钮 + 12.dp + weight(1f) 单行省略标题 + 12.dp + 右圆形玻璃钮），
+ *    左右外边距与垂直中心基准线严格对齐主页顶部搜索栏圆钮，且三者互不重叠、绝不遮挡按钮热区；
+ * 2) 下方完整多行标题置于独立裁剪层，上滑时在按钮行下方平滑折叠渐隐，不侵入上方按钮热区。
+ */
 @Composable
 private fun GalleryDetailTopAppBar(
     title: String,
@@ -400,12 +429,12 @@ private fun GalleryDetailTopAppBar(
     val scrolledOffset = remember(scrollBehavior) { { scrollBehavior.state.heightOffset } }
     val largeTitleAlpha = remember(scrollBehavior) {
         {
-            1f - (scrollBehavior.state.collapsedFraction * 3f).coerceIn(0f, 1f)
+            1f - (scrollBehavior.state.collapsedFraction * 2.5f).coerceIn(0f, 1f)
         }
     }
     val updateHeightOffsetLimit = remember(scrollBehavior) {
-        { height: Int ->
-            val limit = -height.toFloat()
+        { expansionPx: Int ->
+            val limit = -expansionPx.toFloat()
             if (scrollBehavior.state.heightOffsetLimit != limit) {
                 scrollBehavior.state.heightOffsetLimit = limit
             }
@@ -413,13 +442,13 @@ private fun GalleryDetailTopAppBar(
         }
     }
     val smallTitleVisible by remember(scrollBehavior) {
-        derivedStateOf { scrollBehavior.state.collapsedFraction * 3f >= 1f }
+        derivedStateOf { scrollBehavior.state.collapsedFraction * 2.5f >= 1f }
     }
     val largeTitleVisible by remember(scrollBehavior) {
-        derivedStateOf { scrollBehavior.state.collapsedFraction * 3f < 1f }
+        derivedStateOf { scrollBehavior.state.collapsedFraction * 2.5f < 1f }
     }
     val smallTitleAlpha = remember { Animatable(if (smallTitleVisible) 1f else 0f) }
-    val smallTitleTranslationY = remember { Animatable(if (smallTitleVisible) 0f else 20f) }
+    val smallTitleTranslationY = remember { Animatable(if (smallTitleVisible) 0f else 14f) }
 
     LaunchedEffect(smallTitleVisible) {
         if (smallTitleVisible) {
@@ -429,7 +458,7 @@ private fun GalleryDetailTopAppBar(
         } else {
             val hideSpec = folmeSpring<Float>(damping = 1.0f, response = 0.15f)
             launch { smallTitleAlpha.animateTo(0f, hideSpec) }
-            launch { smallTitleTranslationY.animateTo(20f, hideSpec) }
+            launch { smallTitleTranslationY.animateTo(14f, hideSpec) }
         }
     }
 
@@ -437,76 +466,89 @@ private fun GalleryDetailTopAppBar(
         targetValue = MiuixTheme.colorScheme.onSurface,
         animationSpec = tween(durationMillis = 50),
     )
-    val animatedLargeTitleColor by animateColorAsState(
-        targetValue = MiuixTheme.colorScheme.onSurface,
-        animationSpec = tween(durationMillis = 50),
-    )
 
     Layout(
         content = {
-            Box(
-                Modifier
-                    .layoutId("navigationIcon")
-                    .padding(start = TopAppBarDefaults.NavigationIconPadding),
-            ) {
-                navigationIcon()
-            }
-            Box(
-                Modifier
-                    .layoutId("title")
-                    .padding(horizontal = TopAppBarDefaults.TitlePadding)
-                    .graphicsLayer {
-                        alpha = smallTitleAlpha.value
-                        translationY = smallTitleTranslationY.value
-                    },
-            ) {
-                Text(
-                    text = title,
-                    color = animatedTitleColor,
-                    style = galleryDetailTitleStyle,
-                    overflow = TextOverflow.Ellipsis,
-                    softWrap = false,
-                    modifier = Modifier.clickable(
-                        enabled = titleClickable && smallTitleVisible,
-                        onClick = onTitleClick,
-                    ),
-                )
-            }
-            Box(
-                Modifier
-                    .layoutId("actionIcons")
-                    .padding(end = TopAppBarDefaults.ActionIconPadding),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                    content = actions,
-                )
-            }
+            // 先声明大标题层（Z 轴在下），并严格在测量布局中限制于收缩行下方区域
             Box(
                 Modifier
                     .layoutId("largeTitle")
-                    .padding(top = TopAppBarDefaults.CollapsedHeight)
-                    .padding(horizontal = TopAppBarDefaults.TitlePadding)
+                    .fillMaxWidth()
+                    .onSizeChanged { updateHeightOffsetLimit(it.height) }
+                    .clipToBounds()
+                    .padding(
+                        start = DetailTopBarHorizontalMargin,
+                        end = DetailTopBarHorizontalMargin,
+                        top = DetailLargeTitleTopGap,
+                        bottom = DetailLargeTitleBottomGap,
+                    )
                     .graphicsLayer { alpha = largeTitleAlpha() },
             ) {
                 Column(
                     modifier = Modifier
+                        .fillMaxWidth()
                         .offset {
                             IntOffset(0, scrolledOffset().fastRoundToInt())
-                        }
-                        .onSizeChanged { updateHeightOffsetLimit(it.height) },
+                        },
                 ) {
                     Text(
                         text = title,
-                        color = animatedLargeTitleColor,
+                        color = animatedTitleColor,
                         style = galleryDetailTitleStyle,
-                        modifier = Modifier.clickable(
-                            enabled = titleClickable && largeTitleVisible,
-                            onClick = onTitleClick,
-                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .thenIf(titleClickable && largeTitleVisible) {
+                                clickable(onClick = onTitleClick)
+                            },
                     )
                 }
+            }
+
+            // 后声明收缩态三段式顶栏行（Z 轴最上层）：左圆钮 + 12.dp + 中间自适应标题 + 12.dp + 右圆钮
+            Row(
+                modifier = Modifier
+                    .layoutId("collapsedRow")
+                    .fillMaxWidth()
+                    .padding(
+                        start = DetailTopBarHorizontalMargin,
+                        end = DetailTopBarHorizontalMargin,
+                        top = DetailTopBarBreathingSpace,
+                        bottom = DetailTopBarBottomBreathing,
+                    )
+                    .height(LiquidGlassCircleButtonSize),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                navigationIcon()
+                Spacer(modifier = Modifier.width(DetailTopBarCenterGap))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .graphicsLayer {
+                            alpha = smallTitleAlpha.value
+                            translationY = smallTitleTranslationY.value
+                        },
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text(
+                        text = title,
+                        color = animatedTitleColor,
+                        style = galleryDetailCollapsedTitleStyle,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .thenIf(titleClickable && smallTitleVisible) {
+                                clickable(onClick = onTitleClick)
+                            },
+                    )
+                }
+                Spacer(modifier = Modifier.width(DetailTopBarCenterGap))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
             }
         },
         modifier = Modifier
@@ -519,37 +561,30 @@ private fun GalleryDetailTopAppBar(
                 detectTapGestures { /* Consume click */ }
             },
     ) { measurables, constraints ->
-        val navigationIconPlaceable = measurables
-            .fastFirst { it.layoutId == "navigationIcon" }
-            .measure(constraints.copy(minWidth = 0, minHeight = 0))
-        val actionIconsPlaceable = measurables
-            .fastFirst { it.layoutId == "actionIcons" }
-            .measure(constraints.copy(minWidth = 0, minHeight = 0))
-        val maxTitleWidth = if (constraints.maxWidth == Constraints.Infinity) {
-            constraints.maxWidth
-        } else {
-            (constraints.maxWidth - navigationIconPlaceable.width - actionIconsPlaceable.width).coerceAtLeast(0)
-        }
-        val titleMaxWidth = if (maxTitleWidth == Constraints.Infinity) {
-            maxTitleWidth
-        } else {
-            (maxTitleWidth * DETAIL_TITLE_WIDTH_FRACTION).fastRoundToInt()
-        }
-        val titlePlaceable = measurables
-            .fastFirst { it.layoutId == "title" }
-            .measure(constraints.copy(minWidth = 0, maxWidth = titleMaxWidth, minHeight = 0))
+        val collapsedHeightPx = DetailTopBarCollapsedHeight.roundToPx()
+        val collapsedRowPlaceable = measurables
+            .fastFirst { it.layoutId == "collapsedRow" }
+            .measure(
+                constraints.copy(
+                    minWidth = constraints.maxWidth,
+                    maxWidth = constraints.maxWidth,
+                    minHeight = collapsedHeightPx,
+                    maxHeight = collapsedHeightPx,
+                ),
+            )
         val largeTitlePlaceable = measurables
             .fastFirst { it.layoutId == "largeTitle" }
             .measure(
                 constraints.copy(
                     minWidth = 0,
+                    maxWidth = constraints.maxWidth,
                     minHeight = 0,
                     maxHeight = Constraints.Infinity,
                 ),
             )
 
-        val collapsedHeight = TopAppBarDefaults.CollapsedHeight.roundToPx()
-        val expansion = (largeTitlePlaceable.height - collapsedHeight).coerceAtLeast(0)
+        val expansion = largeTitlePlaceable.height.coerceAtLeast(0)
+
         val barHeight = if (expansion > 0) {
             val offset = scrolledOffset()
             val collapseFraction = if (offset.isNaN()) {
@@ -558,38 +593,27 @@ private fun GalleryDetailTopAppBar(
                 (abs(offset) / expansion.toFloat()).coerceIn(0f, 1f)
             }
             lerp(
-                start = collapsedHeight,
-                stop = collapsedHeight + expansion,
+                start = collapsedHeightPx,
+                stop = collapsedHeightPx + expansion,
                 fraction = 1f - collapseFraction,
             )
         } else {
-            collapsedHeight
+            collapsedHeightPx
         }
-        val contentTop = barHeight + TopAppBarDefaults.LargeTitleBottomPadding.roundToPx()
-        val verticalCenter = collapsedHeight / 2
 
-        layout(constraints.maxWidth, contentTop) {
-            navigationIconPlaceable.placeRelative(
-                x = 0,
-                y = verticalCenter - navigationIconPlaceable.height / 2,
-            )
-            var titleX = (constraints.maxWidth - titlePlaceable.width) / 2
-            if (titleX < navigationIconPlaceable.width) {
-                titleX += navigationIconPlaceable.width - titleX
-            } else if (titleX + titlePlaceable.width > constraints.maxWidth - actionIconsPlaceable.width) {
-                titleX += (constraints.maxWidth - actionIconsPlaceable.width) - (titleX + titlePlaceable.width)
+        // 当完全折叠后不再放置大标题层，彻底杜绝大标题越界覆盖上方左右圆钮触摸区
+        val visibleExpansionHeight = (barHeight - collapsedHeightPx).coerceAtLeast(0)
+        val clippedLargeTitlePlaceable = if (visibleExpansionHeight > 0) {
+            largeTitlePlaceable
+        } else {
+            null
+        }
+
+        layout(constraints.maxWidth, barHeight) {
+            if (clippedLargeTitlePlaceable != null) {
+                clippedLargeTitlePlaceable.placeRelative(x = 0, y = collapsedHeightPx)
             }
-            titlePlaceable.placeRelative(
-                x = titleX,
-                y = verticalCenter - titlePlaceable.height / 2,
-            )
-            actionIconsPlaceable.placeRelative(
-                x = constraints.maxWidth - actionIconsPlaceable.width,
-                y = verticalCenter - actionIconsPlaceable.height / 2,
-            )
-            largeTitlePlaceable.placeRelative(x = 0, y = 0)
+            collapsedRowPlaceable.placeRelative(x = 0, y = 0)
         }
     }
 }
-
-private const val DETAIL_TITLE_WIDTH_FRACTION = 0.9f

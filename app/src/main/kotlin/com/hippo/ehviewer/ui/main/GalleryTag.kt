@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ehviewer.core.model.GalleryTagGroup
@@ -61,7 +60,6 @@ fun GalleryTags(
                             BaseRoundText(
                                 text = translation,
                                 weak = power == PowerStatus.Weak,
-                                solid = power == PowerStatus.Solid && showVote,
                                 modifier = Modifier.combinedClickable(
                                     onClick = { onTagClick(tag) },
                                     onLongClick = {
@@ -91,7 +89,6 @@ private fun BaseRoundText(
     text: String,
     modifier: Modifier = Modifier,
     weak: Boolean = false,
-    solid: Boolean = false,
     isGroup: Boolean = false,
 ) {
     val bgColor = if (isGroup) {
@@ -115,7 +112,6 @@ private fun BaseRoundText(
             modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp).width(IntrinsicSize.Max),
             color = if (weak) MiuixTheme.colorScheme.onSurfaceVariantSummary else contentColor,
             style = MiuixTheme.textStyles.footnote1.includeFontPadding,
-            textDecoration = if (solid) TextDecoration.Underline else null,
         )
     }
 }

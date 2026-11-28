@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,7 +34,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -44,7 +42,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,7 +87,6 @@ import com.ehviewer.core.ui.component.CrystalCard
 import com.ehviewer.core.ui.component.FastScrollLazyVerticalGrid
 import com.ehviewer.core.ui.component.FilledTertiaryIconButton
 import com.ehviewer.core.ui.component.FilledTertiaryIconToggleButton
-import com.ehviewer.core.ui.component.GalleryDetailRating
 import com.ehviewer.core.ui.component.GalleryRatingBar
 import com.ehviewer.core.ui.component.SquircleShape
 import com.ehviewer.core.ui.icons.EhIcons
@@ -180,7 +176,6 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Search
@@ -354,6 +349,70 @@ fun GalleryDetailContent(
         }
     }
 
+    var displayRating by remember(galleryInfo.gid, galleryDetail?.rating) {
+        mutableFloatStateOf(galleryDetail?.rating ?: galleryInfo.rating)
+    }
+    var displayRatingCount by remember(galleryInfo.gid, galleryDetail?.ratingCount) {
+        mutableIntStateOf(galleryDetail?.ratingCount ?: 0)
+    }
+    val rateSucceed = stringResource(R.string.rate_successfully)
+    val rateFailed = stringResource(R.string.rate_failed)
+    val rateSignInFirst = stringResource(R.string.sign_in_first)
+    fun showRateDialog() {
+        val detail = galleryDetail ?: return
+        launchIO {
+            if (detail.apiUid < 0) {
+                snackbar(rateSignInFirst)
+                return@launchIO
+            }
+            val currentSummary = string(
+                R.string.rating_text,
+                string(getRatingText(displayRating)),
+                displayRating,
+                displayRatingCount,
+            )
+            val pendingRating = awaitResult(displayRating.coerceAtLeast(.5f), title = R.string.rate) {
+                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = currentSummary,
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    var text by remember { mutableIntStateOf(getRatingText(expectedValue)) }
+                    Text(text = stringResource(id = text), style = MiuixTheme.textStyles.body1)
+                    Spacer(modifier = Modifier.size(keylineMargin))
+                    GalleryRatingBar(
+                        rating = expectedValue,
+                        onRatingChange = {
+                            expectedValue = it.coerceAtLeast(.5f)
+                            text = getRatingText(expectedValue)
+                        },
+                    )
+                }
+            }
+            detail.runSuspendCatching {
+                EhEngine.rateGallery(apiUid, apiKey, gid, token, pendingRating)
+            }.onSuccess { result ->
+                detail.apply {
+                    rating = result.rating
+                    ratingCount = result.ratingCount
+                }
+                displayRating = result.rating
+                displayRatingCount = result.ratingCount
+                snackbar(rateSucceed)
+            }.onFailure {
+                logcat(it)
+                snackbar(rateFailed)
+            }
+        }
+    }
+
+    val secondaryButtonColors = ButtonDefaults.buttonColors(
+        color = MiuixTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MiuixTheme.colorScheme.onSurface,
+    )
+
     val previews = galleryDetail?.collectPreviewItems()
     val windowLayout = LocalWindowLayout.current
     val detailLayoutMode by Settings.galleryDetailLayout.collectAsState()
@@ -417,13 +476,15 @@ fun GalleryDetailContent(
                             onUploaderChipClick = ::onUploaderChipClick.partially1(galleryInfo),
                             onBlockUploaderIconClick = ::showFilterUploaderDialog.partially1(galleryInfo),
                             onCategoryChipClick = ::onCategoryChipClick,
+                            rating = displayRating,
+                            onRatingClick = if (galleryDetail != null) ::showRateDialog else null,
                             onCoverClick = ::onCoverClick,
                             modifier = Modifier.fillMaxWidth().padding(vertical = keylineMargin),
                         )
                         Row {
                             Button(
                                 onClick = ::onDownloadButtonClick,
-                                colors = ButtonDefaults.buttonColors(),
+                                colors = secondaryButtonColors,
                                 modifier = Modifier.padding(horizontal = 4.dp).weight(1F),
                             ) {
                                 Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
@@ -528,6 +589,8 @@ fun GalleryDetailContent(
                         onUploaderChipClick = ::onUploaderChipClick.partially1(galleryInfo),
                         onBlockUploaderIconClick = ::showFilterUploaderDialog.partially1(galleryInfo),
                         onCategoryChipClick = ::onCategoryChipClick,
+                        rating = displayRating,
+                        onRatingClick = if (galleryDetail != null) ::showRateDialog else null,
                         onCoverClick = ::onCoverClick,
                         modifier = Modifier.fillMaxWidth().padding(vertical = keylineMargin),
                     )
@@ -542,7 +605,7 @@ fun GalleryDetailContent(
                         Row {
                             Button(
                                 onClick = ::onDownloadButtonClick,
-                                colors = ButtonDefaults.buttonColors(),
+                                colors = secondaryButtonColors,
                                 modifier = Modifier.padding(horizontal = 4.dp).weight(1F),
                             ) {
                                 Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
@@ -600,6 +663,8 @@ fun GalleryDetailContent(
                             onUploaderChipClick = ::onUploaderChipClick.partially1(galleryInfo),
                             onBlockUploaderIconClick = ::showFilterUploaderDialog.partially1(galleryInfo),
                             onCategoryChipClick = ::onCategoryChipClick,
+                            rating = displayRating,
+                            onRatingClick = if (galleryDetail != null) ::showRateDialog else null,
                             onCoverClick = ::onCoverClick,
                             modifier = Modifier.width(dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_detail_card_landscape_width)).padding(vertical = keylineMargin),
                         )
@@ -607,7 +672,7 @@ fun GalleryDetailContent(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Spacer(modifier = modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = ::onReadButtonClick,
                                 colors = ButtonDefaults.buttonColorsPrimary(),
@@ -615,10 +680,10 @@ fun GalleryDetailContent(
                             ) {
                                 Text(text = readButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
                             }
-                            Spacer(modifier = modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
                             Button(
                                 onClick = ::onDownloadButtonClick,
-                                colors = ButtonDefaults.buttonColors(),
+                                colors = secondaryButtonColors,
                                 modifier = Modifier.height(56.dp).padding(horizontal = 16.dp).width(192.dp),
                             ) {
                                 Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
@@ -702,13 +767,27 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
                     ellipsis = true,
                 )
             }
-            TextButton(
-                text = commentText,
+            Button(
                 onClick = ::navigateToCommentScreen,
+                colors = ButtonDefaults.buttonColors(
+                    color = MiuixTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MiuixTheme.colorScheme.onSurface,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding_v)),
-            )
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = if (commentsList.isEmpty()) 12.dp else 4.dp,
+                        bottom = 12.dp,
+                    ),
+            ) {
+                Text(
+                    text = commentText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
     suspend fun showNewerVersionDialog() {
@@ -735,84 +814,8 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
         }
         Spacer(modifier = Modifier.size(keylineMargin))
     }
-    // 平板竖屏：4 个操作图标靠左、星标评分卡靠右合并到同一行；手机与平板横屏保持原布局
-    val tabletPortrait = with(LocalWindowLayout.current) {
-        !isLandscape && widthDp >= AdaptiveBreakpoints.CONTENT_MAX_WIDTH_MIN_DP
-    }
-    fun getAllRatingText(rating: Float, ratingCount: Int): String = string(
-        R.string.rating_text,
-        string(getRatingText(rating)),
-        rating,
-        ratingCount,
-    )
-    var ratingText by rememberSaveable {
-        mutableStateOf(getAllRatingText(galleryDetail.rating, galleryDetail.ratingCount))
-    }
-    val rateSucceed = stringResource(R.string.rate_successfully)
-    val rateFailed = stringResource(R.string.rate_failed)
-    val rateSignInFirst = stringResource(R.string.sign_in_first)
-    fun showRateDialog() {
-        launchIO {
-            if (galleryDetail.apiUid < 0) {
-                snackbar(rateSignInFirst)
-                return@launchIO
-            }
-            val pendingRating = awaitResult(galleryDetail.rating.coerceAtLeast(.5f), title = R.string.rate) {
-                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    var text by remember { mutableIntStateOf(getRatingText(expectedValue)) }
-                    Text(text = stringResource(id = text), style = MiuixTheme.textStyles.body1)
-                    Spacer(modifier = Modifier.size(keylineMargin))
-                    GalleryRatingBar(
-                        rating = expectedValue,
-                        onRatingChange = {
-                            expectedValue = it.coerceAtLeast(.5f)
-                            text = getRatingText(expectedValue)
-                        },
-                    )
-                }
-            }
-            galleryDetail.runSuspendCatching {
-                EhEngine.rateGallery(apiUid, apiKey, gid, token, pendingRating)
-            }.onSuccess { result ->
-                galleryDetail.apply {
-                    rating = result.rating
-                    ratingCount = result.ratingCount
-                }
-                ratingText = getAllRatingText(result.rating, result.ratingCount)
-                snackbar(rateSucceed)
-            }.onFailure {
-                logcat(it)
-                snackbar(rateFailed)
-            }
-        }
-    }
 
-    @Composable
-    fun RatingCard(compact: Boolean) {
-        CrystalCard(onClick = ::showRateDialog) {
-            Column(
-                modifier = Modifier
-                    .padding(
-                        // 平板竖屏紧凑态：左右各多留出约一颗星的宽度，让星标与评分文字更舒展
-                        horizontal = if (compact) 32.dp else 8.dp,
-                        vertical = if (compact) 6.dp else 8.dp,
-                    )
-                    .then(if (compact) Modifier else Modifier.fillMaxWidth()),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                GalleryDetailRating(rating = galleryDetail.rating, compact = compact)
-                Spacer(modifier = Modifier.size(if (compact) 4.dp else keylineMargin))
-                Text(
-                    text = ratingText,
-                    style = if (compact) MiuixTheme.textStyles.footnote1 else MiuixTheme.textStyles.body1,
-                )
-            }
-        }
-    }
-
-    // 平板竖屏：以上方「下载」「阅读」两颗主按钮的中轴线为基准，
-    // 4 个操作图标居中放在左 50% 区域，星级评分卡居中放在右 50% 区域；
-    // 手机 / 平板横屏保持原有横向滚动布局不变。把操作图标抽成局部组合避免重复。
+    // 4 个操作图标（收藏 / 相似画廊 / 压缩包 / 种子）在手机、平板竖屏与横屏下统一居中对称排布，无冗余星标占位
     @Composable
     fun ActionIcons() {
         val favSlot by FavouriteStatusRouter.collectAsState(galleryDetail) { it }
@@ -983,39 +986,12 @@ fun BelowHeader(galleryDetail: GalleryDetail, voteTag: VoteTag) {
             },
         )
     }
-    if (tabletPortrait) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ActionIcons()
-                }
-            }
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                RatingCard(compact = true)
-            }
-        }
-    } else {
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.Top,
-        ) {
-            ActionIcons()
-        }
-        Spacer(modifier = Modifier.size(keylineMargin))
-        RatingCard(compact = false)
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Top,
+    ) {
+        ActionIcons()
     }
     Spacer(modifier = Modifier.size(keylineMargin))
     val tags = galleryDetail.tagGroups
